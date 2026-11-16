@@ -2,9 +2,12 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
+
+/** Things only the demo can do, such as pretending the laptop froze. */
+export const demoControls: { freeze?: () => void } = {};
 
 export function mockBackend(): Backend {
   let profile: Profile = "balanced";
@@ -138,10 +141,31 @@ export function mockBackend(): Backend {
   const label = (id: string) => rows().find((r) => r.id === id)?.label ?? id;
   const kept = () => records.filter((r) => r.verdict === "keep");
 
+  const blockedIds = new Map<string, string>();
+  // Unclean shutdowns, as the service counts them (dynamis-core boots.rs).
+  let unclean: Unclean = { last: null, in_safe_mode: 0, suspects: [] };
+  let uncleanInARow = 0;
+  demoControls.freeze = () => {
+    const t = now();
+    const recent = [...new Set(journal.filter((e) => e.event === "done" && t - e.time < 600 && e.id).map((e) => e.id))]
+      .map((id) => ({ id, label: label(id) }));
+    const inSafe = !!safeMode;
+    unclean = {
+      last: { found_at: Math.max(t, (unclean.last?.found_at ?? 0) + 1), ended_at: t - 30, kernel: "nothing", detail: null, in_progress: null, recent: inSafe ? [] : recent, in_safe_mode: inSafe },
+      in_safe_mode: unclean.in_safe_mode + (inSafe ? 1 : 0),
+      suspects: inSafe ? unclean.suspects : [...unclean.suspects, ...recent.filter((r) => !unclean.suspects.some((x) => x.id === r.id))],
+    };
+    uncleanInARow += 1;
+    if (uncleanInARow >= 3 && !safeMode) {
+      safeMode = `${uncleanInARow} unclean shutdowns in a row`;
+      log({ event: "safe-mode-on", id: "", label: "", reason: safeMode });
+    }
+  };
+
   const rows = (): SettingRow[] => {
     const row = (id: string, lbl: string, risk: SettingRow["risk"], riskLabel: string, allowed: string, available = true): SettingRow => ({
       id, label: lbl, risk, risk_label: riskLabel, available, allowed,
-      current: available ? values[id] ?? null : null, original: original[id] ?? null, blocked: null,
+      current: available ? values[id] ?? null : null, original: original[id] ?? null, blocked: blockedIds.get(id) ?? null,
       not_allowed: id === "pcie.aspm" ? [[["powersave"], "Realtek RTL8821CE Wi-Fi is widely reported to drop out or freeze the system when PCIe link power saving is forced on."]] : [],
     });
     return [
@@ -199,6 +223,7 @@ export function mockBackend(): Backend {
         health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: null,
       },
       safe_mode: safeMode,
+      unclean,
       dry_run: dryRun,
       kept: { settings: [...keptSettings].map(([id, value]) => ({ id, label: label(id), value, trusted: true })), held_back: [], charge_limit_ignored: false },
       pending: null,
@@ -264,6 +289,11 @@ export function mockBackend(): Backend {
       else keptSettings.delete(id);
     },
     setSafeMode: async (on) => {
+      if (!on && safeMode) {
+        if (unclean.in_safe_mode === 0) for (const x of unclean.suspects) blockedIds.set(x.id, "changed shortly before freezes that stopped in safe mode");
+        unclean = { ...unclean, in_safe_mode: 0, suspects: [] };
+        uncleanInARow = 0;
+      }
       safeMode = on ? "switched on in the app" : null;
       log({ event: on ? "safe-mode-on" : "safe-mode-off", id: "", label: "", reason: on ? "switched on in the app" : "" });
       return safeMode ?? "";

@@ -30,7 +30,10 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelModules=yes
-ProtectKernelLogs=yes
+# The kernel log is read (never written): /dev/kmsg by the health monitor
+# during trials, and the previous boot's log after an unclean shutdown.
+# ProtectKernelLogs=yes would block both.
+ProtectKernelLogs=no
 # Apps (phase 6) change one file, cpu.weight, in app groups of user
 # sessions. The cgroup tree is read-only except user.slice; the daemon's own
 # writer also refuses anything but cpu.weight there.

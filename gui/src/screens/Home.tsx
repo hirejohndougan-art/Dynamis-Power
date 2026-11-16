@@ -21,6 +21,57 @@ function Estimate({ s }: { s: Status }) {
   );
 }
 
+const DISMISSED = "dynamis.unclean-seen";
+
+/** After an unclean shutdown: what was happening, in plain words. */
+function UncleanNotice({ s }: { s: Status }) {
+  const last = s.unclean?.last;
+  const [seen, setSeen] = useState<number | null>(() => {
+    try {
+      return Number(localStorage.getItem(DISMISSED)) || null;
+    } catch {
+      return null;
+    }
+  });
+  if (!last || seen === last.found_at || Date.now() / 1000 - last.found_at > 3 * 86400) return null;
+  const names = (l: { label: string; id: string }[]) => l.map((x) => x.label || x.id).join(", ");
+  const dismiss = () => {
+    try {
+      localStorage.setItem(DISMISSED, String(last.found_at));
+    } catch {
+      /* per-viewer convenience only */
+    }
+    setSeen(last.found_at);
+  };
+  return (
+    <div className="notice notice-info" role="status" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+      <strong>{t("unclean_heading")}</strong>
+      <span>{t(`unclean_kernel_${last.kernel}` as "unclean_kernel_nothing")}</span>
+      {last.in_safe_mode ? (
+        <span>{t("unclean_in_safe_mode")}</span>
+      ) : (
+        <>
+          {last.in_progress && <span>{t("unclean_in_progress", { label: last.in_progress.label || last.in_progress.id })}</span>}
+          {last.recent.length > 0 ? (
+            <span>{t("unclean_recent", { labels: names(last.recent) })}</span>
+          ) : (
+            last.ended_at != null && !last.in_progress && <span>{t("unclean_none_recent")}</span>
+          )}
+        </>
+      )}
+      {last.detail && (
+        <details>
+          <summary>{t("details")}</summary>
+          <code className="small">{last.detail}</code>
+        </details>
+      )}
+      <button type="button" className="btn btn-small" onClick={dismiss}>
+        {t("got_it")}
+      </button>
+    </div>
+  );
+}
+
 export function Home(props: { status: Status; watts: number[]; refresh: () => void; go: (screen: string) => void }) {
   const s = props.status;
   const journal = useLoad(() => backend.journal(30), [s.profile, s.learning.tests]);
@@ -54,9 +105,23 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
         </button>
       </header>
 
+      <UncleanNotice s={s} />
       {s.safe_mode && (
         <div className="notice" role="alert">
-          <span>{t("safe_mode_on", { why: s.safe_mode })}</span>
+          <div className="stack" style={{ gap: 4 }}>
+            <span>{t("safe_mode_on", { why: s.safe_mode })}</span>
+            {(s.unclean?.in_safe_mode ?? 0) > 0 ? (
+              <span>
+                {s.unclean!.in_safe_mode >= 2
+                  ? t("safe_mode_still_froze", { n: s.unclean!.in_safe_mode })
+                  : t("safe_mode_froze_once")}
+              </span>
+            ) : (
+              (s.unclean?.suspects ?? []).length > 0 && (
+                <span>{t("safe_mode_suspects", { labels: s.unclean!.suspects.map((x) => x.label || x.id).join(", ") })}</span>
+              )
+            )}
+          </div>
           <button type="button" className="btn btn-small" onClick={() => run(async () => { await backend.setSafeMode(false); })}>
             {t("safe_mode_off_button")}
           </button>

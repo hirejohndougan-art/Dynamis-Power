@@ -329,13 +329,33 @@ pub fn cmd_safe_mode(root: &SysRoot, state: &Path, switch: Option<bool>) -> io::
         Some(true) => engine
             .set_safe_mode(Some("switched on by hand"))
             .map_err(err)?,
-        Some(false) => engine.set_safe_mode(None).map_err(err)?,
+        Some(false) => {
+            let block = dynamis_core::boots::suspects_to_block(state);
+            engine.set_safe_mode(None).map_err(err)?;
+            if !block.is_empty() && engine.safe_mode().is_none() {
+                println!(
+                    "Blocked, as they were changed shortly before the freezes: {}",
+                    block.join(", ")
+                );
+            }
+        }
         None => {}
     }
     match engine.safe_mode() {
         Some(why) => {
             println!("Safe mode is ON: {why}.");
             println!("No setting will be changed. `dynamis restore` still works.");
+            let (suspects, froze) = dynamis_core::boots::suspects(state);
+            if froze > 0 {
+                println!(
+                    "The laptop stopped uncleanly {froze} time(s) with safe mode on, so Dynamis Power is unlikely to be the cause."
+                );
+            } else if !suspects.is_empty() {
+                println!(
+                    "If the freezes have stopped, switching safe mode off blocks what changed just before them: {}",
+                    suspects.join(", ")
+                );
+            }
             if switch == Some(false) {
                 println!("It is still on because of the disable file or the boot option; remove that to switch it off.");
             }

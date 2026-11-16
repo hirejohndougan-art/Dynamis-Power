@@ -144,7 +144,7 @@ On the VivoBook (and any laptop where Modes used to show only Balanced):
 
 Report anything odd in a bug report with `sudo dynamis journal --last 100` attached.
 
-**On a laptop that already freezes** (like the project's VivoBook), a freeze during these steps does not prove Dynamis Power caused it. After the reboot, check `sudo dynamis journal`: a `recover` line means a change was in progress at the time; no such line means nothing was being changed.
+**On a laptop that already freezes** (like the project's VivoBook), a freeze during these steps does not prove Dynamis Power caused it. After the reboot, Home says what was happening (going to sleep, waking, a device error, or nothing in the log) and what Dynamis Power had changed in the ten minutes before; `sudo dynamis journal` shows the same changes, and a `recover` line means a change was in progress. For the system's own log of that boot to be there, the journal must be kept on disk (`/var/log/journal` exists). After three such freezes safe mode switches on: keep using the laptop. If it still freezes, `dynamis safe-mode` says Dynamis Power is unlikely to be the cause; report that with `journalctl -b -1 -k | tail -50`.
 
 ## Known limits
 

@@ -355,6 +355,16 @@ impl Engine {
             None => {
                 if path.exists() {
                     fs::remove_file(&path)?;
+                    // Freezes stopped in safe mode: what changed just before
+                    // them stays off.
+                    for id in crate::boots::suspects_to_block(&self.dir) {
+                        if !self.blocked().contains_key(&id) {
+                            self.block(
+                                &id,
+                                "changed shortly before freezes that stopped in safe mode",
+                            )?;
+                        }
+                    }
                     crate::boots::reset(&self.dir)?;
                     self.log("safe-mode-off", "", None, None, "")?;
                 }

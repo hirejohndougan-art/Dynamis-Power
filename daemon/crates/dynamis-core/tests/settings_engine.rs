@@ -758,6 +758,43 @@ mod unclean_boots {
         e.apply(&req("vm.swappiness", "10")).unwrap();
     }
 
+    fn turn_on_safe_mode_with_suspect(sb: &Sandbox) {
+        boot(sb, "a");
+        boot(sb, "b");
+        boots::add_suspects(&sb.state(), &["vm.swappiness".to_string()]).unwrap();
+        boot(sb, "c");
+        assert!(boot(sb, "d").safe_mode_now_on);
+        assert_eq!(boots::suspects(&sb.state()).0, ["vm.swappiness"]);
+    }
+
+    #[test]
+    fn suspects_are_blocked_when_freezes_stop_in_safe_mode() {
+        let sb = Sandbox::new();
+        turn_on_safe_mode_with_suspect(&sb);
+        // No freeze in safe mode.
+        clean_stop(&sb);
+        let r = boot(&sb, "e");
+        assert!(!r.unclean && r.in_safe_mode == 0);
+        let mut e = sb.engine();
+        e.set_safe_mode(None).unwrap();
+        assert!(e.blocked()["vm.swappiness"].contains("safe mode"));
+        assert_eq!(boots::suspects(&sb.state()), (vec![], 0));
+    }
+
+    #[test]
+    fn freezes_in_safe_mode_point_elsewhere() {
+        let sb = Sandbox::new();
+        turn_on_safe_mode_with_suspect(&sb);
+        // Two more freezes with safe mode on.
+        let r = boot(&sb, "e");
+        assert!(r.unclean_in_safe_mode);
+        assert_eq!(boot(&sb, "f").in_safe_mode, 2);
+        let mut e = sb.engine();
+        e.set_safe_mode(None).unwrap();
+        assert!(e.blocked().is_empty(), "the suspects are let go");
+        assert_eq!(boots::suspects(&sb.state()), (vec![], 0));
+    }
+
     #[test]
     fn journal_rotates_and_still_reads_back() {
         let sb = Sandbox::new();

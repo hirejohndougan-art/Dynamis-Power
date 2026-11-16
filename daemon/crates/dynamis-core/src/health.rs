@@ -93,6 +93,12 @@ const TROUBLE: &[&str] = &[
     "reset superspeed usb",
 ];
 
+/// Whether a kernel message is one of the trouble patterns.
+pub fn is_trouble(message: &str) -> bool {
+    let m = message.to_ascii_lowercase();
+    TROUBLE.iter().any(|t| m.contains(t))
+}
+
 pub struct Monitor {
     root: SysRoot,
     limits: Limits,

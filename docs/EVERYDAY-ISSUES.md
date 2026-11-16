@@ -82,6 +82,8 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 
 ## 8. Safe mode on laptops that freeze anyway
 
+**Status: built**, except the counting question in Follow-up (every unclean shutdown still counts). Code: `dynamisd/src/crash.rs`, `dynamis-core/src/boots.rs`; Home shows the account for three days, until "Got it", and the safe mode notice says what the freezes in safe mode suggest. `dynamis safe-mode` says the same in a terminal.
+
 **What happens.** Three unclean shutdowns in a row switch safe mode on, even when Dynamis Power had nothing to do with them (the VivoBook freezes on its own). It can look as if the app broke.
 
 **Plan.**

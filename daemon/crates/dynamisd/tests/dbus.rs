@@ -1373,6 +1373,22 @@ fn settings_set_by_hand_survive_sleep_and_restarts() {
     // A new boot, as far as the service can tell.
     fs::create_dir_all(root.join("proc/sys/kernel/random")).unwrap();
     fs::write(root.join("proc/sys/kernel/random/boot_id"), "second-boot").unwrap();
+    // The previous boot's kernel log ends just after waking, with a USB reset.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64();
+    let log = root.join("var/log/dynamis-test");
+    fs::create_dir_all(&log).unwrap();
+    fs::write(
+        log.join("previous-boot-kernel.log"),
+        format!(
+            "{:.6} laptop kernel: PM: suspend exit\n{:.6} laptop kernel: usb 1-2: reset high-speed USB device number 3 using xhci_hcd\n",
+            now - 20.0,
+            now - 5.0
+        ),
+    )
+    .unwrap();
     d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
     zbus::block_on(async {
         let conn = env.client().await;
@@ -1382,6 +1398,21 @@ fn settings_set_by_hand_survive_sleep_and_restarts() {
             .unwrap();
         let k = c.status().await.unwrap()["kept"].clone();
         assert_eq!(k["held_back"].as_array().unwrap().len(), 2, "{k}");
+        // What was happening, for Home.
+        let u = c.status().await.unwrap()["unclean"].clone();
+        assert_eq!(u["last"]["kernel"], "waking", "{u}");
+        assert!(u["last"]["detail"].as_str().unwrap().contains("reset"));
+        let recent: Vec<&str> = u["last"]["recent"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        assert!(
+            recent.contains(&"battery.charge_limit") && recent.contains(&"vm.swappiness"),
+            "{u}"
+        );
+        assert_eq!(u["suspects"].as_array().unwrap().len(), 2, "{u}");
     });
     assert_eq!((limit().as_str(), swappiness().as_str()), ("100", "60"));
 

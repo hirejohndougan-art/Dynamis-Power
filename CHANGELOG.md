@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- After an unclean shutdown (freeze, crash, power cut), Home says what was happening: going to sleep, waking, a device reporting trouble (with Details), or nothing in the log; and whether Dynamis Power was changing something then or in the ten minutes before. Safe mode doubles as a test: unclean shutdowns with safe mode on are counted apart, and the notice says the cause is probably elsewhere; if none happen, switching safe mode off blocks the settings changed just before the freezes. `unclean` in `Status`; `dynamis safe-mode` explains the same. The demo has a "Pretend the laptop froze" button.
+
 - Learning says why it waits: the service counts waiting time per reason over about the last day (plugged in, low battery, warm, busy, an app holding a mode, safe mode, another trial, dry run; rests between tests do not count), and the Learning screen shows the main one with what to do. It measures how often the battery's power reading changes and makes test blocks at least four of those periods long (the time-left estimate follows). Where a battery reports energy but not power, power is worked out from the fall in energy; where it reports neither, learning says it cannot measure. `learning.waiting` and `learning.power_update_s` in `Status`.
 
 - Kept settings: the charge limit and start (always) and any Advanced setting with "Keep after restart" are applied again at startup and after waking from sleep, with an hour's probation after which an unclean shutdown does not hold them back. Waking also re-applies the mode, learned settings and app shares, and stops a test in progress. The service notices firmware that ignores the charge limit. `SetKept`, `kept` in `Status`.
@@ -64,6 +66,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- The service unit no longer sets `ProtectKernelLogs=yes`, which stopped the trial health monitor from reading the kernel log on installed systems.
 - Crash recovery no longer undoes a change whose owner process is still running (needed for tests that span many steps, and for running `dynamis` commands meanwhile).
 - The lag reading cannot be inflated by a pressure counter missing from one reading.
 

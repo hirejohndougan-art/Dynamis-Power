@@ -97,6 +97,20 @@ export const en = {
   // Safety strip
   safe_mode_on: "Safe mode is on: nothing will be changed ({why}).",
   safe_mode_off_button: "Switch safe mode off",
+  safe_mode_still_froze: "The laptop still stopped {n} times while Dynamis Power was changing nothing, so it is unlikely to be the cause. You can switch safe mode off.",
+  safe_mode_froze_once: "The laptop stopped once while Dynamis Power was changing nothing, which suggests the cause is elsewhere.",
+  safe_mode_suspects: "If the laptop no longer freezes, these settings, changed just before the freezes, stay off when you switch safe mode off: {labels}.",
+  unclean_heading: "The laptop did not shut down normally last time",
+  unclean_kernel_sleeping: "It stopped while going to sleep, while asleep, or while waking up.",
+  unclean_kernel_waking: "It stopped shortly after waking from sleep.",
+  unclean_kernel_driver: "A device reported a problem just before it stopped.",
+  unclean_kernel_nothing: "The system log shows nothing unusual before it stopped. A sudden freeze or power cut often leaves no trace.",
+  unclean_kernel_unknown: "There is no system log from that time to check.",
+  unclean_in_safe_mode: "Safe mode was on, so Dynamis Power was changing nothing.",
+  unclean_in_progress: "Dynamis Power was changing {label} at the time. It was put back and is no longer used on this laptop.",
+  unclean_recent: "Dynamis Power changed these in the ten minutes before: {labels}.",
+  unclean_none_recent: "Dynamis Power had changed nothing in the ten minutes before.",
+  got_it: "Got it",
   trial_running: "Testing {label}. It will be undone automatically if anything goes wrong.",
 
   // Restore dialog

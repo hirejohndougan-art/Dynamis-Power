@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../App";
+import { backend } from "../backend";
+import { demoControls } from "../backend/mock";
 
 // jsdom has no modal dialogs; open/close by attribute instead.
 beforeAll(() => {
@@ -199,5 +201,30 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.getByText("Kept after restarts")).toBeTruthy());
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Stop keeping: Swap eagerness" })));
     await waitFor(() => expect(screen.queryByText("Kept after restarts")).toBeNull());
+  });
+
+  // Last: it switches safe mode on and off in the shared stand-in.
+  it("explains a freeze, and uses safe mode as a test", async () => {
+    await backend.setSetting("vm.swappiness", "30", false);
+    for (let i = 0; i < 3; i++) demoControls.freeze!();
+    render(<App />);
+    expect(await screen.findByText("The laptop did not shut down normally last time")).toBeTruthy();
+    expect(screen.getByText(/changed these in the ten minutes before: .*Swap eagerness/)).toBeTruthy();
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/Safe mode is on.*stay off when you switch safe mode off: .*Swap eagerness/);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Got it" })));
+    expect(screen.queryByText("The laptop did not shut down normally last time")).toBeNull();
+
+    // It froze again with safe mode on: probably not Dynamis Power.
+    demoControls.freeze!();
+    demoControls.freeze!();
+    await act(async () => window.dispatchEvent(new Event("dynamis:changed")));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/still stopped 2 times/));
+    expect(screen.getByText(/Safe mode was on, so Dynamis Power was changing nothing/)).toBeTruthy();
+    await act(async () => fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Switch safe mode off" })));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    // The suspects were let go, not blocked.
+    const rows = await backend.settings();
+    expect(rows.find((r) => r.id === "vm.swappiness")?.blocked).toBeNull();
   });
 });

@@ -37,6 +37,8 @@ export interface Status {
     charge_limit: number | null;
   };
   safe_mode: string | null;
+  /** The last unclean shutdown (freeze, crash, power cut) and safe mode as a test. */
+  unclean?: Unclean;
   /** Settings set by hand that are applied again after restarts and sleep. */
   kept?: {
     settings: { id: string; label: string; value: string; trusted: boolean }[];
@@ -275,3 +277,20 @@ export type WaitReason =
   | "safe_mode"
   | "trial"
   | "dry_run";
+
+export type Labelled = { id: string; label: string };
+export type Unclean = {
+  last: {
+    found_at: number;
+    ended_at: number | null;
+    kernel: "sleeping" | "waking" | "driver" | "nothing" | "unknown";
+    detail: string | null;
+    in_progress: Labelled | null;
+    recent: Labelled[];
+    in_safe_mode: boolean;
+  } | null;
+  /** Unclean shutdowns while safe mode was on, since it was last off. */
+  in_safe_mode: number;
+  /** Settings changed shortly before the freezes that led to safe mode. */
+  suspects: Labelled[];
+};

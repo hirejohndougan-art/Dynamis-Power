@@ -16,6 +16,7 @@ mod apps;
 mod bus;
 mod conflicts;
 mod core;
+mod crash;
 mod kept;
 mod learn;
 mod predict;
@@ -84,7 +85,7 @@ async fn run(args: Args) -> Result<(), String> {
     std::fs::create_dir_all(&state).map_err(|e| format!("{}: {e}", state.display()))?;
     let boot = dynamis_core::boots::record_start(&root, &state);
     let after_unclean = boot.as_ref().is_ok_and(|b| b.unclean_in_a_row > 0);
-    match boot {
+    match &boot {
         Ok(b) if b.safe_mode_now_on => eprintln!(
             "dynamisd: {} unclean shutdowns in a row; SAFE MODE is now on and stays on until \
              `sudo dynamis safe-mode off`",
@@ -103,6 +104,25 @@ async fn run(args: Args) -> Result<(), String> {
     let mut engine = crate::core::open_engine(&root, &state)?;
     if let Err(e) = engine.restore_app_weights() {
         eprintln!("dynamisd: could not put app shares back: {e}");
+    }
+    // After an unclean shutdown: what was happening, for the app.
+    if let Ok(b) = &boot {
+        let in_progress = engine.recovered().map(|r| r.id.clone());
+        if let Some(d) = crash::diagnose(
+            &root,
+            &state,
+            b,
+            in_progress,
+            &engine.journal(500),
+            crate::core::unix_now(),
+        ) {
+            eprintln!(
+                "dynamisd: the last boot ended uncleanly; kernel log: {:?}{}; changed in the ten minutes before: {:?}",
+                d.kernel,
+                d.detail.as_deref().map(|t| format!(" ({t})")).unwrap_or_default(),
+                d.recent
+            );
+        }
     }
     drop(engine);
     let core = Core::with_timing(

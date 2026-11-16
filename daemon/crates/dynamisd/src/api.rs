@@ -90,6 +90,7 @@ impl Core {
             "safe_mode": engine.as_ref().and_then(|e| e.safe_mode()),
             "dry_run": engine.as_ref().is_some_and(|e| e.dry_run()),
             "kept": self.kept.json(),
+            "unclean": crate::crash::json(&self.state_dir),
             "missing_modes": profiles::missing(&self.root).into_iter().map(|(p, why)| json!({"profile": p.as_str(), "why": why})).collect::<Vec<_>>(),
             "pending": engine.as_ref().and_then(|e| e.pending()).map(|p| json!({
                 "id": p.id, "label": label(&p.id), "to": p.to, "trial": p.trial_deadline.is_some(),

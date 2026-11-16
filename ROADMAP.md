@@ -59,7 +59,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [ ] Quirk list entries with kernel and firmware version ranges (§6)
 - [x] Keep settings chosen by hand (charge limit and start, Advanced "Keep after restart"): re-apply at startup and after sleep, never in safe mode or right after an unclean shutdown (§7)
 - [x] Notice when firmware ignores the charge limit, and say so (§7)
-- [ ] After an unclean shutdown, say what was happening (sleep, wake, driver error, a recent change); if freezes continue in safe mode, say Dynamis Power is unlikely to be the cause (§8)
+- [x] After an unclean shutdown, say what was happening (sleep, wake, driver error, a recent change); if freezes continue in safe mode, say Dynamis Power is unlikely to be the cause (§8)
 - [ ] Fedora RPM and Arch PKGBUILD, built by CI (§9)
 - [ ] Clear message when systemd or polkit is missing (§9)
 - [ ] "Report a problem": one file with everything useful, privacy filter on, and a pre-filled issue page (§10)

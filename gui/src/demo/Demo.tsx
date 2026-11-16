@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { App } from "../App";
 import { backend, type Profile, type Status } from "../backend";
+import { demoControls } from "../backend/mock";
 import { profileName } from "../i18n";
 
 const changed = () => window.dispatchEvent(new Event("dynamis:changed"));
@@ -171,6 +172,17 @@ export function Demo() {
         </span>
         <span className="demo-actions">
           <button type="button" className="btn btn-small" onClick={restartWelcome}>Restart first-run welcome</button>
+          <button
+            type="button"
+            className="btn btn-small"
+            title="As if the laptop froze and was restarted. Three in a row switch safe mode on."
+            onClick={() => {
+              demoControls.freeze?.();
+              changed();
+            }}
+          >
+            Pretend the laptop froze
+          </button>
           {!appOpen && <button type="button" className="btn btn-small" onClick={() => setAppOpen(true)}>Open the app</button>}
         </span>
       </div>
