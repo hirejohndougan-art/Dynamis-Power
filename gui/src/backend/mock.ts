@@ -9,6 +9,7 @@ const now = () => Math.floor(Date.now() / 1000);
 export function mockBackend(): Backend {
   let profile: Profile = "balanced";
   let auto = true;
+  let pausedByHand = false;
   let learning = true;
   let safeMode: string | null = null;
   const values: Record<string, string> = {
@@ -171,7 +172,11 @@ export function mockBackend(): Backend {
       profile,
       profiles: ["power-saver", "balanced", "performance"],
       holds: [],
-      auto: { on: auto, workload: auto ? "light_interactive" : null, reason: auto ? "On battery" : "Auto mode is off" },
+      auto: {
+        on: auto,
+        workload: auto ? "light_interactive" : null,
+        reason: !auto ? "Auto mode is off" : pausedByHand ? "You picked a mode by hand; auto mode resumes when the charger is plugged in or out" : "On battery",
+      },
       learning: {
         on: learning,
         status: learning ? "Waiting: light use right now" : "Learning is off",
@@ -204,10 +209,12 @@ export function mockBackend(): Backend {
     setProfile: async (p) => {
       refuse();
       profile = p;
+      // As the service does: picking a mode by hand pauses auto mode.
+      if (auto) pausedByHand = true;
       const epp = { "power-saver": "power", balanced: "balance_performance", performance: "performance" }[p];
       setValue("cpu.epp", epp, `profile ${p} chosen`);
     },
-    setAuto: async (on) => { refuse(); auto = on; },
+    setAuto: async (on) => { refuse(); auto = on; pausedByHand = false; },
     setLearning: async (on) => {
       learning = on;
       if (!on) for (const r of kept()) setValue(r.setting, r.baseline, "learning switched off");

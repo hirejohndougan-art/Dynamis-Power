@@ -1,0 +1,45 @@
+/* The pretend desktop around the demo. Theme tokens come from styles.css;
+   this adds the explicit dark choice the published page needs. */
+:root[data-theme="dark"] {
+  --bg: #151718; --surface: #1d2022; --surface-2: #25292b; --border: #2f3436; --border-strong: #3d4346;
+  --text: #eceeed; --text-2: #d3d7d5; --muted: #a0a7a4; --accent: #3fb59b; --accent-hover: #5cc8af;
+  --accent-text: #7fd8c3; --accent-soft: #163a32; --on-accent: #08231d; --warn-bg: #3a2a10;
+  --warn-border: #5c431a; --warn-text: #f3cf91; --danger: #ff8a7d; --focus: #7fd8c3; color-scheme: dark;
+}
+:root { --panel-bg: #202326; --panel-text: #f1f3f2; --desk: #c9d3cf; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --desk: #0c0e0f; } }
+:root[data-theme="dark"] { --desk: #0c0e0f; }
+
+body { background: var(--desk); }
+.demo { min-height: 100vh; display: flex; flex-direction: column; }
+.demo-bar, .panel { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.demo-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding-block: 10px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 14px; }
+.demo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.panel { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; height: 36px; background: var(--panel-bg); color: var(--panel-text); font-size: 13px; }
+.panel-right { display: flex; align-items: center; gap: 12px; }
+.panel-glyph { opacity: 0.7; }
+.panel-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
+.tray-wrap { position: relative; }
+.tray-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.tray-icon:hover, .tray-icon[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
+.tray-icon:focus-visible { outline: 2px solid #7fd8c3; outline-offset: 1px; }
+.tray-menu { position: absolute; right: 0; top: 38px; min-width: 260px; max-width: calc(100vw - 32px); padding: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.tray-menu button { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 34px; padding: 0 10px 0 6px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.tray-menu button:hover:not(:disabled), .tray-menu button:focus-visible { background: var(--accent-soft); outline: none; }
+.tray-menu button:disabled { color: var(--muted); cursor: default; }
+.tray-mark { display: inline-block; width: 18px; text-align: center; color: var(--accent-text); }
+.tray-more { margin-left: auto; color: var(--muted); }
+.tray-summary { padding: 6px 10px; color: var(--muted); font-size: 13px; }
+.tray-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.tray-sub { margin: 2px 0 4px 24px; border-left: 1px solid var(--border); padding-left: 4px; }
+.demo-hint { margin: 12px 16px 0; padding: 10px 14px; border-radius: 10px; background: var(--surface); }
+.window { margin: 16px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-strong); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18); background: var(--bg); }
+.window-title { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 6px 0 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; }
+.window-close { width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text); font-size: 20px; cursor: pointer; }
+.window-close:hover { background: var(--border); }
+.window-body .shell { min-height: 760px; }
+.desktop-empty { margin: 48px auto; max-width: 520px; padding: 24px; text-align: center; background: var(--surface); border-radius: 14px; }
+@media (max-width: 720px) {
+  .window { margin: 12px 16px; }
+  .window-body .shell { min-height: 0; }
+}

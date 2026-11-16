@@ -44,9 +44,13 @@ export function useStatus(intervalMs = 5000) {
     tick();
     timer.current = window.setInterval(tick, intervalMs);
     document.addEventListener("visibilitychange", tick);
+    // Something outside this window changed the service (the demo's panel
+    // icon): read again at once instead of waiting for the next tick.
+    window.addEventListener("dynamis:changed", tick);
     return () => {
       window.clearInterval(timer.current);
       document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("dynamis:changed", tick);
     };
   }, [refresh, intervalMs]);
 

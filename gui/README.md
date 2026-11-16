@@ -63,3 +63,8 @@ From [../CLAUDE.md](../CLAUDE.md#interface-rules), and how this code follows the
 ## Translating
 
 Copy `src/i18n/en.ts` to `xx.ts`, translate the values (never the keys), and add it to `catalogs` in `src/i18n/index.ts`. Known gap: setting names and messages that come from the service (for example error sentences) are English for now.
+
+## Clickable demo
+
+`npm run build:demo` builds `demo-dist/dynamis-power-demo.html`: the real app on its stand-in backend inside a pretend desktop with the panel icon and its menu, as one self-contained file for sharing or design review. Nothing in it talks to a real service. Source: `demo.html`, `src/demo/`, `vite.demo.config.ts`, `scripts/inline-demo.mjs`.
+
