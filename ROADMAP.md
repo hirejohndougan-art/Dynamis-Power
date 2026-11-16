@@ -126,7 +126,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 **Battery**
 
 - [x] Charge start threshold (`battery.charge_start`)
-- [ ] Vendor charge controls where the standard file is missing (ThinkPad, ASUS, Dell, Huawei, LG, Samsung, Sony, System76 and others), each probed, never guessed
+- [x] Vendor charge controls where the standard file is missing, each found by its own file, never guessed: Lenovo IdeaPad conservation mode (60%), LG (80%), Samsung battery life extender (80%), Sony (50/80%), Huawei (start and stop). ThinkPad, ASUS, Dell, System76, Framework, MSI and Toshiba use the standard file in current kernels
 - [x] "Charge fully once" (TLP's `fullcharge`): Battery screen and panel menu
 - [x] Battery recalibration on request (TLP's `recalibrate`: needs running from the battery while plugged in; see the follow-up on `charge_behaviour`)
 

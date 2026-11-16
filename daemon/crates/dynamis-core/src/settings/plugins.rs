@@ -452,13 +452,78 @@ impl Setting for PcieAspm {
 
 pub struct BatteryChargeLimit;
 
+/// Where a battery's charge limit is set (TLP's vendor-specific charge
+/// controls). The standard file first; the others only where it is missing,
+/// each found by its own file, never guessed.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChargeControl {
+    /// `charge_control_end_threshold` (ThinkPad, ASUS, Dell, System76,
+    /// Framework, MSI, Toshiba and most others in recent kernels).
+    Standard(String),
+    /// Lenovo IdeaPad "conservation mode": on stops at about 60%.
+    IdeapadConservation(String),
+    /// LG Gram: 80 or 100.
+    LgCareLimit(String),
+    /// Samsung "battery life extender": on stops at 80%.
+    SamsungExtender(String),
+    /// Sony: 50, 80 or 100 (0 means 100).
+    SonyCareLimiter(String),
+    /// Huawei MateBook: "start end".
+    HuaweiThresholds(String),
+}
+
+const LG_LIMIT: &str = "/sys/devices/platform/lg-laptop/battery_care_limit";
+const SAMSUNG_EXTENDER: &str = "/sys/devices/platform/samsung/battery_life_extender";
+const SONY_LIMITER: &str = "/sys/devices/platform/sony-laptop/battery_care_limiter";
+const HUAWEI_THRESHOLDS: &str = "/sys/devices/platform/huawei-wmi/charge_control_thresholds";
+const IDEAPAD_DRIVER: &str = "/sys/bus/platform/drivers/ideapad_acpi";
+
+/// Vendor files the writer allows (exact paths), for `writer.rs`.
+pub(crate) const VENDOR_CHARGE_FILES: &[&str] =
+    &[LG_LIMIT, SAMSUNG_EXTENDER, SONY_LIMITER, HUAWEI_THRESHOLDS];
+
 impl BatteryChargeLimit {
-    fn path(root: &SysRoot) -> Option<String> {
-        root.list_dir("/sys/class/power_supply")
+    pub fn control(root: &SysRoot) -> Option<ChargeControl> {
+        let standard = root
+            .list_dir("/sys/class/power_supply")
             .into_iter()
             .filter(|n| n.starts_with("BAT"))
             .map(|n| format!("/sys/class/power_supply/{n}/charge_control_end_threshold"))
-            .find(|p| root.exists(p))
+            .find(|p| root.exists(p));
+        if let Some(p) = standard {
+            return Some(ChargeControl::Standard(p));
+        }
+        let ideapad = root
+            .list_dir(IDEAPAD_DRIVER)
+            .into_iter()
+            .filter(|d| !d.contains('/') && !d.starts_with('.'))
+            .map(|d| format!("{IDEAPAD_DRIVER}/{d}/conservation_mode"))
+            .find(|p| root.exists(p));
+        if let Some(p) = ideapad {
+            return Some(ChargeControl::IdeapadConservation(p));
+        }
+        for (f, make) in [
+            (
+                LG_LIMIT,
+                ChargeControl::LgCareLimit as fn(String) -> ChargeControl,
+            ),
+            (SAMSUNG_EXTENDER, ChargeControl::SamsungExtender),
+            (SONY_LIMITER, ChargeControl::SonyCareLimiter),
+            (HUAWEI_THRESHOLDS, ChargeControl::HuaweiThresholds),
+        ] {
+            if root.exists(f) {
+                return Some(make(f.to_string()));
+            }
+        }
+        None
+    }
+
+    /// Whether `path` is an IdeaPad conservation-mode file (for the writer).
+    pub(crate) fn is_ideapad_file(path: &str) -> bool {
+        path.strip_prefix(IDEAPAD_DRIVER)
+            .and_then(|r| r.strip_prefix('/'))
+            .and_then(|r| r.strip_suffix("/conservation_mode"))
+            .is_some_and(|d| !d.is_empty() && !d.contains('/') && !d.contains(".."))
     }
 }
 
@@ -473,27 +538,92 @@ impl Setting for BatteryChargeLimit {
         RiskTier::Safe
     }
     fn probe(&self, root: &SysRoot) -> Probe {
-        match Self::path(root) {
-            // Below 50% would leave too little charge for normal use.
-            Some(_) => Probe::Supported {
-                allowed: Allowed::Range {
-                    min: 50,
-                    max: 100,
-                    unit: "%",
-                },
+        let choices = |v: &[&str]| Probe::Supported {
+            allowed: Allowed::Choices {
+                values: v.iter().map(|s| s.to_string()).collect(),
             },
+        };
+        match Self::control(root) {
+            // Below 50% would leave too little charge for normal use.
+            Some(ChargeControl::Standard(_)) | Some(ChargeControl::HuaweiThresholds(_)) => {
+                Probe::Supported {
+                    allowed: Allowed::Range {
+                        min: 50,
+                        max: 100,
+                        unit: "%",
+                    },
+                }
+            }
+            Some(ChargeControl::IdeapadConservation(_)) => choices(&["60", "100"]),
+            Some(ChargeControl::LgCareLimit(_)) | Some(ChargeControl::SamsungExtender(_)) => {
+                choices(&["80", "100"])
+            }
+            Some(ChargeControl::SonyCareLimiter(_)) => choices(&["50", "80", "100"]),
             None => unsupported("this battery has no charge limit control"),
         }
     }
     fn read(&self, root: &SysRoot) -> ReadResult<String> {
-        root.read_string(&Self::path(root).ok_or(ReadError::Missing)?)
+        let num = |p: &str| -> ReadResult<u64> {
+            root.read_string(p)?
+                .trim()
+                .parse()
+                .map_err(|_| ReadError::Invalid(p.to_string()))
+        };
+        Ok(match Self::control(root).ok_or(ReadError::Missing)? {
+            ChargeControl::Standard(p) => root.read_string(&p)?,
+            ChargeControl::IdeapadConservation(p) => {
+                if num(&p)? == 1 { "60" } else { "100" }.into()
+            }
+            ChargeControl::LgCareLimit(p) => if num(&p)? == 80 { "80" } else { "100" }.into(),
+            ChargeControl::SamsungExtender(p) => if num(&p)? == 1 { "80" } else { "100" }.into(),
+            ChargeControl::SonyCareLimiter(p) => match num(&p)? {
+                50 => "50".into(),
+                80 => "80".into(),
+                _ => "100".into(),
+            },
+            ChargeControl::HuaweiThresholds(p) => {
+                let t = root.read_string(&p)?;
+                let end = t
+                    .split_whitespace()
+                    .nth(1)
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .ok_or_else(|| ReadError::Invalid(t.clone()))?;
+                // 0 0 means no limit.
+                if end == 0 { 100 } else { end.min(100) }.to_string()
+            }
+        })
     }
     fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
-        let path = Self::path(root).ok_or("no charge limit control")?;
-        Ok(vec![Write {
-            path,
-            contents: value.into(),
-        }])
+        let control = Self::control(root).ok_or("no charge limit control")?;
+        let pct: u64 = value
+            .parse()
+            .map_err(|_| format!("'{value}' is not a number"))?;
+        let (path, contents) = match control {
+            ChargeControl::Standard(p) => (p, value.to_string()),
+            ChargeControl::IdeapadConservation(p) => (p, if pct < 100 { "1" } else { "0" }.into()),
+            ChargeControl::LgCareLimit(p) => (p, if pct < 100 { "80" } else { "100" }.into()),
+            ChargeControl::SamsungExtender(p) => (p, if pct < 100 { "1" } else { "0" }.into()),
+            ChargeControl::SonyCareLimiter(p) => (
+                p,
+                match pct {
+                    50 => "50",
+                    80 => "80",
+                    _ => "0",
+                }
+                .into(),
+            ),
+            // Charging resumes 10 points below the limit; "0 100" is no
+            // limit.
+            ChargeControl::HuaweiThresholds(p) => (
+                p,
+                if pct >= 100 {
+                    "0 100".to_string()
+                } else {
+                    format!("{} {pct}", pct.saturating_sub(10))
+                },
+            ),
+        };
+        Ok(vec![Write { path, contents }])
     }
 }
 
@@ -1028,7 +1158,11 @@ impl Setting for BatteryChargeStart {
     fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
         let path = Self::path(root).ok_or("no charge start control")?;
         // The battery refuses a start at or above the stop level.
-        if let Some(stop) = BatteryChargeLimit::path(root).and_then(|p| root.read_u64(&p).ok()) {
+        let stop = match BatteryChargeLimit::control(root) {
+            Some(ChargeControl::Standard(p)) => root.read_u64(&p).ok(),
+            _ => None,
+        };
+        if let Some(stop) = stop {
             let start: u64 = value
                 .parse()
                 .map_err(|_| format!("'{value}' is not a number"))?;

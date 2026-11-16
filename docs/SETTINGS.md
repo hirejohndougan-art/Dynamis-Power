@@ -95,7 +95,7 @@ These are not setting plugins: they are switches on the Apps screen (`SetAppPoli
 
 | ID | What it controls | Interface | Risk |
 | --- | --- | --- | --- |
-| `battery.charge_limit` | Stop charging at a set level | `/sys/class/power_supply/BAT*/charge_control_end_threshold` | Safe where supported |
+| `battery.charge_limit` | Stop charging at a set level | `/sys/class/power_supply/BAT*/charge_control_end_threshold` | Safe where supported Where the standard `charge_control_end_threshold` is missing, a laptop maker's own control is used (TLP's vendor charge controls), each found by its own file: Lenovo IdeaPad `ideapad_acpi/*/conservation_mode` (offered as 60 or 100), LG `lg-laptop/battery_care_limit` (80/100), Samsung `samsung/battery_life_extender` (80/100), Sony `sony-laptop/battery_care_limiter` (50/80/100), Huawei `huawei-wmi/charge_control_thresholds` (start 10 below the limit). The writer allows exactly those files. |
 | `battery.charge_start` | Start charging only below a level | `/sys/class/power_supply/BAT*/charge_control_start_threshold` | Safe where supported |
 | `battery.charge_behaviour` | Run from battery while plugged in: built for **battery recalibration** only ([decision 0019](decisions/0019-running-from-battery-while-plugged-in.md)), not a setting plugin. Engine `set_charge_behaviour` (`auto` or `force-discharge`, only values the file lists), used by `dynamisd/src/recal.rs`; always back to `auto` at the end, on any stop and at the next service start. Learning while plugged in is not built | `/sys/class/power_supply/BAT*/charge_behaviour` | Usually safe, with a 15% floor and temperature limit |
 

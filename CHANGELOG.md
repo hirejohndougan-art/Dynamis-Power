@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Vendor charge controls (TLP list): where the standard charge limit file is missing, the charge limit uses the laptop maker's own control, found by its own file: Lenovo IdeaPad conservation mode, LG, Samsung, Sony and Huawei. The Battery screen offers the levels that control has (for example 60% or 100%).
+
 - Graphics (TLP list): `gpu.dgpu_runtime_pm` lets a second graphics chip (not the one driving the screen) sleep when idle, and learning tests it; `gpu.max_freq` and `gpu.min_freq` set the Intel graphics top and lowest speed in 50 MHz steps (TLP's `INTEL_GPU_MAX_FREQ` and `INTEL_GPU_MIN_FREQ`, which import to them). The writer now allows several files under one prefix.
 
 - *Report a problem* in Activity (everyday problem §10): one file with everything useful, privacy filter on, saved to Downloads, then the project's new-issue page opens with the description and a short summary filled in. The app opens only that one address.

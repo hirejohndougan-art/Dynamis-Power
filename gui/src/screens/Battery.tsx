@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { backend, type Predict, type Sensors, type Status } from "../backend";
-import { Dialog, Switch } from "../components";
+import { Choice, Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { clock, t } from "../i18n";
 import { powerSplit } from "../power";
@@ -9,6 +9,7 @@ export function Battery(props: { status: Status; refresh: () => void; go?: (scre
   const p = props.status.power;
   const settings = useLoad(() => backend.settings(), []);
   const limitRow = settings.data?.find((r) => r.id === "battery.charge_limit");
+  const limitChoices = limitRow?.allowed.includes("|") ? limitRow.allowed.split("|").map((v) => v.trim()) : null;
   const [limit, setLimit] = useState<number>(p.charge_limit ?? 80);
   const predict = useLoad(() => backend.predict(), []);
   const { run, toast } = useAction(() => {
@@ -71,10 +72,21 @@ export function Battery(props: { status: Status; refresh: () => void; go?: (scre
             {props.status.kept?.settings.some((k) => k.id === "battery.charge_limit") && <p className="muted small">{t("battery_limit_kept")}</p>}
             {props.status.kept?.charge_limit_ignored && <p className="notice">{t("battery_limit_ignored")}</p>}
             <div className="row">
-              <label className="field" style={{ flex: 1 }}>
-                <span className="field-label">{limit}%</span>
-                <input type="range" min={50} max={100} step={5} value={limit} onChange={(e) => setLimit(Number(e.target.value))} aria-label={t("battery_limit")} />
-              </label>
+              {limitChoices ? (
+                // A laptop maker's own control offers only a few levels.
+                <Choice
+                  name="charge-limit"
+                  label={t("battery_limit")}
+                  value={String(limit)}
+                  options={limitChoices.map((v): [string, string] => [v, `${v}%`])}
+                  onChange={(v) => setLimit(Number(v))}
+                />
+              ) : (
+                <label className="field" style={{ flex: 1 }}>
+                  <span className="field-label">{limit}%</span>
+                  <input type="range" min={50} max={100} step={5} value={limit} onChange={(e) => setLimit(Number(e.target.value))} aria-label={t("battery_limit")} />
+                </label>
+              )}
               <button type="button" className="btn btn-primary" onClick={() => run(() => backend.setSetting("battery.charge_limit", String(limit), false))}>
                 {t("change_apply")}
               </button>

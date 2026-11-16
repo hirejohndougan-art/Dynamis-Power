@@ -157,8 +157,20 @@ fn read_battery(root: &SysRoot, name: &str, base: &str) -> Battery {
         charge_limit_pct: root
             .read_u64(&f("charge_control_end_threshold"))
             .ok()
+            .or_else(|| vendor_limit(root))
             .map(|v| v.min(100) as u8),
         charge_behaviour_supported: root.exists(&f("charge_behaviour")),
+    }
+}
+
+/// The charge limit from a vendor control, where the standard file is
+/// missing (TLP's vendor charge controls; see `settings::plugins`).
+fn vendor_limit(root: &SysRoot) -> Option<u64> {
+    use crate::settings::plugins::{BatteryChargeLimit, ChargeControl};
+    use crate::settings::Setting;
+    match BatteryChargeLimit::control(root)? {
+        ChargeControl::Standard(_) => None,
+        _ => BatteryChargeLimit.read(root).ok()?.trim().parse().ok(),
     }
 }
 

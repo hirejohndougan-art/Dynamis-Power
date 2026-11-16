@@ -7,7 +7,7 @@
 //!
 //! Setting IDs are permanent. See `docs/SETTINGS.md`.
 
-mod plugins;
+pub(crate) mod plugins;
 
 use serde::Serialize;
 

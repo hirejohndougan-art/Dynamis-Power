@@ -1544,3 +1544,86 @@ mod graphics {
         );
     }
 }
+
+mod vendor_charge {
+    use super::*;
+
+    fn put(sb: &Sandbox, path: &str, v: &str) {
+        let f = sb.dir.join("root").join(path.trim_start_matches('/'));
+        std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+        std::fs::write(f, v).unwrap();
+    }
+
+    #[test]
+    fn ideapad_conservation_mode() {
+        let sb = Sandbox::new();
+        let f = "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode";
+        put(&sb, f, "0\n");
+        let s = settings::by_id("battery.charge_limit").unwrap();
+        assert_eq!(s.read(&sb.root()).unwrap(), "100");
+        let mut e = sb.engine();
+        assert!(
+            e.apply(&req("battery.charge_limit", "80")).is_err(),
+            "not offered here"
+        );
+        e.apply(&req("battery.charge_limit", "60")).unwrap();
+        assert_eq!(sb.file(f).trim(), "1");
+        assert_eq!(
+            dynamis_core::sensors::power::read(&sb.root()).batteries[0].charge_limit_pct,
+            Some(60)
+        );
+        e.restore().unwrap();
+        assert_eq!(sb.file(f).trim(), "0");
+    }
+
+    #[test]
+    fn lg_sony_and_huawei() {
+        for (path, start, set, written, back) in [
+            (
+                "/sys/devices/platform/lg-laptop/battery_care_limit",
+                "100",
+                "80",
+                "80",
+                "100",
+            ),
+            (
+                "/sys/devices/platform/sony-laptop/battery_care_limiter",
+                "0",
+                "50",
+                "50",
+                "0",
+            ),
+            (
+                "/sys/devices/platform/huawei-wmi/charge_control_thresholds",
+                "0 100",
+                "80",
+                "70 80",
+                "0 100",
+            ),
+            (
+                "/sys/devices/platform/samsung/battery_life_extender",
+                "0",
+                "80",
+                "1",
+                "0",
+            ),
+        ] {
+            let sb = Sandbox::new();
+            put(&sb, path, start);
+            let mut e = sb.engine();
+            e.apply(&req("battery.charge_limit", set))
+                .unwrap_or_else(|err| panic!("{path}: {err}"));
+            assert_eq!(sb.file(path).trim(), written, "{path}");
+            e.restore().unwrap();
+            assert_eq!(sb.file(path).trim(), back, "{path}");
+        }
+    }
+
+    #[test]
+    fn the_writer_refuses_other_platform_files() {
+        let sb = Sandbox::new();
+        put(&sb, "/sys/devices/platform/lg-laptop/fan_mode", "0");
+        let s = settings::by_id("battery.charge_limit").unwrap();
+        assert!(matches!(s.probe(&sb.root()), Probe::Unsupported { .. }));
+    }
+}

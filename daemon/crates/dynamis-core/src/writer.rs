@@ -54,6 +54,12 @@ fn allowed(path: &str) -> bool {
     if path.contains("..") {
         return false;
     }
+    // Vendor charge limit files (where the standard one is missing).
+    if crate::settings::plugins::VENDOR_CHARGE_FILES.contains(&path)
+        || crate::settings::plugins::BatteryChargeLimit::is_ideapad_file(path)
+    {
+        return true;
+    }
     if path.starts_with(CGROUP_PREFIX) {
         return path.ends_with(CGROUP_FILE);
     }
@@ -132,6 +138,9 @@ mod tests {
             "/sys/bus/pci/devices/0000:00:14.0/power/control/../../remove",
             "/sys/class/backlight/intel_backlight/bl_power",
             "/sys/class/net/eth0/device/power/control",
+            "/sys/devices/platform/lg-laptop/fan_mode",
+            "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fn_lock",
+            "/sys/bus/platform/drivers/ideapad_acpi/../conservation_mode",
             "/sys/class/drm/card0/gt_boost_freq_mhz",
             "/sys/class/drm/card0/gt_RP0_freq_mhz",
             "/sys/class/net/eth0/address",
