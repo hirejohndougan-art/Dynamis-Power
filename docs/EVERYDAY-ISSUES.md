@@ -111,7 +111,7 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 **Plan.**
 
 - **"Report a problem"** in Activity, Advanced and the panel menu: builds the existing export (with the privacy filter on), adds the answers from section 1's "Something stopped working", the diagnosis from section 8 and the outside changes from section 4, saves it as one file, and opens a pre-filled issue page on GitHub with a plain summary and no personal data, asking the person to attach the file.
-- **A diagnostic report like `tlp-stat`** (already on the TLP list): `dynamis report --full`, also included in the export.
+- **A diagnostic report like `tlp-stat`** (built): `dynamis stat`, also in the app's Export ("Full diagnostic report").
 
 ## Follow-up: needs research, hardware or a decision
 

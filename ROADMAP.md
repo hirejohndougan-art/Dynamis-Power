@@ -93,8 +93,8 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 **Storage**
 
-- [ ] SATA link power *(in SETTINGS: `storage.sata_alpm`; "minimum power" stays opt-in)*
-- [ ] AHCI controller runtime power management
+- [x] SATA link power (`storage.sata_alpm`; "minimum power" not offered)
+- [x] AHCI controller runtime power management (part of "Let idle built-in hardware sleep")
 - [ ] Hard disk power level (APM) and spin-down time, for laptops with spinning disks
 - [x] I/O scheduler (`storage.io_scheduler`)
 
@@ -102,7 +102,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 - [x] Minimum performance level (`cpu.min_perf_pct`)
 - [x] Maximum frequency for drivers without performance levels (`cpu.max_freq`, where the driver lists its frequencies)
-- [ ] Minimum frequency for those drivers
+- [x] Minimum frequency for those drivers (`cpu.min_freq`)
 - [x] HWP dynamic boost (`cpu.hwp_dynamic_boost`)
 - [x] Scaling governor where the driver offers a choice (`cpu.governor`; modes use it only without a speed preference)
 
@@ -115,17 +115,18 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 - [x] Charge start threshold (`battery.charge_start`)
 - [ ] Vendor charge controls where the standard file is missing (ThinkPad, ASUS, Dell, Huawei, LG, Samsung, Sony, System76 and others), each probed, never guessed
-- [ ] "Charge fully once" and battery recalibration on request (TLP's `fullcharge` and `recalibrate`)
+- [x] "Charge fully once" (TLP's `fullcharge`): Battery screen and panel menu
+- [ ] Battery recalibration on request (TLP's `recalibrate`: needs running from the battery while plugged in; see the follow-up on `charge_behaviour`)
 
 **System**
 
 - [x] Sleep type (`system.mem_sleep`, risky: needs an explicit yes; offered only where both exist)
 - [ ] Guided sleep test, run only when the person asks (it needs the laptop for about an hour): sleep about 30 minutes with each sleep type the laptop offers (`s2idle`, `deep`), measure the battery used per hour, check that Wi-Fi, sound, the touchpad and other devices came back and that the kernel log shows no resume errors, then recommend the type that used less and woke cleanly (applied only after a yes). Wakes by RTC alarm; plugged-in state, lid and a running call stop it; a failed wake is recorded so that type is not recommended. Results kept per laptop, and later shared with the model's results
-- [ ] After an unclean shutdown, say whether the laptop was going to sleep or waking when it stopped (from the previous boot's kernel log), to tell sleep problems from other freezes
+- [x] After an unclean shutdown, say whether the laptop was going to sleep or waking when it stopped (from the previous boot's kernel log), to tell sleep problems from other freezes
 - [x] Re-apply settings after resume from sleep (mode, kept, learned settings, app shares)
 - [x] Apply settings to devices plugged in later (USB, Thunderbolt), as TLP does (at the next reading)
 - [ ] A mode to use at boot before auto mode decides, and an option to ignore a power supply that reports wrongly (TLP's `TLP_DEFAULT_MODE` and `TLP_PS_IGNORE`)
-- [ ] A full diagnostic report like `tlp-stat`, building on `dynamis status`, `inventory` and `hardware-report`
+- [x] A full diagnostic report like `tlp-stat`: `dynamis stat`, `Diagnostics()`, and in the app's Export
 - [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export)
 
 **Done when:** on the test laptops, with TLP removed, `tlp-stat` run once with TLP reinstalled shows nothing TLP would set that Dynamis Power does not, and battery life is at least as long as with a hand-tuned TLP.

@@ -388,15 +388,11 @@ impl Engine {
     }
 
     pub fn blocked(&self) -> BTreeMap<String, String> {
-        read_json::<Blocked>(&self.dir.join("blocked.json"))
-            .unwrap_or_default()
-            .blocked
+        blocked_at(&self.dir)
     }
 
     pub fn baseline(&self) -> BTreeMap<String, String> {
-        read_json::<Baseline>(&self.dir.join("baseline.json"))
-            .unwrap_or_default()
-            .values
+        baseline_at(&self.dir)
     }
 
     /// The last `n` journal entries, oldest first. Lines that fail to parse
@@ -1051,6 +1047,21 @@ impl Engine {
         f.sync_all()?;
         Ok(())
     }
+}
+
+/// The settings blocked on this laptop, read without opening an engine.
+pub fn blocked_at(dir: &Path) -> BTreeMap<String, String> {
+    read_json::<Blocked>(&dir.join("blocked.json"))
+        .unwrap_or_default()
+        .blocked
+}
+
+/// The original value of every setting changed, read without opening an
+/// engine.
+pub fn baseline_at(dir: &Path) -> BTreeMap<String, String> {
+    read_json::<Baseline>(&dir.join("baseline.json"))
+        .unwrap_or_default()
+        .values
 }
 
 /// Outside changes to one setting within [`OUTSIDE_WINDOW_S`] before it is

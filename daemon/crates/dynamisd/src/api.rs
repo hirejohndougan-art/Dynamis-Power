@@ -91,6 +91,7 @@ impl Core {
             "dry_run": engine.as_ref().is_some_and(|e| e.dry_run()),
             "kept": self.kept.json(),
             "unclean": crate::crash::json(&self.state_dir),
+            "full_charge": self.fullcharge.json(&self.root),
             "missing_modes": profiles::missing(&self.root).into_iter().map(|(p, why)| json!({"profile": p.as_str(), "why": why})).collect::<Vec<_>>(),
             "pending": engine.as_ref().and_then(|e| e.pending()).map(|p| json!({
                 "id": p.id, "label": label(&p.id), "to": p.to, "trial": p.trial_deadline.is_some(),
@@ -168,6 +169,7 @@ impl Core {
         let dir = self.state_dir.clone();
         self.kept.clear(&dir)?;
         self.devices.clear(&dir);
+        self.fullcharge.drop_it(&dir, "everything was restored");
         if self.apps.policy.changes_shares() {
             let dir = self.state_dir.clone();
             self.apps.stop_changing_shares(&dir)?;
@@ -193,6 +195,10 @@ impl Core {
         })
         .map_err(|e| e.to_string())?;
         drop(e);
+        if id == "battery.charge_limit" {
+            let dir = self.state_dir.clone();
+            self.fullcharge.drop_it(&dir, "you set the limit by hand");
+        }
         // The battery's limits stay after a restart; others when asked to.
         if crate::kept::ALWAYS_KEPT.contains(&id) || self.kept.settings.contains_key(id) {
             let dir = self.state_dir.clone();

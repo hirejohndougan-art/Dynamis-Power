@@ -17,6 +17,8 @@ const EN: &[(&str, &str)] = &[
     ("tray_last_6h", "6 hours"),
     ("tray_last_stop", "Stop making it last"),
     ("tray_lasting", "making it last"),
+    ("tray_full_charge", "Charge fully once"),
+    ("tray_full_charge_stop", "Stop charging fully"),
     ("tray_open", "Open Dynamis Power"),
     ("tray_hide", "Hide this icon"),
     ("tray_left", "about {h} h {m} min left"),

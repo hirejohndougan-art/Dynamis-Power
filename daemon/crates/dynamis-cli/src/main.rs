@@ -95,6 +95,10 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// A full diagnostic report, like tlp-stat: the machine, the battery,
+    /// every setting with its original value, devices, other power tools,
+    /// the service and the last changes. Run with sudo for everything.
+    Stat,
     /// Print a hardware report to paste into a GitHub "Hardware report" issue.
     /// Contains no serial numbers, usernames or network names.
     HardwareReport,
@@ -212,6 +216,7 @@ fn main() {
         Command::Report { file, json } => cmd_report(&root, &file, json),
         Command::Gauge { duration, json } => cmd_gauge(&root, duration, json),
         Command::HardwareReport => cmd_hardware_report(&root),
+        Command::Stat => auto_cmd::cmd_stat(&root, &state),
         Command::Settings { json } => changes::cmd_settings(&root, &state, json),
         Command::Set {
             id,

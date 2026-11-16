@@ -35,6 +35,7 @@ const ONE_FILE_ONLY: &[(&str, &str)] = &[
         "/sys/class/drm/",
         "/device/power_dpm_force_performance_level",
     ),
+    ("/sys/class/scsi_host/", "/link_power_management_policy"),
     // Runtime power management of one USB device or PCI function.
     ("/sys/bus/usb/devices/", "/power/control"),
     ("/sys/bus/pci/devices/", "/power/control"),

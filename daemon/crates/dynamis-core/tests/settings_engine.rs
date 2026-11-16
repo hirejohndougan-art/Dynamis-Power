@@ -1022,6 +1022,34 @@ mod tlp_batch1 {
             sb.file("/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"),
             "2800000"
         );
+        // The lowest speed: every listed frequency up to the top speed.
+        let Probe::Supported {
+            allowed: Allowed::Choices { values },
+        } = settings::by_id("cpu.min_freq").unwrap().probe(&sb.root())
+        else {
+            panic!("min_freq not offered")
+        };
+        assert_eq!(values.first().map(String::as_str), Some("800"));
+        set_and_restore(&sb, "cpu.min_freq", "1200", false);
+    }
+
+    #[test]
+    fn sata_link_power() {
+        let sb = Sandbox::new();
+        let s = settings::by_id("storage.sata_alpm").unwrap();
+        assert!(matches!(s.probe(&sb.root()), Probe::Unsupported { .. }));
+        for h in ["host0", "host1"] {
+            let d = sb.dir.join(format!("root/sys/class/scsi_host/{h}"));
+            fs::create_dir_all(&d).unwrap();
+            fs::write(d.join("link_power_management_policy"), "max_performance\n").unwrap();
+        }
+        // A host without the control (USB storage) is left alone.
+        fs::create_dir_all(sb.dir.join("root/sys/class/scsi_host/host2")).unwrap();
+        set_and_restore(&sb, "storage.sata_alpm", "med_power_with_dipm", false);
+        assert!(sb
+            .engine()
+            .apply(&req("storage.sata_alpm", "min_power"))
+            .is_err());
     }
 
     #[test]

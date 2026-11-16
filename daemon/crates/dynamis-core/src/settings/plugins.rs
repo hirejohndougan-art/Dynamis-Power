@@ -19,6 +19,7 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &CpuMaxPerfPct,
         &CpuMinPerfPct,
         &CpuMaxFreq,
+        &CpuMinFreq,
         &CpuGovernor,
         &CpuHwpDynamicBoost,
         &PlatformProfile,
@@ -29,6 +30,7 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &AudioControllerPower,
         &PcieAspm,
         &StorageIoScheduler,
+        &StorageSataAlpm,
         &GpuAmdPowerLevel,
         &BatteryChargeLimit,
         &BatteryChargeStart,
@@ -602,6 +604,74 @@ impl Setting for CpuMaxFreq {
     }
 }
 
+/// The lowest speed, for drivers without performance levels (TLP's
+/// `CPU_SCALING_MIN_FREQ`). Offered where `cpu.max_freq` is, from the
+/// driver's own list, up to the current top speed.
+pub struct CpuMinFreq;
+
+impl Setting for CpuMinFreq {
+    fn id(&self) -> &'static str {
+        "cpu.min_freq"
+    }
+    fn label(&self) -> &'static str {
+        "CPU lowest speed (MHz)"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if root.exists(&format!("{PSTATE}/max_perf_pct")) {
+            return unsupported("this CPU uses performance levels instead");
+        }
+        let Some(p0) = policies(root).into_iter().next() else {
+            return unsupported("no CPU frequency control");
+        };
+        let Some(list) = root
+            .read_string(&format!("{p0}/scaling_available_frequencies"))
+            .ok()
+        else {
+            return unsupported("this CPU driver lists no frequencies");
+        };
+        let top = root
+            .read_u64(&format!("{p0}/scaling_max_freq"))
+            .unwrap_or(u64::MAX);
+        let mut khz: Vec<u64> = list
+            .split_whitespace()
+            .filter_map(|v| v.parse().ok())
+            .filter(|f| *f <= top)
+            .collect();
+        khz.sort_unstable();
+        khz.dedup();
+        if khz.len() < 2 {
+            return unsupported("this CPU driver lists no frequencies");
+        }
+        Probe::Supported {
+            allowed: Allowed::Choices {
+                values: khz.into_iter().map(|f| (f / 1000).to_string()).collect(),
+            },
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let v = read_all_policies(root, "scaling_min_freq")?;
+        Ok(match v.parse::<u64>() {
+            Ok(khz) => (khz / 1000).to_string(),
+            Err(_) => v,
+        })
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let mhz: u64 = value
+            .parse()
+            .map_err(|_| format!("'{value}' is not a number"))?;
+        Ok(policies(root)
+            .into_iter()
+            .map(|p| Write {
+                path: format!("{p}/scaling_min_freq"),
+                contents: (mhz * 1000).to_string(),
+            })
+            .collect())
+    }
+}
+
 pub struct CpuGovernor;
 
 impl Setting for CpuGovernor {
@@ -780,6 +850,71 @@ impl Setting for StorageIoScheduler {
     }
     fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
         Ok(Self::disks(root)
+            .into_iter()
+            .map(|path| Write {
+                path,
+                contents: value.into(),
+            })
+            .collect())
+    }
+}
+
+/// SATA link power management (TLP's `SATA_LINKPWR_ON_BAT`). Every SATA
+/// host that has the control. `min_power` is not offered: some drives lose
+/// data or hang with it.
+pub struct StorageSataAlpm;
+
+const SATA_POLICIES: &[&str] = &["max_performance", "medium_power", "med_power_with_dipm"];
+
+impl StorageSataAlpm {
+    fn hosts(root: &SysRoot) -> Vec<String> {
+        let mut hosts: Vec<String> = root
+            .list_dir("/sys/class/scsi_host")
+            .into_iter()
+            .map(|h| format!("/sys/class/scsi_host/{h}/link_power_management_policy"))
+            .filter(|p| root.exists(p))
+            .collect();
+        hosts.sort();
+        hosts
+    }
+}
+
+impl Setting for StorageSataAlpm {
+    fn id(&self) -> &'static str {
+        "storage.sata_alpm"
+    }
+    fn label(&self) -> &'static str {
+        "SATA link power saving"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if Self::hosts(root).is_empty() {
+            return unsupported("no SATA controller with link power control");
+        }
+        Probe::Supported {
+            allowed: Allowed::Choices {
+                values: SATA_POLICIES.iter().map(|v| v.to_string()).collect(),
+            },
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let mut vals = Vec::new();
+        for h in Self::hosts(root) {
+            vals.push(root.read_string(&h)?.trim().to_string());
+        }
+        match vals.first() {
+            None => Err(ReadError::Missing),
+            Some(f) if vals.iter().all(|v| v == f) => Ok(f.clone()),
+            Some(_) => Ok("mixed".into()),
+        }
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        if !SATA_POLICIES.contains(&value) {
+            return Err(format!("'{value}' is not offered"));
+        }
+        Ok(Self::hosts(root)
             .into_iter()
             .map(|path| Write {
                 path,

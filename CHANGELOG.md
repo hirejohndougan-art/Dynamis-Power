@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- "Charge fully once" on the Battery screen and in the panel menu: lifts the charge limit until the battery is full, the charger is unplugged or a day passes, then puts it back. Setting the limit by hand or Restore ends it; charging that follows habits waits meanwhile. `ChargeFullyOnce`, `full_charge` in `Status`.
+- `dynamis stat`: a full diagnostic report like `tlp-stat` (the machine, service, battery, every setting with its original value and why it is or is not offered, devices, other power tools, the last changes). Also `Diagnostics()` and an Export option in the app.
+- New settings: `storage.sata_alpm` (SATA link power; learning tests `med_power_with_dipm`; `min_power` not offered) and `cpu.min_freq` (lowest frequency, where the driver lists frequencies).
+
 - Devices on the Battery screen: "Let idle USB devices sleep" and "Let idle built-in hardware sleep", off by default. On battery and not in Faster, every USB device and PCI function that is safe to sleep is set to sleep when idle; input devices, sound, printers, phones and cameras, modems, Bluetooth, graphics and the management engine never are. Devices plugged in later follow at the next reading; plugged in, in Faster, switched off or on Restore, each goes back to its own value. Engine `set_device_power` (journaled as `device-power`, originals in `devices.json`); `Devices`, `SetDevicePolicy`.
 
 - Settings changed behind Dynamis Power's back are noticed: a setting it set that reads differently on two readings in a row is journaled as "changed by something else", with the likely tool (a running program such as TuneD, asusd or auto-cpufreq, a udev rule writing the same file, or a service such as PowerTOP's auto-tune), and never changed back. The second time in a day the setting is blocked and left to that tool. Shown in Activity under Problems. The demo has a "Pretend another tool changed a setting" button.

@@ -98,6 +98,8 @@ pub struct Core {
     pub outside: crate::outside::OutsideState,
     /// Letting idle USB devices and internal hardware sleep on battery.
     pub devices: crate::devices::DevicesState,
+    /// "Charge fully once".
+    pub fullcharge: crate::fullcharge::FullCharge,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -129,6 +131,7 @@ impl Core {
         let predict = PredictState::load(&state_dir);
         let kept = KeptState::load(&state_dir, unix_now());
         let devices = crate::devices::DevicesState::load(&state_dir);
+        let fullcharge = crate::fullcharge::FullCharge::load(&state_dir);
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
@@ -153,6 +156,7 @@ impl Core {
             kept,
             outside: Default::default(),
             devices,
+            fullcharge,
         }
     }
 
@@ -451,6 +455,7 @@ impl Core {
             || self.apps.needs_ticks()
             || self.predict.needs_ticks()
             || self.devices.needs_ticks()
+            || self.fullcharge.is_active()
     }
 
     /// Whether processes need reading this tick.
@@ -485,6 +490,8 @@ impl Core {
                 eprintln!("dynamisd: {e}");
             }
         }
+        self.fullcharge.tick(&root, &dir, unix, ctx.on_ac);
+        self.predict.hold_charge = self.fullcharge.is_active();
         let mut target_changed = false;
         if self
             .predict

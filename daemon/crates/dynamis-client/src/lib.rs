@@ -215,6 +215,15 @@ impl Client {
             .map_err(explain)
     }
 
+    /// The full diagnostic report in plain text (`dynamis stat`).
+    pub async fn diagnostics(&self) -> Result<String> {
+        self.own()
+            .await?
+            .call("Diagnostics", &())
+            .await
+            .map_err(explain)
+    }
+
     /// Devices that can sleep when idle, and the two switches.
     pub async fn devices(&self) -> Result<Value> {
         self.json("Devices", &()).await
@@ -256,6 +265,15 @@ impl Client {
         self.own()
             .await?
             .call::<_, _, ()>("SetAdaptiveCharging", &(on,))
+            .await
+            .map_err(explain)
+    }
+
+    /// "Charge fully once" on, or off (puts the limit back).
+    pub async fn charge_fully_once(&self, on: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("ChargeFullyOnce", &(on,))
             .await
             .map_err(explain)
     }

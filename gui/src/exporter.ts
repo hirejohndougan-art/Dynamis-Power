@@ -6,6 +6,8 @@ export interface ExportOptions {
   results: boolean;
   hardware: boolean;
   settings: boolean;
+  /** The full diagnostic report (`dynamis stat`). */
+  diagnostics: boolean;
   rangeDays: number | null; // null = all
   format: "json" | "text";
   privacy: boolean;
@@ -16,6 +18,7 @@ export interface ExportData {
   learned: Learned | null;
   inventory: unknown;
   settings: SettingRow[];
+  diagnostics?: string | null;
   version: string;
 }
 
@@ -39,6 +42,7 @@ export function build(o: ExportOptions, d: ExportData, now = Date.now() / 1000):
   if (o.results) bundle.results = { records: results, display: d.learned?.display ?? null };
   if (o.hardware) bundle.hardware = d.inventory;
   if (o.settings) bundle.settings = d.settings.map(({ id, current, original, blocked }) => ({ id, current, original, blocked }));
+  if (o.diagnostics && d.diagnostics) bundle.diagnostics = d.diagnostics;
 
   let out: string;
   if (o.format === "json") {
@@ -62,7 +66,9 @@ export function build(o: ExportOptions, d: ExportData, now = Date.now() / 1000):
     if (o.settings) {
       lines.push("== Settings");
       for (const s of d.settings) lines.push(`${s.id}: ${s.current ?? "-"}${s.original ? ` (originally ${s.original})` : ""}${s.blocked ? " BLOCKED" : ""}`);
+      lines.push("");
     }
+    if (o.diagnostics && d.diagnostics) lines.push("== Diagnostic report", d.diagnostics);
     out = lines.join("\n");
   }
   return o.privacy ? scrub(out) : out;

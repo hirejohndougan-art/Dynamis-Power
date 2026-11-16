@@ -43,6 +43,8 @@ pub struct PredictState {
     pub habits: Habits,
     pub target: Option<Target>,
     pub adaptive_charging: bool,
+    /// "Charge fully once" is running: charging that follows habits waits.
+    pub hold_charge: bool,
     pub last: Option<TargetStatus>,
     pub charge: Option<ChargePlan>,
     /// The last reading's forecast of when the battery runs out.
@@ -195,7 +197,7 @@ impl PredictState {
             }
         }
 
-        if self.adaptive_charging {
+        if self.adaptive_charging && !self.hold_charge {
             self.follow_habits(root, state_dir, now);
         }
         self.level() != before

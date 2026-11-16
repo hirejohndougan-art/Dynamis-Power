@@ -16,6 +16,7 @@ Every lever the app can tune. Each row becomes one setting plugin (see [ARCHITEC
 | `cpu.governor` | Frequency governor | `.../policy*/scaling_governor` | Safe |
 | `cpu.max_perf_pct` | Upper speed limit | `/sys/devices/system/cpu/intel_pstate/max_perf_pct` | Safe |
 | `cpu.max_freq` | Top frequency, for drivers without a speed limit in percent | `.../policy*/scaling_max_freq`, from `scaling_available_frequencies` | Safe |
+| `cpu.min_freq` | Lowest frequency, for drivers without performance levels | `.../policy*/scaling_min_freq`, from `scaling_available_frequencies` | Safe |
 | `cpu.min_perf_pct` | Lower speed limit | `/sys/devices/system/cpu/intel_pstate/min_perf_pct` | Safe |
 | `cpu.turbo` | Turbo boost | `/sys/devices/system/cpu/intel_pstate/no_turbo` or `cpufreq/boost` | Safe |
 | `cpu.hwp_dynamic_boost` | Intel HWP dynamic boost | `/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost` | Safe |
@@ -113,6 +114,8 @@ Code: `daemon/crates/dynamis-core/src/settings/plugins.rs`. Values are what peop
 | `pcie.aspm` | `default`, `performance`, `powersave` | `powersupersave` deliberately not offered |
 | `cpu.min_perf_pct` | 0 to the current speed limit | Intel only |
 | `cpu.max_freq` | The driver's own frequency list, in MHz, down to 30% of the top | Only where there is no speed limit in percent and the driver lists frequencies, so the value reads back exactly |
+| `cpu.min_freq` | The driver's own frequency list, in MHz, up to the current top frequency | Offered where `cpu.max_freq` is |
+| `storage.sata_alpm` | `max_performance`, `medium_power`, `med_power_with_dipm` | Every SATA host with the control. `min_power` deliberately not offered (some drives hang or lose data). Learning tests `med_power_with_dipm` |
 | `cpu.governor` | The driver's governors, minus `userspace` | Written to every CPU policy. Used by modes only on laptops without a speed preference |
 | `cpu.hwp_dynamic_boost` | `on`, `off` | Intel HWP |
 | `audio.controller_power` | `on`, `off` | Usually safe |

@@ -127,16 +127,16 @@ function Logs(props: { entries: JournalEntry[] }) {
 }
 
 function ExportDialog(props: { open: boolean; onClose: () => void; version: string; journal: JournalEntry[] }) {
-  const [o, setO] = useState<ExportOptions>({ journal: true, results: true, hardware: true, settings: true, rangeDays: 7, format: "json", privacy: true });
+  const [o, setO] = useState<ExportOptions>({ journal: true, results: true, hardware: true, settings: true, diagnostics: true, rangeDays: 7, format: "json", privacy: true });
   const extra = useLoad(
-    async () => (props.open ? { learned: await backend.learned(), inventory: await backend.inventory(), settings: await backend.settings() } : null),
+    async () => (props.open ? { learned: await backend.learned(), inventory: await backend.inventory(), settings: await backend.settings(), diagnostics: await backend.diagnostics().catch(() => null) } : null),
     [props.open],
   );
   const [note, setNote] = useState<string | null>(null);
-  const data = { journal: props.journal, learned: extra.data?.learned ?? null, inventory: extra.data?.inventory ?? null, settings: extra.data?.settings ?? [], version: props.version };
+  const data = { journal: props.journal, learned: extra.data?.learned ?? null, inventory: extra.data?.inventory ?? null, settings: extra.data?.settings ?? [], diagnostics: extra.data?.diagnostics ?? null, version: props.version };
   const text = build(o, data);
   const set = <K extends keyof ExportOptions>(k: K, v: ExportOptions[K]) => setO({ ...o, [k]: v });
-  const check = (k: "journal" | "results" | "hardware" | "settings", label: Parameters<typeof t>[0]) => (
+  const check = (k: "journal" | "results" | "hardware" | "settings" | "diagnostics", label: Parameters<typeof t>[0]) => (
     <label className="check">
       <input type="checkbox" checked={o[k]} onChange={(e) => set(k, e.target.checked)} /> {t(label)}
     </label>
@@ -173,6 +173,7 @@ function ExportDialog(props: { open: boolean; onClose: () => void; version: stri
         {check("results", "export_results")}
         {check("hardware", "export_hardware")}
         {check("settings", "export_settings")}
+        {check("diagnostics", "export_diagnostics")}
       </fieldset>
       <div className="row">
         <Choice

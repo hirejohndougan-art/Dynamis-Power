@@ -15,6 +15,7 @@ export function Battery(props: { status: Status; refresh: () => void }) {
     predict.reload();
   });
   const d = props.status.display;
+  const fc = props.status.full_charge;
   const pr = predict.data;
 
   return (
@@ -76,6 +77,30 @@ export function Battery(props: { status: Status; refresh: () => void }) {
           </>
         ) : (
           <p className="muted">{t("battery_limit_none")}</p>
+        )}
+        {limitRow?.available && (
+          <>
+            {fc?.active ? (
+              <div className="notice notice-info">
+                <span>{t("full_charge_on", { pct: fc.restore_to ?? "" })}</span>
+                <button type="button" className="btn btn-small" onClick={() => run(() => backend.chargeFullyOnce(false))}>
+                  {t("full_charge_stop")}
+                </button>
+              </div>
+            ) : (
+              fc?.supported &&
+              p.charge_limit != null &&
+              p.charge_limit < 100 && (
+                <div className="row">
+                  <button type="button" className="btn" disabled={!!props.status.safe_mode} onClick={() => run(() => backend.chargeFullyOnce(true))}>
+                    {t("full_charge_button")}
+                  </button>
+                  <span className="muted small">{t("full_charge_desc")}</span>
+                </div>
+              )
+            )}
+            {!fc?.active && fc?.ended && <p className="muted small">{t("full_charge_ended", { why: fc.ended })}</p>}
+          </>
         )}
       </section>
       <Devices locked={!!props.status.safe_mode} run={run} />

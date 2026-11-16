@@ -203,6 +203,20 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.queryByText("Kept after restarts")).toBeNull());
   });
 
+  it("charges fully once, then puts the limit back", async () => {
+    await backend.setSetting("battery.charge_limit", "80", false);
+    window.location.hash = "#battery";
+    render(<App />);
+    const button = await screen.findByRole("button", { name: "Charge fully once" });
+    await act(async () => fireEvent.click(button));
+    await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
+    expect(await screen.findByText(/Charging fully this once\. The limit goes back to 80%/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Stop" })));
+    expect(await screen.findByText("Charging fully ended: you stopped it.")).toBeTruthy();
+    expect((await backend.status()).power.charge_limit).toBe(80);
+    await backend.restore();
+  });
+
   it("lets idle devices sleep, never the sensitive ones", async () => {
     window.location.hash = "#battery";
     render(<App />);

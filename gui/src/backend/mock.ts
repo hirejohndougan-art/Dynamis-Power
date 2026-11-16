@@ -142,6 +142,8 @@ export function mockBackend(): Backend {
   const kept = () => records.filter((r) => r.verdict === "keep");
 
   const blockedIds = new Map<string, string>();
+  let fullCharge: string | null = null;
+  let fullChargeEnded: string | null = null;
   let devicePolicy: DevicePolicy = { usb: false, pci: false };
   const deviceList: (Omit<DeviceInfo, "sleeps" | "managed"> & { own: boolean })[] = [
     { id: "usb:1-3", kind: "usb", name: "Integrated Camera", what: "usb_device", address: "1-3", excluded: null, own: false },
@@ -247,10 +249,11 @@ export function mockBackend(): Backend {
       power: {
         on_ac: false, has_battery: true, battery_pct: 79, charging: false,
         watts: Math.round(watts * 100) / 100, hours_left: Math.round((31.2 / watts) * 10) / 10, hours_to_full: null,
-        health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: null,
+        health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: Number(values["battery.charge_limit"]),
       },
       safe_mode: safeMode,
       unclean,
+      full_charge: { supported: true, active: fullCharge !== null, restore_to: fullCharge, ended: fullChargeEnded },
       dry_run: dryRun,
       kept: { settings: [...keptSettings].map(([id, value]) => ({ id, label: label(id), value, trusted: true })), held_back: [], charge_limit_ignored: false },
       pending: null,
@@ -296,6 +299,7 @@ export function mockBackend(): Backend {
       appPolicy = { ...appPolicy, slow_background: false, boost_front: false, always_slow: [] };
       keptSettings.clear();
       devicePolicy = { usb: false, pci: false };
+      fullCharge = null;
       target = null;
       adaptive = false;
       const done = Object.entries(original)
@@ -310,6 +314,10 @@ export function mockBackend(): Backend {
     setSetting: async (id, value) => {
       refuse();
       setValue(id, value, "set in the app");
+      if (id === "battery.charge_limit" && fullCharge !== null) {
+        fullCharge = null;
+        fullChargeEnded = "you set the limit by hand";
+      }
       if (id.startsWith("battery.charge") || keptSettings.has(id)) keptSettings.set(id, value);
     },
     setKept: async (id, keep) => {
@@ -345,6 +353,24 @@ export function mockBackend(): Backend {
       if (p.never_slow.some((a) => p.always_slow.includes(a))) throw new Error("an app cannot be both never and always slowed");
       appPolicy = { ...p, v: 1 };
     },
+    diagnostics: async () =>
+      delay(
+        [
+          "Dynamis Power diagnostic report (version 0.1.0 (preview))",
+          "",
+          "== System ==",
+          "Model:          Example Computers Inc. Synthetic Laptop 14 (laptop)",
+          "Kernel:         6.14.0-synthetic",
+          "",
+          "== Service ==",
+          `Running:        yes`,
+          `Mode:           ${profile}`,
+          `Safe mode:      ${safeMode ?? "off"}`,
+          "",
+          "== Settings ==",
+          ...Object.entries(values).map(([id, v]) => `${id.padEnd(24)} ${v.padEnd(22)} ${original[id] !== v ? original[id] : ""}`),
+        ].join("\n"),
+      ),
     devices: async () =>
       delay({
         policy: devicePolicy,
@@ -372,6 +398,22 @@ export function mockBackend(): Backend {
       target = until === 0 ? null : { until };
     },
     setAdaptiveCharging: async (on) => { refuse(); adaptive = on; },
+    chargeFullyOnce: async (on) => {
+      refuse();
+      const lim = "battery.charge_limit";
+      if (on && fullCharge === null) {
+        if (values[lim] === "100") throw new Error("the battery already charges fully");
+        fullCharge = values[lim];
+        log({ event: "done", id: lim, label: label(lim), from: values[lim], to: "100", reason: "charge fully once" });
+        values[lim] = "100";
+        fullChargeEnded = null;
+      } else if (!on && fullCharge !== null) {
+        log({ event: "done", id: lim, label: label(lim), from: "100", to: fullCharge, reason: "charge fully once ended: you stopped it" });
+        values[lim] = fullCharge;
+        fullCharge = null;
+        fullChargeEnded = "you stopped it";
+      }
+    },
     trayShown: async () => delay(tray),
     profiles: async () => delay(profileSettings()),
     setProfileOverrides: async (o) => {

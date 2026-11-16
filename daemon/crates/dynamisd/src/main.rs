@@ -18,6 +18,7 @@ mod conflicts;
 mod core;
 mod crash;
 mod devices;
+mod fullcharge;
 mod kept;
 mod learn;
 mod outside;

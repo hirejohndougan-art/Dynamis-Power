@@ -161,6 +161,11 @@ async fn set_app_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), Stri
 }
 
 #[tauri::command]
+async fn diagnostics(conn: State<'_, Conn>) -> Result<String, String> {
+    client(&conn).await?.diagnostics().await
+}
+
+#[tauri::command]
 async fn devices(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.devices().await
 }
@@ -183,6 +188,11 @@ async fn predict(conn: State<'_, Conn>) -> Result<Value, String> {
 #[tauri::command]
 async fn set_target(conn: State<'_, Conn>, until: f64) -> Result<(), String> {
     client(&conn).await?.set_target(until).await
+}
+
+#[tauri::command]
+async fn charge_fully_once(conn: State<'_, Conn>, on: bool) -> Result<(), String> {
+    client(&conn).await?.charge_fully_once(on).await
 }
 
 #[tauri::command]
@@ -261,9 +271,11 @@ fn main() {
             forget_app_usage,
             devices,
             set_device_policy,
+            diagnostics,
             predict,
             set_target,
             set_adaptive_charging,
+            charge_fully_once,
             tray_shown,
             set_tray,
             profiles,

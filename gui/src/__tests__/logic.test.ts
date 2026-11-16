@@ -43,17 +43,24 @@ describe("export", () => {
     version: "0.1.0",
   };
   it("removes personal details when asked", () => {
-    const out = build({ journal: true, results: false, hardware: true, settings: false, rangeDays: null, format: "json", privacy: true }, data);
+    const out = build({ journal: true, results: false, hardware: true, settings: false, diagnostics: false, rangeDays: null, format: "json", privacy: true }, data);
     expect(out).not.toMatch(/john|192\.168|aa:bb|ABC123/);
     expect(out).toContain("[user]");
-    const raw = build({ journal: true, results: false, hardware: true, settings: false, rangeDays: null, format: "json", privacy: false }, data);
+    const raw = build({ journal: true, results: false, hardware: true, settings: false, diagnostics: false, rangeDays: null, format: "json", privacy: false }, data);
     expect(raw).toContain("ABC123");
   });
   it("respects the time range and the sections chosen", () => {
-    const out = build({ journal: true, results: false, hardware: false, settings: false, rangeDays: 1, format: "text", privacy: true }, data, 9_000_100);
+    const out = build({ journal: true, results: false, hardware: false, settings: false, diagnostics: false, rangeDays: 1, format: "text", privacy: true }, data, 9_000_100);
     expect(out).not.toContain("old");
     expect(out).toContain("== Change journal");
     expect(out).not.toContain("== Hardware");
+  });
+  it("adds the diagnostic report when chosen", () => {
+    const d = { ...data, diagnostics: "== System ==\nModel: Book\nseen in /home/john/x" };
+    const out = build({ journal: false, results: false, hardware: false, settings: false, diagnostics: true, rangeDays: null, format: "text", privacy: true }, d);
+    expect(out).toContain("== Diagnostic report");
+    expect(out).toContain("Model: Book");
+    expect(out).toContain("/home/[user]");
   });
   it("makes a short summary", () => {
     expect(summary(data)).toContain("Machine: ? Book");

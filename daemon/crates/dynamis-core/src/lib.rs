@@ -15,6 +15,7 @@ pub mod boots;
 pub mod calibrate;
 pub mod context;
 pub mod devices;
+pub mod diag;
 pub mod display;
 pub mod engine;
 pub mod fs;
@@ -30,6 +31,7 @@ pub mod report;
 pub mod selfstat;
 pub mod sensors;
 pub mod settings;
+pub mod tools;
 pub mod tune;
 mod writer;
 

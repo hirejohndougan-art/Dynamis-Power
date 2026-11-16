@@ -1596,6 +1596,14 @@ fn idle_devices_sleep_on_battery() {
         fs::write(root.join("sys/class/power_supply/AC0/online"), "0").unwrap();
         eventually("battery again", async || control(cam) == "auto").await;
 
+        // The diagnostic report shows the service and the devices.
+        let r = c.diagnostics().await.unwrap();
+        assert!(r.contains("Running:        yes"), "{r}");
+        assert!(
+            r.contains("usb:1-2") && r.contains("kept awake: input"),
+            "{r}"
+        );
+
         // Restore: everything back and the switches off.
         c.restore().await.unwrap();
         assert_eq!([control(cam), control(xhci)], ["on", "on"]);
@@ -1604,5 +1612,69 @@ fn idle_devices_sleep_on_battery() {
             info["policy"],
             serde_json::json!({"usb": false, "pci": false})
         );
+    });
+}
+
+/// "Charge fully once" lifts the limit until the battery is full, or the
+/// charger is unplugged, then puts it back.
+#[test]
+fn charge_fully_once_then_back_to_the_limit() {
+    let Some(env) = Env::new("fullcharge") else {
+        return;
+    };
+    let root = env.dir.join("root");
+    let bat = root.join("sys/class/power_supply/BAT0");
+    let ac = root.join("sys/class/power_supply/AC0/online");
+    fs::write(bat.join("charge_control_end_threshold"), "100").unwrap();
+    let limit = || {
+        fs::read_to_string(bat.join("charge_control_end_threshold"))
+            .unwrap()
+            .trim()
+            .to_string()
+    };
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        c.set_setting("battery.charge_limit", "80", false)
+            .await
+            .unwrap();
+        // Plugged in at 85%.
+        fs::write(&ac, "1").unwrap();
+        fs::write(bat.join("status"), "Charging").unwrap();
+        fs::write(bat.join("capacity"), "85").unwrap();
+        c.charge_fully_once(true).await.unwrap();
+        assert_eq!(limit(), "100");
+        assert_eq!(c.status().await.unwrap()["full_charge"]["active"], true);
+
+        // Full: back to 80.
+        fs::write(bat.join("capacity"), "100").unwrap();
+        fs::write(bat.join("status"), "Full").unwrap();
+        eventually("limit back after full", async || limit() == "80").await;
+        let fc = c.status().await.unwrap()["full_charge"].clone();
+        assert_eq!(fc["active"], false);
+        assert_eq!(fc["ended"], "the battery is full");
+
+        // Again, then unplugged before full.
+        fs::write(bat.join("capacity"), "82").unwrap();
+        fs::write(bat.join("status"), "Charging").unwrap();
+        c.charge_fully_once(true).await.unwrap();
+        assert_eq!(limit(), "100");
+        fs::write(&ac, "0").unwrap();
+        fs::write(bat.join("status"), "Discharging").unwrap();
+        eventually("limit back after unplugging", async || limit() == "80").await;
+
+        // Setting the limit by hand ends it without fighting.
+        fs::write(&ac, "1").unwrap();
+        c.charge_fully_once(true).await.unwrap();
+        c.set_setting("battery.charge_limit", "90", false)
+            .await
+            .unwrap();
+        assert_eq!(c.status().await.unwrap()["full_charge"]["active"], false);
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        assert_eq!(limit(), "90");
     });
 }

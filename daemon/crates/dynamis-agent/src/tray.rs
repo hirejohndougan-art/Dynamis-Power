@@ -57,6 +57,7 @@ mod id {
     pub const LAST_4H: i32 = 32;
     pub const LAST_6H: i32 = 33;
     pub const LAST_STOP: i32 = 34;
+    pub const FULL_CHARGE: i32 = 35;
     pub const OPEN: i32 = 40;
     pub const HIDE: i32 = 41;
 }
@@ -169,6 +170,28 @@ pub fn menu(status: Option<&Value>) -> Vec<Entry> {
                 Kind::Plain,
             ));
         }
+    }
+    // "Charge fully once" where the battery has a limit below 100.
+    let fc = &st["full_charge"];
+    let limited = st["power"]["charge_limit"]
+        .as_f64()
+        .is_some_and(|l| l < 100.0);
+    if fc["supported"].as_bool().unwrap_or(false) && (limited || fc["active"] == true) {
+        let active = fc["active"].as_bool().unwrap_or(false);
+        out.push(Entry {
+            enabled: !locked,
+            ..e(
+                id::FULL_CHARGE,
+                0,
+                s(if active {
+                    "tray_full_charge_stop"
+                } else {
+                    "tray_full_charge"
+                })
+                .into(),
+                Kind::Plain,
+            )
+        });
     }
     out.push(e(id::SEP3, 0, String::new(), Kind::Separator));
     out.push(e(id::OPEN, 0, s("tray_open").into(), Kind::Plain));
@@ -381,6 +404,10 @@ impl Shared {
             .status()
             .and_then(|s| s["auto"]["on"].as_bool())
             .unwrap_or(false);
+        let charging_fully = self
+            .status()
+            .and_then(|s| s["full_charge"]["active"].as_bool())
+            .unwrap_or(false);
         let result = match item {
             id::POWER_SAVER => set_prop(PPD_PATH, PPD, "ActiveProfile", "power-saver".into()).await,
             id::BALANCED => set_prop(PPD_PATH, PPD, "ActiveProfile", "balanced".into()).await,
@@ -390,6 +417,17 @@ impl Shared {
             id::LAST_4H => target(4.0).await,
             id::LAST_6H => target(6.0).await,
             id::LAST_STOP => target(0.0).await,
+            id::FULL_CHARGE => self
+                .service
+                .call_method(
+                    Some(SERVICE),
+                    SERVICE_PATH,
+                    Some(SERVICE_IFACE),
+                    "ChargeFullyOnce",
+                    &(!charging_fully,),
+                )
+                .await
+                .map(|_| ()),
             id::OPEN => {
                 open_app();
                 Ok(())
@@ -797,6 +835,19 @@ mod tests {
         let mut st = status();
         st["last_until"] = json!({"until": 1.0});
         assert!(menu(Some(&st)).iter().any(|e| e.id == id::LAST_STOP));
+    }
+
+    #[test]
+    fn charge_fully_once_where_there_is_a_limit() {
+        let mut st = status();
+        let item = |st: &Value| menu(Some(st)).into_iter().find(|e| e.id == id::FULL_CHARGE);
+        assert!(item(&st).is_none());
+        st["full_charge"] = json!({"supported": true, "active": false});
+        st["power"]["charge_limit"] = json!(80);
+        assert_eq!(item(&st).unwrap().label, "Charge fully once");
+        st["full_charge"]["active"] = json!(true);
+        st["power"]["charge_limit"] = json!(100);
+        assert_eq!(item(&st).unwrap().label, "Stop charging fully");
     }
 
     #[test]

@@ -171,3 +171,30 @@ fn s(v: &serde_json::Value) -> String {
         .map(String::from)
         .unwrap_or_else(|| v.to_string())
 }
+
+/// `dynamis stat`: the diagnostic report. Asks the running service for its
+/// status (system bus; nothing is changed), and reads the state directory
+/// when this user can.
+pub fn cmd_stat(root: &dynamis_core::SysRoot, state: &std::path::Path) -> io::Result<()> {
+    // A test root is not the system the service runs on.
+    let real = root.root() == std::path::Path::new("/");
+    let status: Option<serde_json::Value> = zbus::block_on(async {
+        if !real {
+            return None;
+        }
+        let conn = Connection::system().await.ok()?;
+        let own = zbus::Proxy::new(&conn, NAME, PATH, IFACE).await.ok()?;
+        let text: String = own.call("Status", &()).await.ok()?;
+        serde_json::from_str(&text).ok()
+    });
+    print!(
+        "{}",
+        dynamis_core::diag::report(
+            root,
+            Some(state),
+            status.as_ref(),
+            env!("CARGO_PKG_VERSION")
+        )
+    );
+    Ok(())
+}

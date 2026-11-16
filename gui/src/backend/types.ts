@@ -39,6 +39,8 @@ export interface Status {
   safe_mode: string | null;
   /** The last unclean shutdown (freeze, crash, power cut) and safe mode as a test. */
   unclean?: Unclean;
+  /** "Charge fully once". */
+  full_charge?: { supported: boolean; active: boolean; restore_to: string | null; ended: string | null };
   /** Settings set by hand that are applied again after restarts and sleep. */
   kept?: {
     settings: { id: string; label: string; value: string; trusted: boolean }[];
@@ -248,6 +250,8 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** The full diagnostic report in plain text (`dynamis stat`). */
+  diagnostics(): Promise<string>;
   /** Devices that can sleep when idle (USB, internal), and the two switches. */
   devices(): Promise<DevicesInfo>;
   setDevicePolicy(p: DevicePolicy): Promise<void>;
@@ -255,6 +259,8 @@ export interface Backend {
   /** Unix seconds; 0 ends "Last until". */
   setTarget(until: number): Promise<void>;
   setAdaptiveCharging(on: boolean): Promise<void>;
+  /** Lift the charge limit until the battery is full (or stop). */
+  chargeFullyOnce(on: boolean): Promise<void>;
   /** The panel icon (shown by the session helper). */
   trayShown(): Promise<boolean>;
   setTray(on: boolean): Promise<void>;

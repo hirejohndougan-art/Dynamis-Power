@@ -446,6 +446,19 @@ impl DynamisPower {
         self.0.lock().status_json().to_string()
     }
 
+    /// A full diagnostic report in plain text, like `tlp-stat` (also
+    /// `dynamis stat`). Contains no serial numbers or personal data.
+    fn diagnostics(&self) -> String {
+        let c = self.0.lock();
+        let status = c.status_json();
+        dynamis_core::diag::report(
+            &c.root,
+            Some(&c.state_dir),
+            Some(&status),
+            env!("CARGO_PKG_VERSION"),
+        )
+    }
+
     /// The last `n` journal entries, newest first (JSON).
     fn journal(&self, n: u32) -> fdo::Result<String> {
         self.0
@@ -699,6 +712,32 @@ impl DynamisPower {
         r.map_err(fdo::Error::InvalidArgs)?;
         self.0.ticker.poke();
         notify(conn, &self.0).await;
+        Ok(())
+    }
+
+    /// "Charge fully once": lift the charge limit until the battery is full
+    /// or the charger is unplugged (`true`), or stop and put it back.
+    async fn charge_fully_once(
+        &self,
+        on: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        {
+            let mut c = self.0.lock();
+            let (root, dir) = (c.root().clone(), c.state_dir.clone());
+            let on_ac = dynamis_core::sensors::power::read(&root).on_ac();
+            let now = crate::core::unix_now();
+            if on {
+                c.fullcharge.start(&root, &dir, now, on_ac)
+            } else {
+                c.fullcharge.stop(&root, &dir, "you stopped it")
+            }
+            .map_err(fdo::Error::Failed)?;
+            c.predict.hold_charge = c.fullcharge.is_active();
+        }
+        self.0.ticker.poke();
         Ok(())
     }
 
