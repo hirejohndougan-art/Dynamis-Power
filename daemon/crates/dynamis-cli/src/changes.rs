@@ -174,6 +174,13 @@ pub fn cmd_set(root: &SysRoot, state: &Path, a: SetArgs) -> io::Result<()> {
             return Ok(());
         }
         Outcome::Changed { from, to } => (from, to),
+        Outcome::WouldChange { from, to } => {
+            println!(
+                "Dry-run mode is on: {} would change {from} → {to}. Nothing was written.",
+                a.id
+            );
+            return Ok(());
+        }
     };
     println!("Changed {}: {from} → {to}", a.id);
     let Some(secs) = a.trial else {

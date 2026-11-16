@@ -102,3 +102,18 @@ describe("apps", () => {
     expect(w("100", "25", "you chose to always slow this app")?.category).toBe("mine");
   });
 });
+
+describe("sensors", () => {
+  it("turns two readings into processor watts and deep-sleep share", async () => {
+    const { rates } = await import("../screens/AdvancedMore");
+    const base = { on_ac: false, battery_w: 5, battery_pct: 80, pressure: { cpu: 0, memory: 0, io: 0 }, thermal: [], cpu_mhz: 1000, brightness_pct: null };
+    const a = { ...base, time: 100, rapl: [{ id: "r0", name: "package-0", energy_uj: 1_000_000, max_energy_range_uj: 10_000_000 }], idle: { cpus: 2, states: [{ name: "C1", index: 1, time_us: 0 }, { name: "C6", index: 2, time_us: 0 }] } };
+    const b = { ...base, time: 102, rapl: [{ id: "r0", name: "package-0", energy_uj: 5_000_000, max_energy_range_uj: 10_000_000 }], idle: { cpus: 2, states: [{ name: "C1", index: 1, time_us: 1e6 }, { name: "C6", index: 2, time_us: 3e6 }] } };
+    const r = rates(a, b);
+    expect(r.cpu_w).toBeCloseTo(2);
+    expect(r.deep_pct).toBeCloseTo(75);
+    // The counter wrapped.
+    const w = rates(b, { ...b, time: 104, rapl: [{ ...b.rapl[0], energy_uj: 1_000_000 }] });
+    expect(w.cpu_w).toBeCloseTo(3);
+  });
+});

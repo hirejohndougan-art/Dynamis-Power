@@ -126,6 +126,14 @@ Phase 6 (apps) adds:
 | Off by default | Counting is on; nothing is slowed or boosted until switched on. Background slowing needs battery power and a known app in front |
 | Same journal, same undo | Every change is journaled and shown in Activity. Restore puts every share back and turns the switches off; a restart of the service puts back anything left over. Safe mode refuses changes |
 
+Advanced adds:
+
+| Rail | How |
+| --- | --- |
+| Profile choices within the probe | A person can pick what each mode sets, only for that mode's own settings and only among the values this laptop offers; anything else is refused, and an outdated file is ignored when planning |
+| Dry run | A file in the state directory makes every change journal `would` and write nothing; trials are refused, learning waits, restore still writes |
+| Advisor writes nothing | TLP and TuneD output is text for the person; the service never writes configuration files |
+
 Other power tools can be switched off from the app's welcome only after an administrator password, only from a fixed list (TLP, auto-cpufreq, Laptop Mode Tools, TuneD, System76 Power, PowerTOP auto-tune, power-profiles-daemon, tuned-ppd), and each one is recorded so removing Dynamis Power turns it back on.
 
 Not built, by decision: the systemd watchdog ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: dropping capabilities to the minimum after the real-hardware test.

@@ -57,6 +57,12 @@ export function describe(e: JournalEntry): Item | null {
       return item(t("ev_safe_on"), reason, "rollbacks");
     case "safe-mode-off":
       return item(t("ev_safe_off"), "", "mine");
+    case "would":
+      return item(t("ev_would", v), strip(reason, ""), "mine");
+    case "dry-run-on":
+      return item(t("ev_dry_on"), "", "mine");
+    case "dry-run-off":
+      return item(t("ev_dry_off"), "", "mine");
     case "app-weight": {
       const app = appName(e.id);
       const to = Number(e.to), from = Number(e.from);

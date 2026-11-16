@@ -3,9 +3,11 @@ import { backend, type SettingRow, type Status } from "../backend";
 import { Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { t, valueName } from "../i18n";
+import { DeveloperTab, ProfilesTab, SensorsTab, SystemTab } from "./AdvancedMore";
 import { RestoreDialog } from "./Home";
 
-type Tab = "settings" | "learning" | "safety";
+export const TABS = ["settings", "learning", "profiles", "sensors", "safety", "system", "developer"] as const;
+export type Tab = (typeof TABS)[number];
 
 export function Advanced(props: { status: Status; refresh: () => void; initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(props.initialTab ?? "settings");
@@ -24,7 +26,7 @@ export function Advanced(props: { status: Status; refresh: () => void; initialTa
       </header>
       <p className="muted">{t("advanced_notice")}</p>
       <div className="tabs" role="tablist">
-        {(["settings", "learning", "safety"] as const).map((k) => (
+        {TABS.map((k) => (
           <button key={k} type="button" role="tab" id={`atab-${k}`} aria-controls={`apanel-${k}`} aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>
             {t(`tab_${k}`)}
           </button>
@@ -34,6 +36,10 @@ export function Advanced(props: { status: Status; refresh: () => void; initialTa
         {tab === "settings" && <SettingsTab rows={settings.data ?? []} learned={(learned.data?.learned ?? []).map((r) => r.setting)} run={run} />}
         {tab === "learning" && <LearningTab status={props.status} data={learned.data} run={run} />}
         {tab === "safety" && <SafetyTab status={props.status} rows={settings.data ?? []} run={run} />}
+        {tab === "profiles" && <ProfilesTab locked={!!props.status.safe_mode} run={run} />}
+        {tab === "sensors" && <SensorsTab />}
+        {tab === "system" && <SystemTab />}
+        {tab === "developer" && <DeveloperTab status={props.status} run={run} refresh={props.refresh} />}
       </section>
       {toast && <div className="toast" role="status">{toast}</div>}
     </>

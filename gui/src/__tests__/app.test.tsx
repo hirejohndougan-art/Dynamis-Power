@@ -134,4 +134,28 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Stop" })));
     await waitFor(() => expect(screen.queryByText(/^Lasting until/)).toBeNull());
   });
+
+  it("has every Advanced tab, and the Developer tools work", async () => {
+    window.location.hash = "#advanced:developer";
+    render(<App />);
+    for (const name of ["Settings", "Learning", "Profiles", "Sensors", "Safety", "System", "Developer"]) {
+      expect(await screen.findByRole("tab", { name })).toBeTruthy();
+    }
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "As TLP" })));
+    await waitFor(() => expect(screen.getByLabelText("Configuration for another tool").textContent).toMatch(/NMI_WATCHDOG=0/));
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: /Dry run/ })));
+    await waitFor(() => expect(screen.getByRole("switch", { name: /Dry run/ }).getAttribute("aria-checked")).toBe("true"));
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: /Dry run/ })));
+
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Profiles" })));
+    const select = (await screen.findAllByRole("combobox"))[1];
+    fireEvent.change(select, { target: { value: "balance_power" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Profile settings saved/));
+
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "System" })));
+    expect(await screen.findByText(/Example Linux/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Sensors" })));
+    expect(await screen.findByText(/Whole laptop/)).toBeTruthy();
+  });
 });

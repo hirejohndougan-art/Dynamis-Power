@@ -3,7 +3,7 @@ import { Logo } from "./components";
 import { useStatus } from "./hooks";
 import { t } from "./i18n";
 import { Activity } from "./screens/Activity";
-import { Advanced } from "./screens/Advanced";
+import { Advanced, TABS, type Tab } from "./screens/Advanced";
 import { Apps } from "./screens/Apps";
 import { Battery } from "./screens/Battery";
 import { Home } from "./screens/Home";
@@ -85,7 +85,7 @@ export function App() {
         ) : screen === "activity" ? (
           <Activity version={status.version} onChange={refresh} />
         ) : (
-          <Advanced key={sub} status={status} refresh={refresh} initialTab={sub === "learning" || sub === "safety" ? sub : "settings"} />
+          <Advanced key={sub} status={status} refresh={refresh} initialTab={TABS.includes(sub as Tab) ? (sub as Tab) : "settings"} />
         )}
       </main>
     </div>

@@ -162,3 +162,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .app-row { align-items: center; }
 .bar { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+
+/* Raw text (advisor output, raw data) */
+.code { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; overflow: auto; max-height: 320px; font-size: 12px; margin: 0; white-space: pre; }
+.tabs { flex-wrap: wrap; }

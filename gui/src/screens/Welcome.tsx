@@ -139,7 +139,7 @@ function Check(props: { status: Status; rows: SettingRow[]; model?: { vendor?: s
   );
 }
 
-function Conflicts(props: { list: Conflict[] | null; reload: () => void }) {
+export function Conflicts(props: { list: Conflict[] | null; reload: () => void }) {
   const [error, setError] = useState<string | null>(null);
   if (props.list === null) return <p className="muted">{t("loading")}</p>;
   if (props.list.length === 0) return <p>{t("welcome_conflicts_none")}</p>;

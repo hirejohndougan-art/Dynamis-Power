@@ -4,7 +4,7 @@ The app must be usable by someone who has never opened a terminal, while still g
 
 The visual mock-ups are kept with the project's design files. This document is the written specification; when the two disagree, update both.
 
-> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes (with the panel icon switch), Apps, Battery (with the forecast, *Make it last* and *Follow my routine*), Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
+> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes (with the panel icon switch), Apps, Battery (with the forecast, *Make it last* and *Follow my routine*), Activity (with Logs and Export), and every tab of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
 
 ## Principles
 
@@ -81,11 +81,11 @@ Advanced opens with a one-line notice: "These controls are for experienced users
 | --- | --- |
 | Settings | Every setting the app manages, grouped by component. Each row: plain name, technical ID, current value, learned best value, risk tier badge, status (*learned*, *testing*, *pinned*, *blocked*), and controls to pin a value, exclude it from learning, or reset it. Risky and experimental settings each need their own switch |
 | Learning | Pause learning; how much time to spend testing (low, normal, eager); test only on battery / also plugged in; allow running from battery while plugged in; reset everything learned (with confirmation) |
-| Profiles | Edit any profile's goal, limits and allowed ranges; clone a profile; import and export profiles as files |
-| Sensors | Live readings: power, CPU energy, stall pressure, temperatures, idle residency, with small charts |
+| Profiles | **Built:** choose what each mode sets on this laptop (from the values it offers), back to standard, export and import as a file. *Planned:* goals, limits and cloning, with extended profiles |
+| Sensors | **Built:** live readings every 2 s while open: whole-laptop and processor power, time in the deepest sleep state, average speed (with small charts), waiting (stall) for processor, memory and disk, temperatures, brightness |
 | Safety | Safe-mode status and switch, quirk list version and blocked settings for this machine, trial in progress, rollback history, dead-man timer length, battery floor for tests |
-| System | Conflicting power tools detected, desktop integration choices (who controls brightness and sleep), update channel (stable or beta), daemon resource use |
-| Developer | Dry-run mode, advisor mode (write a TLP or TuneD config instead of applying), log level, D-Bus inspector, "Restore original settings" |
+| System | **Built:** versions, the service's own memory and processor use against its budget, other power tools with *Switch off*, what the desktop controls (brightness and sleep are never touched), where updates come from |
+| Developer | **Built:** dry run (changes journaled as "would", nothing written; learning waits; restore still writes), advisor (the mode in use plus what was learned, as a TLP or TuneD configuration, shown and saved as a file, never installed), raw data from the service, *Restore original settings*. *Not built:* log level (the service logs to the journal; `journalctl -u dynamisd`) |
 
 ## Panel icon
 

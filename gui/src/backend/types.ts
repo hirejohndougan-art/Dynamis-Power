@@ -31,6 +31,8 @@ export interface Status {
     charge_limit: number | null;
   };
   safe_mode: string | null;
+  /** Developer: changes are journaled as "would" and not made. */
+  dry_run?: boolean;
   pending: { id: string; label: string; to: string; trial: boolean } | null;
   display: { w_per_pct: number; base_w: number; r2: number; samples: number } | null;
   /** "Last until", when set. Times are Unix seconds. */
@@ -157,6 +159,43 @@ export interface AppsInfo {
   week: AppUse[];
 }
 
+export interface ProfileSettings {
+  profiles: {
+    profile: Profile;
+    settings: { id: string; label: string; choices: string[]; value: string | null; default: string | null }[];
+  }[];
+  overrides: ProfileOverrides;
+}
+
+export interface ProfileOverrides {
+  v: number;
+  profiles: { [profile: string]: { [setting: string]: string } };
+}
+
+export interface Sensors {
+  time: number;
+  on_ac: boolean;
+  battery_w: number | null;
+  battery_pct: number | null;
+  rapl: { id: string; name: string; energy_uj: number | null; max_energy_range_uj: number | null }[];
+  pressure: { cpu: number | null; memory: number | null; io: number | null };
+  thermal: { name: string; kind: string; temp_c: number }[];
+  cpu_mhz: number | null;
+  idle: { cpus: number; states: { name: string; index: number; time_us: number }[] } | null;
+  brightness_pct: number | null;
+}
+
+export interface SystemInfo {
+  version: string;
+  kernel: string | null;
+  os: string | null;
+  uptime_s: number;
+  cpu_s: number | null;
+  cpu_pct: number | null;
+  memory_mb: number | null;
+  state_dir: string;
+}
+
 /** Everything the app can ask of the service. */
 export interface Backend {
   status(): Promise<Status>;
@@ -186,6 +225,13 @@ export interface Backend {
   /** The panel icon (shown by the session helper). */
   trayShown(): Promise<boolean>;
   setTray(on: boolean): Promise<void>;
+  profiles(): Promise<ProfileSettings>;
+  setProfileOverrides(o: ProfileOverrides): Promise<void>;
+  sensors(): Promise<Sensors>;
+  system(): Promise<SystemInfo>;
+  /** "tlp" or "tuned": text only, nothing is written. */
+  advise(format: string): Promise<string>;
+  setDryRun(on: boolean): Promise<void>;
   /** Save an exported file; returns where it went. */
   saveFile(name: string, contents: string): Promise<string>;
 }

@@ -14,7 +14,7 @@ The Dynamis Power app: Tauri 2 + React + TypeScript. It talks to the Dynamis Pow
 | Activity | Plain-language history with filters (automatic, mine, tests, rollbacks, problems) and Undo; a Logs tab with the full journal and search; **Export logs** with sections, time range, JSON or text, *Remove personal details*, a preview and *Copy summary* |
 | Advanced | Settings (plain values, risk badges, status, Change and Reset, technical IDs behind *Details*, an extra confirmation for risky settings), Learning (every test, Forget, forget everything), Safety (safe mode, what is not allowed on this laptop, Restore) |
 
-Not yet (see [../docs/UI.md](../docs/UI.md)): Sharing (phase 8), and the Profiles, Sensors, System and Developer tabs of Advanced. The design's five-step slider is three modes today, matching the service's three profiles.
+Not yet (see [../docs/UI.md](../docs/UI.md)): Sharing and the optional AI helper (phase 8). The design's five-step slider is three modes today, matching the service's three profiles.
 
 ## Layout
 

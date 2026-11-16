@@ -89,6 +89,8 @@ pub struct Core {
     pub learn: Learning,
     pub apps: AppsState,
     pub predict: PredictState,
+    /// The person's own choices for what each profile sets (Advanced).
+    pub profile_overrides: profiles::Overrides,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,6 +120,10 @@ impl Core {
         let learn = Learning::load(&state_dir, timing);
         let apps = AppsState::load(&state_dir);
         let predict = PredictState::load(&state_dir);
+        let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
+            .unwrap_or_default();
         let auto = AutoState {
             enabled: saved_auto.as_ref().is_some_and(|a| a.enabled),
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
@@ -134,6 +140,7 @@ impl Core {
             learn,
             apps,
             predict,
+            profile_overrides,
         }
     }
 
@@ -264,7 +271,13 @@ impl Core {
         if let Some(why) = engine.safe_mode() {
             return Err(format!("safe mode is on ({why}); profiles are not applied"));
         }
-        let results = profiles::apply(&mut engine, &self.root, target, reason);
+        let results = profiles::apply_with(
+            &mut engine,
+            &self.root,
+            target,
+            &self.profile_overrides,
+            reason,
+        );
         let failures: Vec<String> = results
             .iter()
             .filter_map(|a| {

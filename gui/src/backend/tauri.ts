@@ -28,5 +28,11 @@ export const tauriBackend: Backend = {
   setAdaptiveCharging: (on) => invoke("set_adaptive_charging", { on }),
   trayShown: () => invoke("tray_shown"),
   setTray: (on) => invoke("set_tray", { on }),
+  profiles: () => invoke("profiles"),
+  setProfileOverrides: (overrides) => invoke("set_profile_overrides", { overrides }),
+  sensors: () => invoke("sensors"),
+  system: () => invoke("system"),
+  advise: (format) => invoke("advise", { format }),
+  setDryRun: (on) => invoke("set_dry_run", { on }),
   saveFile: (name, contents) => invoke("save_file", { name, contents }),
 };

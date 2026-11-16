@@ -405,6 +405,10 @@ impl Core {
                     self.learn.status = "Waiting: another trial is in progress".into();
                     return;
                 }
+                if e.dry_run() {
+                    self.learn.status = "Waiting: dry-run mode is on, so nothing is tested".into();
+                    return;
+                }
                 self.next_plan(&e)
             }
             Err(e) => {

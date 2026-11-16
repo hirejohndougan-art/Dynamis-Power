@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -59,6 +59,38 @@ export function mockBackend(): Backend {
   let target: { until: number } | null = null;
   let adaptive = false;
   let tray = true;
+  let dryRun = false;
+  let overrides: ProfileOverrides = { v: 1, profiles: {} };
+  const eppChoices = ["performance", "balance_performance", "balance_power", "power"];
+  const profileDefaults: Record<Profile, string> = { "power-saver": "power", balanced: "balance_performance", performance: "performance" };
+  const profileSettings = (): ProfileSettings => ({
+    profiles: (["power-saver", "balanced", "performance"] as Profile[]).map((p) => ({
+      profile: p,
+      settings: [{ id: "cpu.epp", label: "CPU speed preference", choices: eppChoices, value: overrides.profiles[p]?.["cpu.epp"] ?? profileDefaults[p], default: profileDefaults[p] }],
+    })),
+    overrides: JSON.parse(JSON.stringify(overrides)),
+  });
+  let energy = 1_000_000_000;
+  let idleUs = [5e9, 2e10, 9e10];
+  const sensorsInfo = (): Sensors => {
+    energy += 1_400_000 + Math.random() * 300_000;
+    idleUs = idleUs.map((v, i) => v + [5e3, 2e5, 1.5e6][i] * (0.8 + Math.random() * 0.4));
+    return {
+      time: Date.now() / 1000,
+      on_ac: false,
+      battery_w: Math.round(watts * 100) / 100,
+      battery_pct: 79,
+      rapl: [{ id: "intel-rapl:0", name: "package-0", energy_uj: Math.round(energy), max_energy_range_uj: 262143328850 }],
+      pressure: { cpu: 1.2, memory: 0, io: 0.4 },
+      thermal: [{ name: "thermal_zone0", kind: "x86_pkg_temp", temp_c: 48 + Math.random() * 3 }, { name: "thermal_zone1", kind: "acpitz", temp_c: 41 }],
+      cpu_mhz: 1100 + Math.round(Math.random() * 400),
+      idle: { cpus: 2, states: ["POLL", "C1", "C10"].map((name, index) => ({ name, index, time_us: Math.round(idleUs[index]) })) },
+      brightness_pct: 60,
+    };
+  };
+  const systemInfo = (): SystemInfo => ({
+    version: "0.1.0 (preview)", kernel: "6.17.0-generic", os: "Example Linux 26.04", uptime_s: 86_400, cpu_s: 95, cpu_pct: 0.11, memory_mb: 9.4, state_dir: "/var/lib/dynamis-power",
+  });
   const predictInfo = (): Predict => {
     const n = now();
     return {
@@ -154,6 +186,7 @@ export function mockBackend(): Backend {
         health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: null,
       },
       safe_mode: safeMode,
+      dry_run: dryRun,
       pending: null,
       display: { w_per_pct: 0.031, base_w: 3.9, r2: 0.86, samples: 412 },
       last_until: target && { until: target.until, level: "no_boost", reason: "Saving more to reach your time", on_track: false },
@@ -238,6 +271,26 @@ export function mockBackend(): Backend {
     },
     setAdaptiveCharging: async (on) => { refuse(); adaptive = on; },
     trayShown: async () => delay(tray),
+    profiles: async () => delay(profileSettings()),
+    setProfileOverrides: async (o) => {
+      refuse();
+      for (const m of Object.values(o.profiles)) for (const v of Object.values(m)) if (!eppChoices.includes(v)) throw new Error(`'${v}' is not offered for 'cpu.epp'`);
+      overrides = JSON.parse(JSON.stringify(o));
+      const want = overrides.profiles[profile]?.["cpu.epp"] ?? profileDefaults[profile];
+      setValue("cpu.epp", want, "profile settings changed in Advanced");
+    },
+    sensors: async () => delay(sensorsInfo()),
+    system: async () => delay(systemInfo()),
+    advise: async (format) => {
+      if (format !== "tlp" && format !== "tuned") throw new Error("format must be 'tlp' or 'tuned'");
+      return delay(format === "tlp"
+        ? "# Written by Dynamis Power 0.1.0 from the balanced mode and what it learned on this laptop.\nCPU_ENERGY_PERF_POLICY_ON_AC=balance_performance\nCPU_ENERGY_PERF_POLICY_ON_BAT=balance_performance\nNMI_WATCHDOG=0\n"
+        : "# Written by Dynamis Power 0.1.0 from the balanced mode and what it learned on this laptop.\n[main]\ninclude=balanced\n\n[sysctl]\nkernel.nmi_watchdog=0\n");
+    },
+    setDryRun: async (on) => {
+      dryRun = on;
+      log({ event: on ? "dry-run-on" : "dry-run-off", id: "", label: "", reason: "" });
+    },
     setTray: async (on) => { tray = on; },
     saveFile: async (name, contents) => {
       const url = URL.createObjectURL(new Blob([contents], { type: "text/plain" }));

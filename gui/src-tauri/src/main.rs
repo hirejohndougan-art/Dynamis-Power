@@ -190,6 +190,36 @@ async fn set_tray(on: bool) -> Result<(), String> {
     Client::set_tray(on).await
 }
 
+#[tauri::command]
+async fn profiles(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.profiles().await
+}
+
+#[tauri::command]
+async fn set_profile_overrides(conn: State<'_, Conn>, overrides: Value) -> Result<(), String> {
+    client(&conn).await?.set_profile_overrides(&overrides).await
+}
+
+#[tauri::command]
+async fn sensors(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.sensors().await
+}
+
+#[tauri::command]
+async fn system(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.system().await
+}
+
+#[tauri::command]
+async fn advise(conn: State<'_, Conn>, format: String) -> Result<String, String> {
+    client(&conn).await?.advise(&format).await
+}
+
+#[tauri::command]
+async fn set_dry_run(conn: State<'_, Conn>, on: bool) -> Result<(), String> {
+    client(&conn).await?.set_dry_run(on).await
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Conn::default())
@@ -219,6 +249,12 @@ fn main() {
             set_adaptive_charging,
             tray_shown,
             set_tray,
+            profiles,
+            set_profile_overrides,
+            sensors,
+            system,
+            advise,
+            set_dry_run,
             save_file
         ])
         .run(tauri::generate_context!())

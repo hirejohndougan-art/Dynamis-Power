@@ -38,6 +38,8 @@ pub const DEFAULT_STATE_DIR: &str = "/var/lib/dynamis-power";
 /// Dynamis Power itself (after repeated unclean shutdowns) or by
 /// `dynamis safe-mode on`. Holds the reason.
 pub const SAFE_MODE_FILE: &str = "safe-mode";
+/// While this file exists, changes are journaled as `would` and not made.
+pub const DRY_RUN_FILE: &str = "dry-run";
 /// The journal is rotated when it grows past this many bytes; one previous
 /// file (`journal.1.jsonl`) is kept.
 pub const JOURNAL_ROTATE_BYTES: u64 = 1 << 20;
@@ -206,8 +208,16 @@ struct Blocked {
 /// What [`Engine::apply`] did.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
-    Changed { from: String, to: String },
+    Changed {
+        from: String,
+        to: String,
+    },
     AlreadySet(String),
+    /// Dry-run mode: journaled as "would", nothing written.
+    WouldChange {
+        from: String,
+        to: String,
+    },
 }
 
 /// What [`Engine::open`] found and fixed from an earlier run.
@@ -305,6 +315,31 @@ impl Engine {
             .split_whitespace()
             .any(|w| w == SAFE_MODE_CMDLINE)
             .then(|| format!("{SAFE_MODE_CMDLINE} on the kernel command line"))
+    }
+
+    /// Dry-run mode (Advanced → Developer): every change is checked and
+    /// journaled as `would`, and nothing is written. Restore still writes.
+    pub fn dry_run(&self) -> bool {
+        self.dir.join(DRY_RUN_FILE).exists()
+    }
+
+    pub fn set_dry_run(&mut self, on: bool) -> Result<()> {
+        let path = self.dir.join(DRY_RUN_FILE);
+        if on == path.exists() {
+            return Ok(());
+        }
+        if on {
+            fs::write(&path, "on\n").map_err(|e| EngineError::State(e.to_string()))?;
+        } else {
+            fs::remove_file(&path).map_err(|e| EngineError::State(e.to_string()))?;
+        }
+        self.log(
+            if on { "dry-run-on" } else { "dry-run-off" },
+            "",
+            None,
+            None,
+            "",
+        )
     }
 
     /// Switch safe mode on (`Some(reason)`) or off (`None`). Switching it off
@@ -407,6 +442,15 @@ impl Engine {
             return Ok(Outcome::AlreadySet(to));
         }
         let writes = s.plan(&self.root, &to).map_err(EngineError::Invalid)?;
+        if self.dry_run() {
+            if req.trial_secs.is_some() {
+                return Err(EngineError::Invalid(
+                    "dry-run mode is on: nothing is tested".into(),
+                ));
+            }
+            self.log("would", req.id, Some(&from), Some(&to), req.reason)?;
+            return Ok(Outcome::WouldChange { from, to });
+        }
 
         self.remember_baseline(req.id, &from)?;
         let deadline = req.trial_secs.map(|t| now() + t);
@@ -512,6 +556,16 @@ impl Engine {
             .read_string(&path)
             .map_err(|e| EngineError::Unsupported(format!("{path}: {e}")))?;
         if current == weight.to_string() {
+            return Ok(false);
+        }
+        if self.dry_run() {
+            self.log(
+                "would",
+                app,
+                Some(&current),
+                Some(&weight.to_string()),
+                reason,
+            )?;
             return Ok(false);
         }
         let file = self.dir.join("cgroups.json");

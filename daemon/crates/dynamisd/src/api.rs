@@ -3,6 +3,7 @@
 //! without a bus.
 
 use dynamis_core::calibrate::Verdict;
+use dynamis_core::profiles;
 use dynamis_core::sensors::power;
 use dynamis_core::settings;
 use serde_json::{json, Value};
@@ -82,6 +83,7 @@ impl Core {
                 "charge_limit": bat.and_then(|b| b.charge_limit_pct),
             },
             "safe_mode": engine.as_ref().and_then(|e| e.safe_mode()),
+            "dry_run": engine.as_ref().is_some_and(|e| e.dry_run()),
             "pending": engine.as_ref().and_then(|e| e.pending()).map(|p| json!({
                 "id": p.id, "label": label(&p.id), "to": p.to, "trial": p.trial_deadline.is_some(),
             })),
@@ -185,5 +187,129 @@ impl Core {
         e.set_safe_mode(on.then_some("switched on in the app"))
             .map_err(|e| e.to_string())?;
         Ok(e.safe_mode())
+    }
+
+    // --- Advanced: Profiles, Sensors, System, Developer ---------------------
+
+    /// What each profile sets here: the default, the person's own choice,
+    /// and the values offered.
+    pub fn profiles_json(&self) -> Value {
+        use dynamis_core::profiles::{editable, plan, plan_with};
+        let rows: Vec<Value> = self
+            .available()
+            .iter()
+            .map(|p| {
+                let now = plan_with(&self.root, *p, &self.profile_overrides);
+                let default = plan(&self.root, *p);
+                let settings: Vec<Value> = editable(&self.root, *p)
+                    .into_iter()
+                    .map(|(id, choices)| {
+                        let pick = |steps: &[dynamis_core::profiles::Step]| {
+                            steps.iter().find(|s| s.id == id).map(|s| s.value.clone())
+                        };
+                        json!({
+                            "id": id,
+                            "label": label(id),
+                            "choices": choices,
+                            "value": pick(&now),
+                            "default": pick(&default),
+                        })
+                    })
+                    .collect();
+                json!({"profile": p.as_str(), "settings": settings})
+            })
+            .collect();
+        json!({"profiles": rows, "overrides": self.profile_overrides})
+    }
+
+    /// Replace the person's profile choices (checked against this machine)
+    /// and apply the active profile again.
+    pub fn set_profile_overrides(&mut self, mut ov: profiles::Overrides) -> Result<(), String> {
+        ov.v = profiles::Overrides::VERSION;
+        ov.profiles.retain(|_, m| !m.is_empty());
+        ov.check(&self.root)?;
+        crate::core::write_atomic(
+            &self.state_dir.join("profiles.json"),
+            &serde_json::to_string_pretty(&ov).map_err(|e| e.to_string())?,
+        )?;
+        self.profile_overrides = ov;
+        self.apply_active("profile settings changed in Advanced")
+    }
+
+    /// Live readings for the Sensors tab. Counters (energy, idle time) are
+    /// totals; the app turns two readings into rates.
+    pub fn sensors_json(&self) -> Value {
+        use dynamis_core::sensors::{self, idle};
+        let snap = sensors::snapshot(&self.root);
+        json!({
+            "time": snap.time,
+            "on_ac": snap.power.on_ac(),
+            "battery_w": snap.power.total_battery_power_w(),
+            "battery_pct": snap.power.batteries.first().and_then(|b| b.capacity_pct),
+            "rapl": snap.rapl,
+            "pressure": {
+                "cpu": snap.pressure.cpu.as_ref().map(|p| p.some.avg10),
+                "memory": snap.pressure.memory.as_ref().map(|p| p.some.avg10),
+                "io": snap.pressure.io.as_ref().map(|p| p.some.avg10),
+            },
+            "thermal": snap.thermal,
+            "cpu_mhz": snap.cpu.avg_mhz(),
+            "idle": idle::read(&self.root),
+            "brightness_pct": snap.backlight.map(|b| b.percent),
+        })
+    }
+
+    /// About this machine and the service, for the System tab.
+    pub fn system_json(&self, uptime_s: f64) -> Value {
+        let me = dynamis_core::selfstat::SelfUsage::read();
+        let os = self.root.read_string("/etc/os-release").ok().and_then(|t| {
+            t.lines()
+                .find_map(|l| l.strip_prefix("PRETTY_NAME="))
+                .map(|v| v.trim_matches('"').to_string())
+        });
+        json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "kernel": self.root.read_string("/proc/sys/kernel/osrelease").ok(),
+            "os": os,
+            "uptime_s": uptime_s,
+            "cpu_s": me.as_ref().map(|m| m.cpu_s),
+            "cpu_pct": me.as_ref().map(|m| if uptime_s > 0.0 { m.cpu_s / uptime_s * 100.0 } else { 0.0 }),
+            "memory_mb": me.as_ref().and_then(|m| m.rss_mb),
+            "state_dir": self.state_dir.display().to_string(),
+        })
+    }
+
+    /// Advisor mode: what Dynamis Power would set, as a TLP or TuneD file.
+    pub fn advise(&self, format: &str) -> Result<String, String> {
+        use dynamis_core::advisor::{self, Format, Plan};
+        let format = Format::parse(format).ok_or("format must be 'tlp' or 'tuned'")?;
+        let ac: std::collections::BTreeMap<String, String> =
+            profiles::plan_with(&self.root, self.active(), &self.profile_overrides)
+                .into_iter()
+                .map(|s| (s.id.to_string(), s.value))
+                .collect();
+        let mut bat = ac.clone();
+        for r in self.learn.learned() {
+            bat.insert(r.setting.clone(), r.value.clone());
+        }
+        if let Some(c) = self
+            .predict
+            .charge
+            .as_ref()
+            .filter(|_| self.predict.adaptive_charging)
+        {
+            bat.insert("battery.charge_limit".into(), c.limit_pct.to_string());
+        }
+        let header = format!(
+            "Written by Dynamis Power {} from the {} mode and what it learned on this laptop.",
+            env!("CARGO_PKG_VERSION"),
+            self.active().as_str()
+        );
+        Ok(advisor::write(&Plan { ac, bat }, format, &header))
+    }
+
+    pub fn set_dry_run(&mut self, on: bool) -> Result<(), String> {
+        let mut e = open_engine(&self.root, &self.state_dir)?;
+        e.set_dry_run(on).map_err(|e| e.to_string())
     }
 }

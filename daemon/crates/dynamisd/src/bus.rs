@@ -680,6 +680,62 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// What each profile sets on this machine, and the person's own choices
+    /// (Advanced → Profiles), as JSON.
+    fn profiles(&self) -> String {
+        self.0.lock().profiles_json().to_string()
+    }
+
+    /// Replace the person's profile choices. Takes the `overrides` object
+    /// from `Profiles`; values must be among those offered here.
+    async fn set_profile_overrides(
+        &self,
+        overrides: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let ov: profiles::Overrides =
+            serde_json::from_str(&overrides).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        self.0
+            .lock()
+            .set_profile_overrides(ov)
+            .map_err(fdo::Error::InvalidArgs)?;
+        notify(conn, &self.0).await;
+        Ok(())
+    }
+
+    /// Live sensor readings (JSON). Reads only.
+    fn sensors(&self) -> String {
+        self.0.lock().sensors_json().to_string()
+    }
+
+    /// About this machine and the service (JSON).
+    fn system(&self) -> String {
+        let up = self.0.epoch.elapsed().as_secs_f64();
+        self.0.lock().system_json(up).to_string()
+    }
+
+    /// Advisor mode: what would be set, as a "tlp" or "tuned" configuration
+    /// (text only; nothing is written anywhere).
+    fn advise(&self, format: String) -> fdo::Result<String> {
+        self.0
+            .lock()
+            .advise(&format)
+            .map_err(fdo::Error::InvalidArgs)
+    }
+
+    /// Dry-run mode: changes are journaled as "would" and not made.
+    async fn set_dry_run(
+        &self,
+        on: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0.lock().set_dry_run(on).map_err(fdo::Error::Failed)
+    }
+
     /// Every calibration result and the display model, as JSON.
     fn learned_json(&self) -> String {
         let c = self.0.lock();

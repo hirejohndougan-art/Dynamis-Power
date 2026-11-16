@@ -6,6 +6,7 @@
 
 pub mod backlight;
 pub mod cpu;
+pub mod idle;
 pub mod power;
 pub mod pressure;
 pub mod rapl;

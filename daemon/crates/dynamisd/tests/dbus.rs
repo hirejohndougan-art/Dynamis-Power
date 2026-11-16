@@ -1213,3 +1213,82 @@ fn the_panel_icon_shows_and_changes_the_mode() {
         assert!(saved.contains("\"tray\":false"), "{saved}");
     });
 }
+
+#[test]
+fn advanced_profiles_sensors_system_and_developer() {
+    let Some(env) = Env::new("advanced") else {
+        return;
+    };
+    let _d = Guard(env.daemon("state"));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+
+        // Profiles: Balanced uses balance_performance by default; choose
+        // balance_power instead, and it applies at once.
+        let p = c.profiles().await.unwrap();
+        let bal = p["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["profile"] == "balanced")
+            .unwrap()
+            .clone();
+        let epp = bal["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == "cpu.epp")
+            .unwrap()
+            .clone();
+        assert_eq!(epp["default"], "balance_performance");
+        assert!(epp["choices"]
+            .as_array()
+            .unwrap()
+            .contains(&"balance_power".into()));
+        c.set_profile("balanced").await.unwrap();
+        let ov =
+            serde_json::json!({"v": 1, "profiles": {"balanced": {"cpu.epp": "balance_power"}}});
+        c.set_profile_overrides(&ov).await.unwrap();
+        assert_eq!(env.epp(), "balance_power");
+        let bad = serde_json::json!({"v": 1, "profiles": {"balanced": {"cpu.epp": "turbo-max"}}});
+        assert!(c
+            .set_profile_overrides(&bad)
+            .await
+            .unwrap_err()
+            .contains("not offered"));
+        let bad = serde_json::json!({"v": 1, "profiles": {"balanced": {"vm.swappiness": "1"}}});
+        assert!(c.set_profile_overrides(&bad).await.is_err());
+
+        // Sensors and System: readings only.
+        let s = c.sensors().await.unwrap();
+        assert!(s["battery_w"].as_f64().is_some(), "{s}");
+        assert!(s["thermal"].is_array());
+        let sys = c.system().await.unwrap();
+        assert!(sys["memory_mb"].as_f64().is_some() || sys["memory_mb"].is_null());
+        assert_eq!(sys["version"], c.status().await.unwrap()["version"]);
+
+        // Developer: advisor text, and dry-run journals instead of writing.
+        let tlp = c.advise("tlp").await.unwrap();
+        assert!(
+            tlp.contains("CPU_ENERGY_PERF_POLICY_ON_AC=balance_power"),
+            "{tlp}"
+        );
+        assert!(c.advise("windows").await.is_err());
+        c.set_dry_run(true).await.unwrap();
+        assert_eq!(c.status().await.unwrap()["dry_run"], true);
+        c.set_profile("power-saver").await.unwrap();
+        assert_eq!(env.epp(), "balance_power", "dry run writes nothing");
+        let j = c.journal(5).await.unwrap().to_string();
+        assert!(j.contains("\"event\":\"would\""), "{j}");
+        c.set_dry_run(false).await.unwrap();
+        c.set_profile("balanced").await.unwrap();
+        c.set_profile("power-saver").await.unwrap();
+        assert_eq!(env.epp(), "power");
+    });
+    let saved = fs::read_to_string(env.dir.join("state/profiles.json")).unwrap();
+    assert!(saved.contains("balance_power"));
+}

@@ -279,6 +279,46 @@ impl Client {
                 "the Dynamis Power session helper is not running; log out and back in".to_string()
             })
     }
+
+    /// What each profile sets here, and the person's own choices.
+    pub async fn profiles(&self) -> Result<Value> {
+        self.json("Profiles", &()).await
+    }
+
+    pub async fn set_profile_overrides(&self, overrides: &Value) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetProfileOverrides", &(overrides.to_string(),))
+            .await
+            .map_err(explain)
+    }
+
+    /// Live sensor readings.
+    pub async fn sensors(&self) -> Result<Value> {
+        self.json("Sensors", &()).await
+    }
+
+    /// About the machine and the service.
+    pub async fn system(&self) -> Result<Value> {
+        self.json("System", &()).await
+    }
+
+    /// What would be set, as a "tlp" or "tuned" configuration.
+    pub async fn advise(&self, format: &str) -> Result<String> {
+        self.own()
+            .await?
+            .call::<_, _, String>("Advise", &(format,))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn set_dry_run(&self, on: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetDryRun", &(on,))
+            .await
+            .map_err(explain)
+    }
 }
 
 const AGENT: &str = "net.dynamis.Agent";

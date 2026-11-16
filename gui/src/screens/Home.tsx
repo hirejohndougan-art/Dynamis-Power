@@ -63,6 +63,11 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
         </div>
       )}
       {s.pending?.trial && <div className="notice notice-info">{t("trial_running", { label: s.pending.label })}</div>}
+      {s.dry_run && (
+        <div className="notice notice-info">
+          {t("dry_run_on")} <a href="#advanced:developer">{t("tab_developer")}</a>
+        </div>
+      )}
 
       <section className="card" aria-label={t("battery_title")}>
         <Estimate s={s} />
