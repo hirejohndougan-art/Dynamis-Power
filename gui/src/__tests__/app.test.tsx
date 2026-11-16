@@ -203,6 +203,20 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.queryByText("Kept after restarts")).toBeNull());
   });
 
+  it("lets idle devices sleep, never the sensitive ones", async () => {
+    window.location.hash = "#battery";
+    render(<App />);
+    const usb = await screen.findByRole("switch", { name: "Let idle USB devices sleep" });
+    expect(usb.getAttribute("aria-checked")).toBe("false");
+    await act(async () => fireEvent.click(usb));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Let idle USB devices sleep" }).getAttribute("aria-checked")).toBe("true"));
+    expect(screen.getByText(/1-2 · kept awake: input devices/)).toBeTruthy();
+    expect(screen.getAllByText("Changed").length).toBe(2);
+    expect(screen.getByText(/0000:00:14.0/).closest("li")?.textContent).toContain("USB controller");
+    // Restore switches it off again.
+    await backend.restore();
+  });
+
   it("shows settings changed by another tool, and leaves them to it the second time", async () => {
     demoControls.outside!();
     window.location.hash = "#activity";

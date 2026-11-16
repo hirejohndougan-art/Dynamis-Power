@@ -1184,3 +1184,81 @@ mod modes_without_epp {
         );
     }
 }
+
+mod device_power {
+    use super::*;
+    use dynamis_core::devices::{fixture, Kind};
+
+    const CAM: &str = "/sys/bus/usb/devices/1-1";
+
+    #[test]
+    fn devices_sleep_and_come_back() {
+        let sb = Sandbox::new();
+        fixture::usb(
+            &sb.dir.join("root"),
+            "1-1",
+            "Webcam",
+            "on",
+            &[("0e", "uvcvideo")],
+        );
+        let mut e = sb.engine();
+        assert!(e
+            .set_device_power(Kind::Usb, CAM, "usb:1-1", "auto", "test")
+            .unwrap());
+        assert_eq!(sb.file(&format!("{CAM}/power/control")).trim(), "auto");
+        // Again: nothing to do.
+        assert!(!e
+            .set_device_power(Kind::Usb, CAM, "usb:1-1", "auto", "test")
+            .unwrap());
+        assert_eq!(e.touched_devices()[CAM], "on");
+        let j: Vec<String> = e.journal(5).into_iter().map(|j| j.event).collect();
+        assert_eq!(j, ["device-power"]);
+
+        // Restore puts it back and forgets it.
+        e.restore().unwrap();
+        assert_eq!(sb.file(&format!("{CAM}/power/control")).trim(), "on");
+        assert!(e.touched_devices().is_empty());
+    }
+
+    #[test]
+    fn refused_where_it_must_be() {
+        let sb = Sandbox::new();
+        fixture::usb(&sb.dir.join("root"), "1-1", "Webcam", "on", &[]);
+        let mut e = sb.engine();
+        for (kind, dev) in [
+            (Kind::Usb, "/sys/bus/usb/devices/1-1/power"),
+            (Kind::Usb, "/sys/bus/usb/devices/../../../proc"),
+            (Kind::Pci, CAM),
+            (Kind::Usb, "/sys/class/net/wlan0"),
+        ] {
+            assert!(
+                matches!(
+                    e.set_device_power(kind, dev, "x", "auto", "test"),
+                    Err(EngineError::Invalid(_))
+                ),
+                "{dev}"
+            );
+        }
+        assert!(matches!(
+            e.set_device_power(Kind::Usb, CAM, "usb:1-1", "off", "test"),
+            Err(EngineError::Invalid(_))
+        ));
+        // Dry run: only "would".
+        e.set_dry_run(true).unwrap();
+        assert!(!e
+            .set_device_power(Kind::Usb, CAM, "usb:1-1", "auto", "test")
+            .unwrap());
+        assert_eq!(sb.file(&format!("{CAM}/power/control")).trim(), "on");
+        e.set_dry_run(false).unwrap();
+        // Safe mode refuses; undoing still works.
+        e.set_device_power(Kind::Usb, CAM, "usb:1-1", "auto", "test")
+            .unwrap();
+        e.set_safe_mode(Some("test")).unwrap();
+        assert!(matches!(
+            e.set_device_power(Kind::Usb, CAM, "usb:1-1", "on", "test"),
+            Err(EngineError::SafeMode(_))
+        ));
+        assert!(e.reset_device_power(CAM, "usb:1-1", "test").unwrap());
+        assert_eq!(sb.file(&format!("{CAM}/power/control")).trim(), "on");
+    }
+}

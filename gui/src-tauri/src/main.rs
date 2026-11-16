@@ -161,6 +161,16 @@ async fn set_app_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), Stri
 }
 
 #[tauri::command]
+async fn devices(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.devices().await
+}
+
+#[tauri::command]
+async fn set_device_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), String> {
+    client(&conn).await?.set_device_policy(&policy).await
+}
+
+#[tauri::command]
 async fn forget_app_usage(conn: State<'_, Conn>) -> Result<(), String> {
     client(&conn).await?.forget_app_usage().await
 }
@@ -249,6 +259,8 @@ fn main() {
             apps,
             set_app_policy,
             forget_app_usage,
+            devices,
+            set_device_policy,
             predict,
             set_target,
             set_adaptive_charging,

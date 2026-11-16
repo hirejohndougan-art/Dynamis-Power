@@ -96,6 +96,8 @@ pub struct Core {
     pub kept: KeptState,
     /// Settings changed behind Dynamis Power's back.
     pub outside: crate::outside::OutsideState,
+    /// Letting idle USB devices and internal hardware sleep on battery.
+    pub devices: crate::devices::DevicesState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -126,6 +128,7 @@ impl Core {
         let apps = AppsState::load(&state_dir);
         let predict = PredictState::load(&state_dir);
         let kept = KeptState::load(&state_dir, unix_now());
+        let devices = crate::devices::DevicesState::load(&state_dir);
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
@@ -149,6 +152,7 @@ impl Core {
             profile_overrides,
             kept,
             outside: Default::default(),
+            devices,
         }
     }
 
@@ -411,6 +415,20 @@ impl Core {
             .apply_all(&root, &dir, false, "after waking from sleep");
         self.learn.reapply_soon();
         self.apps.reassert();
+        self.devices.mark_dirty();
+    }
+
+    /// Whether device power saving should be in force: on battery, and not
+    /// in Faster.
+    fn devices_save(&self, on_ac: bool) -> bool {
+        !on_ac && self.active() != Profile::Performance
+    }
+
+    pub fn set_device_policy(&mut self, p: crate::devices::DevicePolicy) -> Result<(), String> {
+        let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
+        let want = self.devices_save(on_ac);
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.devices.set_policy(p, &root, &dir, want)
     }
 
     pub fn report_session(&mut self, owner: &str, report: SessionReport) {
@@ -432,6 +450,7 @@ impl Core {
             || self.learn.enabled
             || self.apps.needs_ticks()
             || self.predict.needs_ticks()
+            || self.devices.needs_ticks()
     }
 
     /// Whether processes need reading this tick.
@@ -502,6 +521,10 @@ impl Core {
         self.auto.observed = Some(workload);
 
         let changed = (self.auto.enabled && self.auto_step(now, &ctx)) || target_changed;
+        // Devices follow the charger, the mode and plugging.
+        let want = self.devices_save(ctx.on_ac);
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.devices.tick(&root, &dir, want);
         if self.learn.enabled {
             self.learn_tick(now, &ctx, workload);
         }

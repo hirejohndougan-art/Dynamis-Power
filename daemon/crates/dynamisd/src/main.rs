@@ -17,6 +17,7 @@ mod bus;
 mod conflicts;
 mod core;
 mod crash;
+mod devices;
 mod kept;
 mod learn;
 mod outside;
@@ -105,6 +106,13 @@ async fn run(args: Args) -> Result<(), String> {
     let mut engine = crate::core::open_engine(&root, &state)?;
     if let Err(e) = engine.restore_app_weights() {
         eprintln!("dynamisd: could not put app shares back: {e}");
+    }
+    // Devices left changed with the switches off (a crash, or switched off
+    // while the service was stopped) go back too.
+    if !crate::devices::DevicesState::load(&state).enabled() {
+        if let Err(e) = engine.restore_device_power() {
+            eprintln!("dynamisd: could not put devices back: {e}");
+        }
     }
     // After an unclean shutdown: what was happening, for the app.
     if let Ok(b) = &boot {

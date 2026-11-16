@@ -167,6 +167,7 @@ impl Core {
         self.apps.forced_slow = false;
         let dir = self.state_dir.clone();
         self.kept.clear(&dir)?;
+        self.devices.clear(&dir);
         if self.apps.policy.changes_shares() {
             let dir = self.state_dir.clone();
             self.apps.stop_changing_shares(&dir)?;

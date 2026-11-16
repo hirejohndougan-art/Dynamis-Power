@@ -123,7 +123,8 @@ Settings toward replacing TLP add:
 
 | Rail | How |
 | --- | --- |
-| One file per new directory | The writer accepts under `/sys/block` only `queue/scheduler`, under `/sys/class/drm` only the AMD power level, and under `/sys/power` only `mem_sleep` (never `state`, which would put the laptop to sleep) |
+| One file per new directory | The writer accepts under `/sys/block` only `queue/scheduler`, under `/sys/class/drm` only the AMD power level, under `/sys/bus/usb/devices` and `/sys/bus/pci/devices` only `power/control`, and under `/sys/power` only `mem_sleep` (never `state`, which would put the laptop to sleep) |
+| Devices that misbehave asleep stay awake | Input devices, sound, printers, phones and cameras, modems, Bluetooth, graphics and the management engine are never let sleep (`dynamis-core/src/devices.rs`). The engine accepts only a device directory and only `on` or `auto`, refuses in safe mode or when `usb.autosuspend` / `pci.runtime_pm` is blocked for the laptop, and keeps each device's original value for Restore. Off by default; only on battery and not in Faster |
 | Limits on the new settings | Charge start 40–95% and below the charge limit; top frequency never below 30% of the fastest; governors never `userspace`; AMD power level only `auto`, `low`, `high` |
 | Sleep type needs a yes | `system.mem_sleep` is Risky: some firmware wakes badly from one kind of sleep |
 

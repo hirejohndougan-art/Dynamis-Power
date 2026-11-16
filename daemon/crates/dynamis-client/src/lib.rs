@@ -215,6 +215,20 @@ impl Client {
             .map_err(explain)
     }
 
+    /// Devices that can sleep when idle, and the two switches.
+    pub async fn devices(&self) -> Result<Value> {
+        self.json("Devices", &()).await
+    }
+
+    /// Change the device switches (`{"usb": bool, "pci": bool}`).
+    pub async fn set_device_policy(&self, policy: &Value) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetDevicePolicy", &(policy.to_string(),))
+            .await
+            .map_err(explain)
+    }
+
     pub async fn forget_app_usage(&self) -> Result<()> {
         self.own()
             .await?

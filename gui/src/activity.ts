@@ -49,6 +49,10 @@ export function describe(e: JournalEntry): Item | null {
       return item(t("ev_quirk", v), strip(reason, ""), "rollbacks");
     case "block":
       return item(t("ev_blocked", v), reason, "problems");
+    case "device-power": {
+      const dev = e.label || e.id.replace(/^(usb|pci):/, "");
+      return item(t(e.to === "auto" ? "ev_dev_sleep" : "ev_dev_awake", { dev }), reason, reason.startsWith("on battery") ? "auto" : "mine");
+    }
     case "outside": {
       const tool = reason.match(/likely by (.+)$/)?.[1];
       return item(t("ev_outside", v), tool ? t("why_outside_tool", { tool }) : t("why_outside"), "problems");

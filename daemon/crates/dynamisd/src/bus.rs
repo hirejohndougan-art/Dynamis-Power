@@ -622,6 +622,32 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// Devices that can sleep when idle: the two switches and every USB
+    /// device and PCI function, with whether each is managed or kept awake
+    /// and why (JSON).
+    fn devices(&self) -> String {
+        let c = self.0.lock();
+        c.devices.json(&c.root, &c.state_dir).to_string()
+    }
+
+    /// Change the device switches. Takes the `policy` object from `Devices`.
+    async fn set_device_policy(
+        &self,
+        policy: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let p: crate::devices::DevicePolicy =
+            serde_json::from_str(&policy).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        self.0
+            .lock()
+            .set_device_policy(p)
+            .map_err(fdo::Error::InvalidArgs)?;
+        self.0.ticker.poke();
+        Ok(())
+    }
+
     /// Forget every per-app energy total.
     async fn forget_app_usage(
         &self,

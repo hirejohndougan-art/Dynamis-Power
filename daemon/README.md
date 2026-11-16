@@ -170,6 +170,7 @@ dynamis auto off
 | `SetSetting(setting, value, allow_risky)`, `SetSafeMode(on)` | method | Change one setting; safe mode on or off |
 | `AutoPrefs()`, `SetAutoPrefs(json)` | method | Auto mode's preferences; out-of-range values are refused with a reason |
 | `Conflicts()`, `SwitchOffConflict(unit)` | method | Other power tools found running or enabled (asked of systemd); switch one off (administrator password; only known tools; recorded so removal turns it back on) |
+| `Devices()`, `SetDevicePolicy(json)` | method | USB devices and PCI functions that can sleep when idle, with why some are kept awake; the two switches (`{"usb": bool, "pci": bool}`) |
 | `ReportSession(facts)` | method | For the session agent only |
 
 ### Learning

@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -142,6 +142,19 @@ export function mockBackend(): Backend {
   const kept = () => records.filter((r) => r.verdict === "keep");
 
   const blockedIds = new Map<string, string>();
+  let devicePolicy: DevicePolicy = { usb: false, pci: false };
+  const deviceList: (Omit<DeviceInfo, "sleeps" | "managed"> & { own: boolean })[] = [
+    { id: "usb:1-3", kind: "usb", name: "Integrated Camera", what: "usb_device", address: "1-3", excluded: null, own: false },
+    { id: "usb:1-5", kind: "usb", name: "Fingerprint reader", what: "usb_device", address: "1-5", excluded: null, own: false },
+    { id: "usb:1-2", kind: "usb", name: "Logitech USB Receiver", what: "usb_device", address: "1-2", excluded: "input", own: false },
+    { id: "usb:1-10", kind: "usb", name: "Bluetooth", what: "usb_device", address: "1-10", excluded: "bluetooth", own: false },
+    { id: "usb:usb1", kind: "usb", name: "xHCI Host Controller", what: "usb_device", address: "usb1", excluded: null, own: true },
+    { id: "pci:0000:00:02.0", kind: "pci", name: null, what: "graphics", address: "0000:00:02.0", excluded: "graphics", own: false },
+    { id: "pci:0000:00:14.0", kind: "pci", name: null, what: "usb_controller", address: "0000:00:14.0", excluded: null, own: false },
+    { id: "pci:0000:00:16.0", kind: "pci", name: null, what: "communication", address: "0000:00:16.0", excluded: "management", own: false },
+    { id: "pci:0000:00:17.0", kind: "pci", name: null, what: "storage", address: "0000:00:17.0", excluded: null, own: false },
+    { id: "pci:0000:01:00.0", kind: "pci", name: null, what: "network", address: "0000:01:00.0", excluded: null, own: true },
+  ];
   // Unclean shutdowns, as the service counts them (dynamis-core boots.rs).
   let unclean: Unclean = { last: null, in_safe_mode: 0, suspects: [] };
   let uncleanInARow = 0;
@@ -282,6 +295,7 @@ export function mockBackend(): Backend {
       learning = false;
       appPolicy = { ...appPolicy, slow_background: false, boost_front: false, always_slow: [] };
       keptSettings.clear();
+      devicePolicy = { usb: false, pci: false };
       target = null;
       adaptive = false;
       const done = Object.entries(original)
@@ -330,6 +344,25 @@ export function mockBackend(): Backend {
       refuse();
       if (p.never_slow.some((a) => p.always_slow.includes(a))) throw new Error("an app cannot be both never and always slowed");
       appPolicy = { ...p, v: 1 };
+    },
+    devices: async () =>
+      delay({
+        policy: devicePolicy,
+        blocked: { usb: null, pci: null },
+        devices: deviceList.map(({ own, ...x }) => {
+          const managed = devicePolicy[x.kind] && !x.excluded && !own;
+          return { ...x, managed, sleeps: own || managed };
+        }),
+      }),
+    setDevicePolicy: async (p) => {
+      refuse();
+      for (const k of ["usb", "pci"] as const) {
+        if (p[k] === devicePolicy[k]) continue;
+        for (const x of deviceList.filter((d) => d.kind === k && !d.excluded && !d.own)) {
+          log({ event: "device-power", id: x.id, label: x.name ?? x.address, from: p[k] ? "on" : "auto", to: p[k] ? "auto" : "on", reason: p[k] ? "on battery: let it sleep when idle" : "switched off" });
+        }
+      }
+      devicePolicy = p;
     },
     forgetAppUsage: async () => { usage = { today: [], week: [] }; },
     predict: async () => delay(predictInfo()),

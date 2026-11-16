@@ -83,8 +83,9 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 **Devices and buses (the biggest savings TLP has that Dynamis Power lacks)**
 
-- [ ] USB autosuspend for idle devices, never for input devices, audio, phones, printers or mobile broadband, with a per-device "never" list *(in SETTINGS: `usb.autosuspend`)*
-- [ ] Runtime power management for idle PCI devices, with a per-driver "never" list *(in SETTINGS: `pci.runtime_pm`)*
+- [x] USB autosuspend for idle devices, never for input devices, audio, phones, printers or mobile broadband *(in SETTINGS: `usb.autosuspend`)*
+- [ ] A per-device "never" list the person can add to (for a device not caught by class or driver)
+- [x] Runtime power management for idle PCI devices, with a per-driver "never" list *(in SETTINGS: `pci.runtime_pm`)*
 - [ ] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
 - [ ] Wake-on-LAN off
 - [x] Sound controller power saving as well as the codec (`audio.controller_power`)
@@ -122,7 +123,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [ ] Guided sleep test, run only when the person asks (it needs the laptop for about an hour): sleep about 30 minutes with each sleep type the laptop offers (`s2idle`, `deep`), measure the battery used per hour, check that Wi-Fi, sound, the touchpad and other devices came back and that the kernel log shows no resume errors, then recommend the type that used less and woke cleanly (applied only after a yes). Wakes by RTC alarm; plugged-in state, lid and a running call stop it; a failed wake is recorded so that type is not recommended. Results kept per laptop, and later shared with the model's results
 - [ ] After an unclean shutdown, say whether the laptop was going to sleep or waking when it stopped (from the previous boot's kernel log), to tell sleep problems from other freezes
 - [x] Re-apply settings after resume from sleep (mode, kept, learned settings, app shares)
-- [ ] Apply settings to devices plugged in later (USB, Thunderbolt), as TLP does
+- [x] Apply settings to devices plugged in later (USB, Thunderbolt), as TLP does (at the next reading)
 - [ ] A mode to use at boot before auto mode decides, and an option to ignore a power supply that reports wrongly (TLP's `TLP_DEFAULT_MODE` and `TLP_PS_IGNORE`)
 - [ ] A full diagnostic report like `tlp-stat`, building on `dynamis status`, `inventory` and `hardware-report`
 - [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export)

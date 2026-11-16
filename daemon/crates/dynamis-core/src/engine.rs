@@ -201,6 +201,14 @@ struct Touched {
     weights: BTreeMap<String, String>,
 }
 
+/// Devices whose runtime power management was changed, with the original
+/// `power/control` value, by kernel path.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct DevicesTouched {
+    v: u32,
+    control: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Blocked {
     v: u32,
@@ -689,6 +697,145 @@ impl Engine {
         Ok(n)
     }
 
+    // --- Device runtime power management (TLP batch 2) -------------------
+
+    /// Let one USB device or PCI function sleep when idle (`auto`) or keep it
+    /// awake (`on`). `dev` is its directory, e.g. `/sys/bus/usb/devices/1-2`
+    /// (see `crate::devices`). Refused for a kind that is blocked on this
+    /// laptop (`usb.autosuspend`, `pci.runtime_pm`), in safe mode, and for
+    /// anything but a device directory. The first value seen is kept so
+    /// restore can put it back. Returns whether anything changed.
+    pub fn set_device_power(
+        &mut self,
+        kind: crate::devices::Kind,
+        dev: &str,
+        id: &str,
+        value: &str,
+        reason: &str,
+    ) -> Result<bool> {
+        if let Some(why) = self.safe_mode() {
+            return Err(EngineError::SafeMode(why));
+        }
+        if let Some(why) = self.blocked().get(kind.setting_id()) {
+            return Err(EngineError::Blocked {
+                id: kind.setting_id().to_string(),
+                reason: why.clone(),
+            });
+        }
+        if !matches!(value, "auto" | "on") {
+            return Err(EngineError::Invalid(format!("{value} is not auto or on")));
+        }
+        let prefix = match kind {
+            crate::devices::Kind::Usb => crate::devices::USB_DIR,
+            crate::devices::Kind::Pci => crate::devices::PCI_DIR,
+        };
+        if !crate::devices::is_device_path(dev) || !dev.starts_with(prefix) {
+            return Err(EngineError::Invalid(format!("not a device: {dev}")));
+        }
+        let path = format!("{dev}/power/control");
+        let current = self
+            .root
+            .read_string(&path)
+            .map_err(|e| EngineError::Unsupported(format!("{path}: {e}")))?
+            .trim()
+            .to_string();
+        if current == value {
+            return Ok(false);
+        }
+        if self.dry_run() {
+            self.log("would", id, Some(&current), Some(value), reason)?;
+            return Ok(false);
+        }
+        let file = self.dir.join("devices.json");
+        let mut touched: DevicesTouched = read_json(&file).unwrap_or_default();
+        if !touched.control.contains_key(dev) {
+            touched.v = STATE_FORMAT_VERSION;
+            touched.control.insert(dev.to_string(), current.clone());
+            write_json(&file, &touched)?;
+        }
+        self.log("device-power", id, Some(&current), Some(value), reason)?;
+        self.write_device(&path, value)?;
+        Ok(true)
+    }
+
+    fn write_device(&self, path: &str, value: &str) -> Result<()> {
+        let w = settings::Write {
+            path: path.to_string(),
+            contents: value.to_string(),
+        };
+        writer::write_all(&self.root, &[w]).map_err(EngineError::Write)?;
+        match self.root.read_string(path) {
+            Ok(v) if v.trim() == value => Ok(()),
+            Ok(v) => Err(EngineError::Write(format!(
+                "{path}: read back '{}' instead of '{value}'",
+                v.trim()
+            ))),
+            Err(e) => Err(EngineError::Write(format!("{path}: {e}"))),
+        }
+    }
+
+    /// Put one device back to its original value. Works in safe mode.
+    /// Returns whether anything changed (false if never changed or gone).
+    pub fn reset_device_power(&mut self, dev: &str, id: &str, reason: &str) -> Result<bool> {
+        let file = self.dir.join("devices.json");
+        let mut touched: DevicesTouched = read_json(&file).unwrap_or_default();
+        let Some(original) = touched.control.remove(dev) else {
+            return Ok(false);
+        };
+        write_json(&file, &touched)?;
+        let path = format!("{dev}/power/control");
+        let Ok(current) = self.root.read_string(&path) else {
+            return Ok(false); // unplugged
+        };
+        if current.trim() == original {
+            return Ok(false);
+        }
+        self.log(
+            "device-power",
+            id,
+            Some(current.trim()),
+            Some(&original),
+            reason,
+        )?;
+        self.write_device(&path, &original)?;
+        Ok(true)
+    }
+
+    /// The devices changed, with their original values.
+    pub fn touched_devices(&self) -> BTreeMap<String, String> {
+        read_json::<DevicesTouched>(&self.dir.join("devices.json"))
+            .unwrap_or_default()
+            .control
+    }
+
+    /// Put every device changed back. Unplugged ones are skipped. Returns
+    /// how many were restored.
+    pub fn restore_device_power(&mut self) -> Result<usize> {
+        let file = self.dir.join("devices.json");
+        let touched: DevicesTouched = read_json(&file).unwrap_or_default();
+        let mut n = 0;
+        for (dev, original) in &touched.control {
+            let path = format!("{dev}/power/control");
+            match self.root.read_string(&path) {
+                Ok(v) if v.trim() != original && self.write_device(&path, original).is_ok() => {
+                    n += 1
+                }
+                _ => {}
+            }
+        }
+        if n > 0 {
+            self.log(
+                "restore",
+                "devices",
+                None,
+                None,
+                &format!("{n} devices back to their own power setting"),
+            )?;
+        }
+        let _ = fs::remove_file(&file);
+        Ok(n)
+    }
+
     /// Put every changed setting back to its original value. Works in safe
     /// mode and on blocked settings. Returns (id, original, ok) per setting
     /// that needed changing. Also puts app CPU weights back.
@@ -697,6 +844,7 @@ impl Engine {
             self.revert("restore requested")?;
         }
         self.restore_app_weights()?;
+        self.restore_device_power()?;
         let mut done = Vec::new();
         for (id, original) in self.baseline() {
             let Some(s) = settings::by_id(&id) else {

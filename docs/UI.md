@@ -47,7 +47,7 @@ Cards for each profile with a one-line description. "Last until" opens a time pi
 
 ## Battery
 
-Health percentage against design capacity, wear trend, charge limit toggle (only where supported), adaptive charging, overnight drain report, and charge history. **Built:** health, capacity, cycles, charge limit, what the screen costs, the forecast at your usual use and usual unplug time, *Make it last* (2/4/6/8 hours or a clock time; shows the budget and recent use; *Stop*), and *Follow my routine* (charging that follows habits). Still planned: wear trend, overnight drain report, charge history. "Last until" lives on Battery rather than Modes, next to the forecast it depends on; Home shows it while it runs.
+Health percentage against design capacity, wear trend, charge limit toggle (only where supported), adaptive charging, overnight drain report, and charge history. **Built:** health, capacity, cycles, charge limit, what the screen costs, the forecast at your usual use and usual unplug time, *Make it last* (2/4/6/8 hours or a clock time; shows the budget and recent use; *Stop*), *Follow my routine* (charging that follows habits), and *Devices* (two switches to let idle USB devices and built-in hardware sleep on battery, with each device listed under a Details toggle and why some are kept awake). Still planned: wear trend, overnight drain report, charge history. "Last until" lives on Battery rather than Modes, next to the forecast it depends on; Home shows it while it runs.
 
 ## Apps
 

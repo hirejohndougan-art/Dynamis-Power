@@ -35,6 +35,9 @@ const ONE_FILE_ONLY: &[(&str, &str)] = &[
         "/sys/class/drm/",
         "/device/power_dpm_force_performance_level",
     ),
+    // Runtime power management of one USB device or PCI function.
+    ("/sys/bus/usb/devices/", "/power/control"),
+    ("/sys/bus/pci/devices/", "/power/control"),
 ];
 
 fn allowed(path: &str) -> bool {
@@ -91,6 +94,10 @@ mod tests {
             "/sys/block/sda/queue/read_ahead_kb",
             "/sys/class/drm/card0/device/power_state",
             "/sys/power/state",
+            "/sys/bus/usb/devices/1-2/authorized",
+            "/sys/bus/usb/devices/1-2/power/autosuspend_delay_ms",
+            "/sys/bus/pci/devices/0000:00:14.0/remove",
+            "/sys/bus/pci/devices/0000:00:14.0/power/control/../../remove",
         ] {
             let err = write_all(
                 &root,

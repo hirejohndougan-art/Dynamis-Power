@@ -1529,3 +1529,80 @@ fn settings_changed_by_another_tool_are_noticed_and_left_alone() {
         );
     });
 }
+
+/// Idle devices sleep on battery once switched on; sensitive ones never;
+/// newly plugged ones follow; the charger and Restore put them back.
+#[test]
+fn idle_devices_sleep_on_battery() {
+    use dynamis_core::devices::fixture;
+    let Some(env) = Env::new("devices") else {
+        return;
+    };
+    let root = env.dir.join("root");
+    fixture::usb(&root, "1-1", "Webcam", "on", &[("0e", "uvcvideo")]);
+    fixture::usb(&root, "1-2", "Mouse", "on", &[("03", "usbhid")]);
+    fixture::pci(&root, "0000:00:02.0", "0x030000", "on", "i915");
+    fixture::pci(&root, "0000:00:14.0", "0x0c0330", "on", "xhci_hcd");
+    let control = |p: &str| {
+        fs::read_to_string(root.join(p.trim_start_matches('/')).join("power/control"))
+            .unwrap()
+            .trim()
+            .to_string()
+    };
+    let cam = "sys/bus/usb/devices/1-1";
+    let mouse = "sys/bus/usb/devices/1-2";
+    let gpu = "sys/bus/pci/devices/0000:00:02.0";
+    let xhci = "sys/bus/pci/devices/0000:00:14.0";
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let info = c.devices().await.unwrap();
+        assert_eq!(info["devices"].as_array().unwrap().len(), 4, "{info}");
+        c.set_device_policy(&serde_json::json!({"usb": true, "pci": true}))
+            .await
+            .unwrap();
+        // On battery: applied at once.
+        assert_eq!(
+            [control(cam), control(mouse), control(gpu), control(xhci)],
+            ["auto", "on", "on", "auto"]
+        );
+        let info = c.devices().await.unwrap();
+        let mouse_info = info["devices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["id"] == "usb:1-2")
+            .unwrap()
+            .clone();
+        assert_eq!(mouse_info["excluded"], "input");
+
+        // A new device plugged in follows at the next reading.
+        fixture::usb(&root, "1-3", "Card reader", "on", &[("08", "usb-storage")]);
+        eventually("new device sleeps", async || {
+            control("sys/bus/usb/devices/1-3") == "auto"
+        })
+        .await;
+
+        // Plugged in: back to their own values.
+        fs::write(root.join("sys/class/power_supply/AC0/online"), "1").unwrap();
+        eventually("back on mains", async || {
+            control(cam) == "on" && control(xhci) == "on"
+        })
+        .await;
+        fs::write(root.join("sys/class/power_supply/AC0/online"), "0").unwrap();
+        eventually("battery again", async || control(cam) == "auto").await;
+
+        // Restore: everything back and the switches off.
+        c.restore().await.unwrap();
+        assert_eq!([control(cam), control(xhci)], ["on", "on"]);
+        let info = c.devices().await.unwrap();
+        assert_eq!(
+            info["policy"],
+            serde_json::json!({"usb": false, "pci": false})
+        );
+    });
+}

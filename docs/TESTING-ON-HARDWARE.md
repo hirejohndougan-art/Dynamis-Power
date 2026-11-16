@@ -125,6 +125,13 @@ On the VivoBook (and any laptop where Modes used to show only Balanced):
 2. Modes should now offer Longer battery, Balanced and Faster. Pick each and check: `cat /sys/devices/system/cpu/intel_pstate/no_turbo /sys/devices/system/cpu/intel_pstate/max_perf_pct /sys/devices/system/cpu/cpufreq/policy0/scaling_governor` should read `1 60 powersave` for Longer battery, `0 100 powersave` for Balanced and `0 100 performance` for Faster.
 3. Compare power on battery between Longer battery and Balanced with the same light use (`sudo dynamis gauge`).
 
+### Devices (TLP batch 2)
+
+1. On battery, switch on both switches under *Devices* on the Battery screen. Then `grep . /sys/bus/usb/devices/*/power/control /sys/bus/pci/devices/*/power/control`: the devices the screen lists as sleeping should read `auto`; the mouse, keyboard, Bluetooth and graphics should not have changed.
+2. Use the laptop for a while: the mouse, keyboard, touchpad, sound, Wi-Fi and a USB stick should all behave as before. Plug in a USB stick: within a reading (15 seconds) it should read `auto` too.
+3. Plug the charger in: every device goes back to what it was. *Restore original settings* does the same and switches both off.
+4. Compare power on battery with the switches off and on (`sudo dynamis gauge`), with the same light use.
+
 ### Tuning together (phase 5) and its gate
 
 1. Leave learning on. Once every setting has been tested on its own, `dynamis learn` shows tests of `cpu.turbo` and `cpu.max_perf_pct` again, one step at a time. `dynamis learned` lists each result with what it was tested together with.

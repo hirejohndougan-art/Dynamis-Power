@@ -248,6 +248,9 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** Devices that can sleep when idle (USB, internal), and the two switches. */
+  devices(): Promise<DevicesInfo>;
+  setDevicePolicy(p: DevicePolicy): Promise<void>;
   predict(): Promise<Predict>;
   /** Unix seconds; 0 ends "Last until". */
   setTarget(until: number): Promise<void>;
@@ -293,4 +296,28 @@ export type Unclean = {
   in_safe_mode: number;
   /** Settings changed shortly before the freezes that led to safe mode. */
   suspects: Labelled[];
+};
+
+export type DevicePolicy = { usb: boolean; pci: boolean };
+export type DeviceInfo = {
+  id: string;
+  kind: "usb" | "pci";
+  /** The device's own name, if it gives one. */
+  name: string | null;
+  /** What kind of device (translated as dev_what_*). */
+  what: string;
+  /** Its address on the bus. */
+  address: string;
+  /** The device may sleep when idle now. */
+  sleeps: boolean;
+  /** Dynamis Power changed it (and will put it back). */
+  managed: boolean;
+  /** Why it is always kept awake, if so. */
+  excluded: string | null;
+};
+export type DevicesInfo = {
+  policy: DevicePolicy;
+  /** Why a kind is blocked on this laptop, if it is. */
+  blocked: { usb: string | null; pci: string | null };
+  devices: DeviceInfo[];
 };

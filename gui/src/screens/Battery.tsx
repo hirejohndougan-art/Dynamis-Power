@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { backend, type Predict, type Status } from "../backend";
+import { backend, type DeviceInfo, type DevicesInfo, type Predict, type Status } from "../backend";
 import { Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
-import { clock, t } from "../i18n";
+import { clock, t, tn } from "../i18n";
 
 export function Battery(props: { status: Status; refresh: () => void }) {
   const p = props.status.power;
@@ -78,12 +78,68 @@ export function Battery(props: { status: Status; refresh: () => void }) {
           <p className="muted">{t("battery_limit_none")}</p>
         )}
       </section>
+      <Devices locked={!!props.status.safe_mode} run={run} />
       <section className="card" aria-labelledby="screen-heading">
         <h2 id="screen-heading">{t("battery_screen")}</h2>
         <p>{d ? t("battery_screen_value", { w: (d.w_per_pct * 10).toFixed(2) }) : t("battery_screen_learning")}</p>
       </section>
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
+  );
+}
+
+/** Letting idle USB devices and internal hardware sleep on battery. */
+function Devices(props: { locked: boolean; run: (a: () => Promise<string | void>) => void }) {
+  const info = useLoad<DevicesInfo>(() => backend.devices(), []);
+  const d = info.data;
+  if (!d || d.devices.length === 0) return null;
+  const set = (p: DevicesInfo["policy"]) =>
+    props.run(async () => {
+      await backend.setDevicePolicy(p);
+      info.reload();
+    });
+  const name = (x: DeviceInfo) => x.name || t(`dev_what_${x.what}` as "dev_what_other");
+  const usb = d.devices.filter((x) => x.kind === "usb");
+  const pci = d.devices.filter((x) => x.kind === "pci");
+  const kind = (k: "usb" | "pci", list: DeviceInfo[]) => {
+    const blocked = d.blocked[k];
+    return (
+      <div className="stack" style={{ gap: 4 }}>
+        <Switch
+          checked={d.policy[k]}
+          disabled={props.locked || !!blocked}
+          label={t(k === "usb" ? "dev_usb_switch" : "dev_pci_switch")}
+          onChange={(on) => set({ ...d.policy, [k]: on })}
+        />
+        <p className="muted small">{blocked ? t("dev_blocked", { why: blocked }) : t(k === "usb" ? "dev_usb_desc" : "dev_pci_desc")}</p>
+        <details>
+          <summary>{tn("dev_count", list.length, { n: list.length })}</summary>
+          <ul className="entries">
+            {list.map((x) => (
+              <li key={x.id} className="entry">
+                <div className="stack" style={{ gap: 2 }}>
+                  <span>{name(x)}</span>
+                  <span className="muted small">
+                    {x.address}
+                    {" · "}
+                    {x.excluded ? t(`dev_keep_${x.excluded}` as "dev_keep_input") : x.sleeps ? t("dev_sleeps") : t("dev_awake")}
+                  </span>
+                </div>
+                {x.managed && <span className="badge badge-safe">{t("dev_managed")}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
+    );
+  };
+  return (
+    <section className="card" aria-labelledby="dev-heading">
+      <h2 id="dev-heading">{t("dev_heading")}</h2>
+      <p className="muted">{t("dev_intro")}</p>
+      {usb.length > 0 && kind("usb", usb)}
+      {pci.length > 0 && kind("pci", pci)}
+    </section>
   );
 }
 
