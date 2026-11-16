@@ -142,6 +142,25 @@ enum Command {
         #[arg(long, hide = true)]
         session_bus: bool,
     },
+    /// Show, switch on or switch off learning: tests one setting at a time at
+    /// quiet moments on battery, and keeps only what measurably saves power.
+    Learn {
+        #[arg(value_enum, default_value_t = SafeModeAction::Status)]
+        action: SafeModeAction,
+        #[arg(long, hide = true)]
+        session_bus: bool,
+    },
+    /// What learning found. `dynamis learned forget SETTING` undoes one.
+    Learned {
+        /// `forget` followed by a setting ID.
+        #[arg(num_args = 0..=2)]
+        args: Vec<String>,
+        /// Print JSON.
+        #[arg(long)]
+        json: bool,
+        #[arg(long, hide = true)]
+        session_bus: bool,
+    },
     /// Show, switch on or switch off safe mode (no setting is changed while it
     /// is on; restore still works).
     SafeMode {
@@ -224,6 +243,26 @@ fn main() {
             },
             session_bus,
         ),
+        Command::Learn {
+            action,
+            session_bus,
+        } => auto_cmd::cmd_learn(
+            match action {
+                SafeModeAction::Status => None,
+                SafeModeAction::On => Some(true),
+                SafeModeAction::Off => Some(false),
+            },
+            session_bus,
+        ),
+        Command::Learned {
+            args,
+            json,
+            session_bus,
+        } => match args.as_slice() {
+            [] => auto_cmd::cmd_learned(None, json, session_bus),
+            [f, id] if f == "forget" => auto_cmd::cmd_learned(Some(id), json, session_bus),
+            _ => Err(io::Error::other("usage: dynamis learned [forget SETTING]")),
+        },
         Command::SafeMode { action } => changes::cmd_safe_mode(
             &root,
             &state,

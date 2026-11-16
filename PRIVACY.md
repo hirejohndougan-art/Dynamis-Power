@@ -8,6 +8,7 @@ Dynamis Power works entirely on your computer. Nothing leaves your machine unles
 
 - **The session agent** (`dynamis-agent`) tells the Dynamis Power service five yes/no facts about your desktop session: whether media is playing, the screen is locked, an app asked the screen to stay on, a game is running, and whether you are idle. It does not read or send window titles, app names, website addresses or what you are playing. The facts go to the service on your own computer and are kept only in memory.
 - **Auto mode** also reads whether a microphone is recording (to recognise calls), how busy the processor is, and network traffic totals. None of this is stored except the reason line of each change in the journal (for example "auto: On a call: keeping sound and video steady").
+- **Learning** keeps its test results (setting, value, measured watts and lag) and a brightness-versus-power model on your computer. They contain nothing about what you were doing.
 - **The quirk list download** (`dynamis-sync`) fetches a public file from GitHub once a day. It sends nothing about you; GitHub sees an ordinary download.
 
 ## If you share results

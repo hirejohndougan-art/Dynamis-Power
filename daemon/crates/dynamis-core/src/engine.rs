@@ -137,6 +137,51 @@ pub struct Pending {
     pub to: String,
     /// Unix time by which a trial must be kept, or it is reverted.
     pub trial_deadline: Option<u64>,
+    /// The process that made the change. Recovery leaves a change alone while
+    /// its owner is still running (it may be mid-trial or mid-experiment).
+    /// Absent in files written before this field existed: treated as gone.
+    #[serde(default)]
+    pub owner: Option<Owner>,
+}
+
+/// Identifies a process across PID reuse and reboots.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Owner {
+    pub pid: u32,
+    /// Start time from /proc/PID/stat, in clock ticks since boot.
+    pub start: u64,
+    pub boot_id: String,
+}
+
+impl Owner {
+    /// This process. Process identity is a property of the real machine, not
+    /// of the (possibly fixture) SysRoot, so the real /proc is right here.
+    pub fn current() -> Owner {
+        let pid = std::process::id();
+        Owner {
+            pid,
+            start: proc_start(pid).unwrap_or(0),
+            boot_id: boot_id(),
+        }
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.boot_id == boot_id() && proc_start(self.pid).is_some_and(|s| s == self.start)
+    }
+}
+
+fn boot_id() -> String {
+    fs::read_to_string("/proc/sys/kernel/random/boot_id")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default()
+}
+
+fn proc_start(pid: u32) -> Option<u64> {
+    let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // The command name (field 2) is in parentheses and may contain spaces;
+    // fields after the last ')' are plain. Start time is field 22.
+    let rest = &stat[stat.rfind(')')? + 1..];
+    rest.split_whitespace().nth(19)?.parse().ok()
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -366,6 +411,7 @@ impl Engine {
                 from: from.clone(),
                 to: to.clone(),
                 trial_deadline: deadline,
+                owner: Some(Owner::current()),
             },
         )?;
         self.log("start", req.id, Some(&from), Some(&to), req.reason)?;
@@ -465,6 +511,10 @@ impl Engine {
         let Some(p) = self.pending() else {
             return Ok(());
         };
+        if p.owner.as_ref().is_some_and(|o| o.is_alive()) {
+            // In flight in a process that is still running: not ours to undo.
+            return Ok(());
+        }
         let reason = match p.trial_deadline {
             Some(_) => "a trial did not finish (crash, freeze or no answer)",
             None => "a change did not finish (crash or power cut)",

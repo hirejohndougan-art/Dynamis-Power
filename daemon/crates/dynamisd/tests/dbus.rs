@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use futures_lite::StreamExt;
 use std::path::{Path, PathBuf};
@@ -384,4 +386,215 @@ fn auto_mode_follows_the_situation() {
         eventually("off", async || reason().await.contains("off")).await;
     });
     assert!(env.dir.join("state/auto.json").exists());
+}
+
+/// A pretend laptop: reads the settings Dynamis Power changes and reports
+/// battery power and stall to match, with noise. Known truth to test against.
+fn spawn_plant(root: std::path::PathBuf, stop: Arc<AtomicBool>) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let read = |rel: &str| {
+            fs::read_to_string(root.join(rel))
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+        let mut seed: u64 = 42;
+        let mut stall_us: f64 = 1_000_000.0;
+        let mut last = Instant::now();
+        while !stop.load(Ordering::Relaxed) {
+            let nmi_off = read("proc/sys/kernel/nmi_watchdog") == "0";
+            let turbo_off = read("sys/devices/system/cpu/intel_pstate/no_turbo") == "1";
+            let max_perf: f64 = read("sys/devices/system/cpu/intel_pstate/max_perf_pct")
+                .parse()
+                .unwrap_or(100.0);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let noise = ((seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5) * 0.2;
+            let watts = 6.0
+                - if nmi_off { 0.4 } else { 0.0 }
+                - if turbo_off { 0.8 } else { 0.0 }
+                - (100.0 - max_perf) / 20.0 * 0.3
+                + noise;
+            let stall_pct = 0.5 + if turbo_off { 5.0 } else { 0.0 } + (100.0 - max_perf) / 20.0;
+            let dt = last.elapsed().as_secs_f64();
+            last = Instant::now();
+            stall_us += stall_pct / 100.0 * dt * 1e6;
+            let _ = fs::write(
+                root.join("sys/class/power_supply/BAT0/power_now"),
+                format!("{}", (watts * 1e6) as u64),
+            );
+            let _ = fs::write(
+                root.join("proc/pressure/cpu"),
+                format!(
+                    "some avg10=0.00 avg60=0.00 avg300=0.00 total={}\n",
+                    stall_us as u64
+                ),
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    })
+}
+
+#[test]
+fn learning_keeps_only_what_saves_power_without_lag() {
+    let Some(env) = Env::new("learn") else { return };
+    let stop = Arc::new(AtomicBool::new(false));
+    let plant = spawn_plant(env.dir.join("root"), stop.clone());
+    let _d = Guard(env.daemon_with(
+        "state",
+        &[
+            "--tick-secs",
+            "0.02",
+            "--calib-block-secs",
+            "0.3",
+            "--calib-settle-secs",
+            "0.05",
+            "--calib-cooldown-secs",
+            "0",
+        ],
+    ));
+    let read = |rel: &str| {
+        fs::read_to_string(env.dir.join("root").join(rel))
+            .unwrap()
+            .trim()
+            .to_string()
+    };
+
+    let learned = zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let own = zbus::Proxy::new(
+            &conn,
+            "net.dynamis.Power",
+            "/net/dynamis/Power",
+            "net.dynamis.Power1",
+        )
+        .await
+        .unwrap();
+        own.set_property("Learning", true).await.unwrap();
+        let start = Instant::now();
+        loop {
+            let props =
+                zbus::fdo::PropertiesProxy::new(&conn, "net.dynamis.Power", "/net/dynamis/Power")
+                    .await
+                    .unwrap();
+            let status = String::try_from(
+                props
+                    .get("net.dynamis.Power1".try_into().unwrap(), "LearningStatus")
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            if status.contains("Every setting has been tested") {
+                break;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(120),
+                "learning did not finish: {status}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let text: String = own.call("LearnedJson", &()).await.unwrap();
+        serde_json::from_str::<serde_json::Value>(&text).unwrap()
+    });
+
+    let verdict = |setting: &str, value: &str| -> Vec<String> {
+        learned["records"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["setting"] == setting && r["value"] == value)
+            .map(|r| {
+                format!(
+                    "{}: {}",
+                    r["verdict"].as_str().unwrap(),
+                    r["reason"].as_str().unwrap()
+                )
+            })
+            .collect()
+    };
+    eprintln!(
+        "{}",
+        serde_json::to_string_pretty(&learned["records"]).unwrap()
+    );
+    assert!(
+        verdict("kernel.nmi_watchdog", "off")[0].starts_with("keep"),
+        "{:?}",
+        verdict("kernel.nmi_watchdog", "off")
+    );
+    assert!(
+        verdict("cpu.turbo", "off")[0].contains("less responsive"),
+        "{:?}",
+        verdict("cpu.turbo", "off")
+    );
+    assert!(verdict("cpu.max_perf_pct", "80")
+        .iter()
+        .all(|v| !v.starts_with("keep")));
+    assert!(verdict("vm.dirty_writeback", "1500")
+        .iter()
+        .all(|v| !v.starts_with("keep")));
+    let kept: Vec<&str> = learned["learned"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["setting"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        kept,
+        ["kernel.nmi_watchdog"],
+        "only real, lag-free savings are kept"
+    );
+
+    // Applied on battery, original value on mains.
+    assert_eq!(read("proc/sys/kernel/nmi_watchdog"), "0");
+    assert_eq!(
+        read("sys/devices/system/cpu/intel_pstate/no_turbo"),
+        "0",
+        "rejected change undone"
+    );
+    fs::write(env.dir.join("root/sys/class/power_supply/AC0/online"), "1").unwrap();
+    let start = Instant::now();
+    while read("proc/sys/kernel/nmi_watchdog") != "1" {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "learned setting not undone on mains"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    fs::write(env.dir.join("root/sys/class/power_supply/AC0/online"), "0").unwrap();
+    let start = Instant::now();
+    while read("proc/sys/kernel/nmi_watchdog") != "0" {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "learned setting not reapplied on battery"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    // Forget puts the original back.
+    zbus::block_on(async {
+        let conn = env.client().await;
+        let own = zbus::Proxy::new(
+            &conn,
+            "net.dynamis.Power",
+            "/net/dynamis/Power",
+            "net.dynamis.Power1",
+        )
+        .await
+        .unwrap();
+        assert!(own
+            .call::<_, _, bool>("Forget", &("kernel.nmi_watchdog",))
+            .await
+            .unwrap());
+    });
+    assert_eq!(read("proc/sys/kernel/nmi_watchdog"), "1");
+    let journal = fs::read_to_string(env.dir.join("state/journal.jsonl")).unwrap();
+    assert!(journal.contains("calibration: step"));
+    assert!(
+        !journal.contains("\"event\":\"recover\""),
+        "the service must never recover its own live experiment"
+    );
+    stop.store(true, Ordering::Relaxed);
+    plant.join().unwrap();
 }

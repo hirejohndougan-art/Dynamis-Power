@@ -111,6 +111,12 @@ After installing, log out and back in once (this starts the session agent), then
 2. Pick a mode in the panel: `dynamis auto` should say it is paused until the charger changes.
 3. Anything that looks wrong: note what you were doing and what `dynamis auto` said, and add it to a bug report. It can become a new scenario file.
 
+### Learning (phase 4) and its gate
+
+1. `dynamis learn on`, then use the laptop on battery for light work (or leave it idle) for a few hours over a day or two. `dynamis learn` shows progress; `dynamis learned` shows results.
+2. **The gate: does it beat stock Balanced?** On a fully charged battery, with the same brightness and the same light activity (for example a looping video or a fixed set of web pages), run `sudo ./scripts/phase1-test.sh 60` twice: once with `dynamis learn on` and once after `dynamis learn off` (which puts every learned setting back). Compare the average whole-system power in the two reports. Phase 4 passes if the learned settings use measurably less power with no rise in lag.
+3. Send both `phase1-results-….tar.gz` files and the output of `dynamis learned --json`.
+
 Report anything odd in a bug report with `sudo dynamis journal --last 100` attached.
 
 **On a laptop that already freezes** (like the project's VivoBook), a freeze during these steps does not prove Dynamis Power caused it. After the reboot, check `sudo dynamis journal`: a `recover` line means a change was in progress at the time; no such line means nothing was being changed.

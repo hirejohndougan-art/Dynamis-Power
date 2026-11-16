@@ -20,6 +20,8 @@ use dynamis_core::profiles::{self, Profile};
 use dynamis_core::SysRoot;
 use serde::{Deserialize, Serialize};
 
+use crate::learn::{Learning, Timing};
+
 /// Version of `profile.json`.
 const PROFILE_FILE_VERSION: u32 = 1;
 /// Version of `auto.json`.
@@ -57,6 +59,8 @@ pub struct AutoState {
     /// here is the charger state at the time).
     paused_on_ac: Option<bool>,
     last: Option<Step>,
+    /// Classifies the workload for learning even while auto mode is off.
+    observer: Auto,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -69,13 +73,14 @@ pub struct Hold {
 }
 
 pub struct Core {
-    root: SysRoot,
-    state_dir: PathBuf,
+    pub(crate) root: SysRoot,
+    pub(crate) state_dir: PathBuf,
     available: Vec<Profile>,
     chosen: Profile,
-    holds: BTreeMap<u32, Hold>,
+    pub(crate) holds: BTreeMap<u32, Hold>,
     next_cookie: u32,
     pub auto: AutoState,
+    pub learn: Learning,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,7 +92,12 @@ struct SavedProfile {
 impl Core {
     /// Load state and recover from anything an earlier run left unfinished.
     /// Does not apply anything yet; call [`Core::apply_active`] for that.
+    #[cfg(test)]
     pub fn new(root: SysRoot, state_dir: PathBuf) -> Core {
+        Self::with_timing(root, state_dir, Timing::default())
+    }
+
+    pub fn with_timing(root: SysRoot, state_dir: PathBuf, timing: Timing) -> Core {
         let available = profiles::available(&root);
         let saved = fs::read_to_string(state_dir.join("profile.json"))
             .ok()
@@ -97,6 +107,7 @@ impl Core {
         let saved_auto = fs::read_to_string(state_dir.join("auto.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<SavedAuto>(&t).ok());
+        let learn = Learning::load(&state_dir, timing);
         let auto = AutoState {
             enabled: saved_auto.as_ref().is_some_and(|a| a.enabled),
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
@@ -110,6 +121,7 @@ impl Core {
             holds: BTreeMap::new(),
             next_cookie: 1,
             auto,
+            learn,
         }
     }
 
@@ -292,9 +304,15 @@ impl Core {
         }
     }
 
-    /// One auto-mode reading. Returns true if the profile changed.
-    pub fn auto_tick(&mut self, now: f64) -> bool {
-        if !self.auto.enabled {
+    /// Whether anything needs regular readings (auto mode or learning).
+    pub fn needs_ticks(&self) -> bool {
+        self.auto.enabled || self.learn.enabled
+    }
+
+    /// One reading, shared by auto mode and learning. Returns true if the
+    /// active profile changed.
+    pub fn tick(&mut self, now: f64) -> bool {
+        if !self.needs_ticks() {
             return false;
         }
         let mut ctx: Context = self.auto.sampler.read(&self.root, now);
@@ -304,7 +322,22 @@ impl Core {
         ctx.game_running = s.game_running;
         ctx.screen_locked = s.screen_locked;
         ctx.user_idle = s.user_idle;
+        let workload = self
+            .auto
+            .observer
+            .step(now, &ctx, &self.available)
+            .decision
+            .workload;
 
+        let changed = self.auto.enabled && self.auto_step(now, &ctx);
+        if self.learn.enabled {
+            self.learn_tick(now, &ctx, workload);
+        }
+        changed
+    }
+
+    fn auto_step(&mut self, now: f64, ctx: &Context) -> bool {
+        let ctx = ctx.clone();
         if let Some(was) = self.auto.paused_on_ac {
             if was == ctx.on_ac {
                 // Keep reading so the explanation stays current, but do not act.
@@ -350,8 +383,12 @@ impl Core {
     /// How long to wait before the next reading: longer while idle, to cost
     /// less when nothing is happening.
     pub fn auto_interval(&self, base: Duration) -> Duration {
+        if self.learn.testing() {
+            // Several readings per test block.
+            return base.min(Duration::from_secs_f64(self.learn.timing.block_s / 6.0));
+        }
         match &self.auto.last {
-            Some(s) if s.decision.workload == Workload::Idle => base * 4,
+            Some(s) if s.decision.workload == Workload::Idle && !self.learn.enabled => base * 4,
             _ => base,
         }
     }
@@ -366,7 +403,7 @@ impl Core {
     }
 }
 
-fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     let tmp = path.with_extension("tmp");
     let write = || -> std::io::Result<()> {
         if let Some(dir) = path.parent() {

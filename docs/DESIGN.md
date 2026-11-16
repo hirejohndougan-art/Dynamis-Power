@@ -56,7 +56,7 @@ Each layer works without the ones after it.
 
 1. **Context rules** — charger, battery level, video, calls, games, temperature, app requests. *(Built, phase 3.)*
 2. **Workload detection** — eight classes: idle, light interactive, bursty interactive, video, call, sustained compute, gaming, background transfer. Rules first; a small classifier later. *(Rules built, phase 3.)*
-3. **Calibration** — tests each setting alone on this machine.
+3. **Calibration** — tests each setting alone on this machine. *(Built, phase 4: [decision 0012](decisions/0012-calibration-method.md).)*
 4. **Online learning** — tunes settings that interact (mainly CPU) per workload class.
 5. **Prediction** — habits, time remaining, pre-emptive moves.
 6. **Shared results** — starts from what worked on the same model, then re-verifies locally.

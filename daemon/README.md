@@ -27,7 +27,9 @@ daemon/
       src/quirks.rs          built-in and signed downloaded quirk lists
       src/boots.rs           counts unclean shutdowns for automatic safe mode
       src/auto.rs            auto mode's rules (pure; replayed by tests/scenarios/)
-      src/context.rs         auto mode's system readings: charger, battery, CPU, network, microphone
+      src/context.rs         auto mode's system readings: charger, battery, CPU, network, microphone, power, lag
+      src/calibrate.rs       calibration experiments and their statistics (pure; simulated in tests)
+      src/display.rs         display power model
       quirks/builtin.json    the built-in quirk list
     dynamis-cli/             the `dynamis` command
     dynamis-sync/            downloads the signed quirk list (unprivileged; the only network use)
@@ -139,6 +141,20 @@ dynamis auto off
 - Off until you switch it on. Picking a mode in the panel pauses it until the charger is plugged in or out.
 - Media, screen lock and games are reported by `dynamis-agent`, which starts at login (log out and in once after installing).
 - The rules and every scenario they are tested against are in `crates/dynamis-core/src/auto.rs` and `../tests/scenarios/`. To add a case, copy a scenario file. `sudo dynamis journal` shows it; `sudo dynamis unblock <id>` allows it again.
+
+### Learning
+
+```sh
+dynamis learn on       # test settings one at a time at quiet moments on battery
+dynamis learn          # what it is doing: "Testing kernel.nmi_watchdog = off: step 3 of 8"
+dynamis learned        # every result, what was kept, and the screen's power cost
+dynamis learned forget kernel.nmi_watchdog
+dynamis learn off      # stops testing and puts learned settings back
+```
+
+- Tests run only on battery at 40% or more, during idle or light use, and stop if anything changes. Each takes about 8 minutes.
+- A change is kept only if it saves power with confidence and adds no lag. Learned settings apply on battery only.
+- How it decides: [../docs/decisions/0012-calibration-method.md](../docs/decisions/0012-calibration-method.md).
 
 ### Log columns
 

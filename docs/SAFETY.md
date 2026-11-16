@@ -88,4 +88,15 @@ Phase 3 (auto mode) adds:
 | Same safety path | Auto mode only switches between the three standard profiles, through the same engine, journal and quirk checks as any other change |
 | Off by default | Auto mode does nothing until switched on |
 
-Not built, by decision: the systemd watchdog ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: pre-flight checks (battery floor, no call or full-screen video) with automatic experiments in phase 4, and dropping capabilities to the minimum after the real-hardware test.
+Phase 4 (learning) adds:
+
+| Rail | How |
+| --- | --- |
+| Pre-flight checks | Tests start only on battery at 40%+, below 80 °C, during idle or light use, with no app holds, no other trial and no safe mode |
+| Stop when things change | Charger, workload, profile or an app request ends a test early; the original value is put back |
+| Responsiveness is a hard limit | A change that adds more than 0.5 points of stall is rejected however much power it saves |
+| Health monitor during tests | Trouble undoes the test at once and blocks the setting |
+| Off means off | Switching learning off ends any test and puts learned settings back |
+| Owner-aware recovery | A pending change is undone after a crash only when the process that made it is gone, so a running test is never undone by mistake |
+
+Not built, by decision: the systemd watchdog ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: dropping capabilities to the minimum after the real-hardware test.

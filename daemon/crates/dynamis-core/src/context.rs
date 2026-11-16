@@ -6,7 +6,7 @@
 
 use crate::auto::Context;
 use crate::fs::SysRoot;
-use crate::sensors::{power, thermal};
+use crate::sensors::{backlight, power, pressure, thermal};
 
 /// Keeps the previous reading of the counters that need two readings
 /// (CPU time, network bytes).
@@ -14,6 +14,8 @@ use crate::sensors::{power, thermal};
 pub struct Sampler {
     cpu: Option<(u64, u64)>,
     net: Option<(u64, f64)>,
+    /// Previous PSI "some" totals for CPU, memory and disk, and when.
+    stall: Option<([Option<u64>; 3], f64)>,
 }
 
 impl Sampler {
@@ -56,11 +58,39 @@ impl Sampler {
             }
         };
 
+        // Stall: the growth of the PSI "some" counters for CPU, memory and
+        // disk, as a share of the time since the last reading.
+        // Each counter is compared only with its own previous value, so a
+        // counter missing from one reading cannot make the next look huge.
+        let p = pressure::read(root);
+        let totals = [p.cpu, p.memory, p.io].map(|x| x.map(|x| x.some.total_us));
+        let stall_pct = match self.stall {
+            Some((prev, pt)) if now > pt => {
+                let grown: u64 = totals
+                    .iter()
+                    .zip(prev.iter())
+                    .filter_map(|(cur, before)| {
+                        Some(cur.as_ref()?.saturating_sub(*before.as_ref()?))
+                    })
+                    .sum();
+                grown as f64 / ((now - pt) * 1e6) * 100.0
+            }
+            _ => 0.0,
+        };
+        self.stall = Some((totals, now));
+
         Context {
             on_ac,
             battery_pct,
             cpu_busy_pct,
             net_mb_s,
+            power_w: if on_ac {
+                None
+            } else {
+                ps.total_battery_power_w()
+            },
+            stall_pct,
+            brightness_pct: backlight::read(root).map(|b| b.percent),
             max_temp_c: thermal::max_c(&thermal::read(root)),
             mic_in_use: mic_in_use(root),
             ..Context::default()
@@ -194,6 +224,15 @@ mod tests {
         assert!(s.read(&root, 30.0).mic_in_use);
         fs::write(sub.join("status"), "closed\n").unwrap();
         assert!(!s.read(&root, 40.0).mic_in_use);
+
+        // A pressure counter missing from one reading is not counted as
+        // stall when it comes back.
+        let cpu = dir.join("proc/pressure/cpu");
+        let original = fs::read_to_string(&cpu).unwrap();
+        fs::write(&cpu, "").unwrap();
+        s.read(&root, 50.0);
+        fs::write(&cpu, original).unwrap();
+        assert_eq!(s.read(&root, 60.0).stall_pct, 0.0);
         fs::remove_dir_all(&dir).ok();
     }
 

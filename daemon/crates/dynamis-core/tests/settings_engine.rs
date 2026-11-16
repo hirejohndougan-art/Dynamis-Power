@@ -64,6 +64,15 @@ fn copy_tree(src: &Path, dst: &Path) {
     }
 }
 
+/// Make the pending change look as if its process has died.
+fn mark_owner_gone(sb: &Sandbox) {
+    let path = sb.state().join("pending.json");
+    let mut v: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    v["owner"]["pid"] = serde_json::json!(999_999_999u32);
+    fs::write(&path, v.to_string()).unwrap();
+}
+
 fn req<'a>(id: &'a str, value: &'a str) -> Request<'a> {
     Request {
         id,
@@ -317,8 +326,10 @@ fn unfinished_trial_is_undone_and_blocked_on_next_start() {
             ..req("vm.swappiness", "5")
         })
         .unwrap();
-        // Simulate a freeze: the process ends without keep or revert.
+        // Simulate a freeze: the process ends without keep or revert. In
+        // this test the process lives on, so mark the owner as gone.
     }
+    mark_owner_gone(&sb);
     assert_eq!(sb.file("/proc/sys/vm/swappiness"), "5");
 
     let mut e = sb.engine();
@@ -339,6 +350,26 @@ fn unfinished_trial_is_undone_and_blocked_on_next_start() {
 
     assert!(e.unblock("vm.swappiness").unwrap());
     e.apply(&req("vm.swappiness", "5")).unwrap();
+}
+
+#[test]
+fn a_live_owners_trial_is_left_alone() {
+    let sb = Sandbox::new();
+    {
+        let mut e = sb.engine();
+        e.apply(&Request {
+            trial_secs: Some(30),
+            ..req("vm.swappiness", "5")
+        })
+        .unwrap();
+    }
+    // Reopened by the same, still-running process (as the service does for
+    // every step of an experiment): nothing is undone or blocked.
+    let mut e = sb.engine();
+    assert!(e.recovered().is_none());
+    assert_eq!(sb.file("/proc/sys/vm/swappiness"), "5");
+    assert!(e.blocked().is_empty());
+    e.keep().unwrap();
 }
 
 #[test]

@@ -37,6 +37,12 @@ pub struct Context {
     /// Network traffic, megabytes per second, both directions.
     pub net_mb_s: f64,
     pub max_temp_c: Option<f64>,
+    /// Whole-system power from the battery, watts (on battery only).
+    pub power_w: Option<f64>,
+    /// Share of time tasks stalled (CPU + memory + disk) since the last
+    /// reading, percent. The lag measure calibration holds as a hard limit.
+    pub stall_pct: f64,
+    pub brightness_pct: Option<f64>,
     /// A microphone is recording: almost always a call.
     pub mic_in_use: bool,
     // From the session agent:

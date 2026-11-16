@@ -410,6 +410,56 @@ impl DynamisPower {
         self.0.lock().auto_status().1
     }
 
+    /// Whether Dynamis Power runs calibration tests at quiet moments on
+    /// battery, and applies what it learned (on battery only).
+    #[zbus(property(emits_changed_signal = "false"))]
+    fn learning(&self) -> bool {
+        self.0.lock().learn.enabled
+    }
+
+    #[zbus(property)]
+    async fn set_learning(
+        &mut self,
+        on: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Option<Header<'_>>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, hdr.as_ref(), ACTION_SWITCH).await?;
+        self.0.lock().set_learning(on).map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        notify_auto(conn, &self.0).await;
+        Ok(())
+    }
+
+    /// One plain-language line on what learning is doing.
+    #[zbus(property(emits_changed_signal = "false"))]
+    fn learning_status(&self) -> String {
+        self.0.lock().learn.status()
+    }
+
+    /// Every calibration result and the display model, as JSON.
+    fn learned_json(&self) -> String {
+        let c = self.0.lock();
+        serde_json::json!({
+            "records": c.learn.records,
+            "learned": c.learn.learned(),
+            "display": c.learn.display.fit(),
+        })
+        .to_string()
+    }
+
+    /// Forget what was learned about a setting and put its original value
+    /// back. Returns false if nothing was learned about it.
+    async fn forget(
+        &self,
+        setting: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<bool> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0.lock().forget(&setting).map_err(fdo::Error::Failed)
+    }
+
     /// Called by the session agent when something in the desktop session
     /// changes. Keys: media_playing, screen_inhibited, game_running,
     /// screen_locked, user_idle (booleans). Unknown keys are ignored.
@@ -441,9 +491,14 @@ impl DynamisPower {
 
 /// Signal changes to auto mode's properties.
 pub async fn notify_auto(conn: &Connection, svc: &Service) {
-    let (enabled, (workload, reason)) = {
+    let (enabled, (workload, reason), learning, learning_status) = {
         let c = svc.lock();
-        (c.auto.enabled, c.auto_status())
+        (
+            c.auto.enabled,
+            c.auto_status(),
+            c.learn.enabled,
+            c.learn.status(),
+        )
     };
     let workload = workload
         .and_then(|w| serde_json::to_value(w).ok())
@@ -455,6 +510,8 @@ pub async fn notify_auto(conn: &Connection, svc: &Service) {
             ("AutoMode", Variant::from(enabled)),
             ("Workload", Variant::from(workload.as_str())),
             ("AutoReason", Variant::from(reason.as_str())),
+            ("Learning", Variant::from(learning)),
+            ("LearningStatus", Variant::from(learning_status.as_str())),
         ]);
         fdo::Properties::properties_changed(
             &emitter,

@@ -13,6 +13,7 @@
 
 mod bus;
 mod core;
+mod learn;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -41,6 +42,13 @@ struct Args {
     /// Seconds between auto-mode readings (four times longer while idle).
     #[arg(long, default_value_t = 15.0, hide = true)]
     tick_secs: f64,
+    /// Calibration timing (testing only): block length, settle time, rest.
+    #[arg(long, default_value_t = 60.0, hide = true)]
+    calib_block_secs: f64,
+    #[arg(long, default_value_t = 10.0, hide = true)]
+    calib_settle_secs: f64,
+    #[arg(long, default_value_t = 300.0, hide = true)]
+    calib_cooldown_secs: f64,
     /// Use the session bus and skip polkit (testing only; needs --root, so it
     /// can never change the real system without polkit).
     #[arg(long, hide = true)]
@@ -85,7 +93,15 @@ async fn run(args: Args) -> Result<(), String> {
 
     // Recovery happens here, before anything else touches a setting.
     crate::core::open_engine(&root, &state)?;
-    let core = Core::new(root, state);
+    let core = Core::with_timing(
+        root,
+        state,
+        crate::learn::Timing {
+            block_s: args.calib_block_secs,
+            settle_s: args.calib_settle_secs,
+            cooldown_s: args.calib_cooldown_secs,
+        },
+    );
     let svc = Service {
         core: Arc::new(Mutex::new(core)),
         polkit: !args.session,
@@ -173,14 +189,17 @@ fn spawn_auto_thread(conn: zbus::Connection, svc: Service, tick_secs: f64) {
         loop {
             let (enabled, interval) = {
                 let c = svc.core.lock().unwrap_or_else(|p| p.into_inner());
-                (c.auto.enabled, c.auto_interval(base))
+                (c.needs_ticks(), c.auto_interval(base))
             };
             svc.ticker.wait(enabled.then_some(interval));
             let now = svc.epoch.elapsed().as_secs_f64();
             let (changed, said) = {
                 let mut c = svc.core.lock().unwrap_or_else(|p| p.into_inner());
-                let changed = c.auto_tick(now);
-                (changed, c.auto_status().1)
+                let changed = c.tick(now);
+                (
+                    changed,
+                    format!("{}|{}", c.auto_status().1, c.learn.status()),
+                )
             };
             // Signal only real changes, so listeners are not woken every tick.
             if changed {

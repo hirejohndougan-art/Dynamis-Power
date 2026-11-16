@@ -86,7 +86,7 @@ The setting `id` is permanent. Renaming one breaks journals, learned data and sh
 ## The two loops
 
 - **Fast loop (seconds):** reacts to context — charger, battery level, video playing, a call starting — and picks the profile. Rule-based and predictable. **Built in phase 3** as auto mode: `dynamis-core/src/auto.rs` (rules), `context.rs` (system readings), the auto thread in `dynamisd`, and `dynamis-agent` (session readings). See [decision 0011](decisions/0011-auto-mode-rules-and-session-agent.md).
-- **Slow loop (days):** the learner. Tries one small change at a time when conditions allow, measures it, keeps or reverts it. See [DESIGN.md](DESIGN.md).
+- **Slow loop (days):** the learner. Tries one small change at a time when conditions allow, measures it, keeps or reverts it. See [DESIGN.md](DESIGN.md). **Calibration built in phase 4:** `dynamis-core/src/calibrate.rs` (experiments and statistics), `display.rs`, and `dynamisd/src/learn.rs` (pre-flight, running tests, learned settings). See [decision 0012](decisions/0012-calibration-method.md).
 
 ## Data on disk
 
@@ -102,6 +102,9 @@ The setting `id` is permanent. Renaming one breaks journals, learned data and sh
 | `/var/lib/dynamis-power/running`, `unclean-boots.json` **(built)** | Unclean-shutdown detection | Text; JSON, `"v": 1` |
 | `/var/lib/dynamis-power/quirk-serial` **(built)** | Highest downloaded quirk list serial accepted | Text |
 | `/var/lib/dynamis-power-sync/quirks.json`, `.sig` **(built)** | Downloaded quirk list, written by the unprivileged helper | JSON `"v": 1`, ed25519 signature in hex |
+| `/var/lib/dynamis-power/learning.json` **(built)** | Whether learning is on | JSON, `"v": 1` |
+| `/var/lib/dynamis-power/calibration.json` **(built)** | Every test result; kept results are the learned settings | JSON, `"v": 1`; records use `schema/v1` result field names |
+| `/var/lib/dynamis-power/display.json` **(built)** | Display power model (running least-squares sums) | JSON, `"v": 1` |
 | `/var/lib/dynamis-power/auto.json` **(built)** | Whether auto mode is on, and its preferences | JSON, `"v": 1` |
 | `/var/lib/dynamis-power/profile.json` **(built)** | The profile the user last chose | JSON, `"v": 1` |
 | `/var/lib/dynamis-power/replaced-services` **(built)** | Services `install.sh` turned off, for uninstall | Text, one per line |

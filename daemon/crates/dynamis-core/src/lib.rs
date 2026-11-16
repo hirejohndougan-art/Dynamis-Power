@@ -10,7 +10,9 @@
 
 pub mod auto;
 pub mod boots;
+pub mod calibrate;
 pub mod context;
+pub mod display;
 pub mod engine;
 pub mod fs;
 pub mod gauge;

@@ -15,6 +15,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0009](0009-signed-quirk-list.md) | A signed quirk list, downloaded without root |
 | [0010](0010-no-systemd-watchdog-yet.md) | No systemd watchdog for now; rate limits arrive with automatic changes |
 | [0011](0011-auto-mode-rules-and-session-agent.md) | Auto mode: plain rules, and a session agent that reports five facts |
+| [0012](0012-calibration-method.md) | How calibration tests and keeps a setting |
 
 ## Adding a record
 
