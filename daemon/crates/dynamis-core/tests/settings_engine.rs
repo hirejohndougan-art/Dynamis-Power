@@ -1418,3 +1418,15 @@ mod wifi_power_save {
         assert!(matches!(s.probe(&sb.root()), Probe::Unsupported { .. }));
     }
 }
+
+#[test]
+fn a_learned_change_undone_twice_is_blocked() {
+    let sb = Sandbox::new();
+    let mut e = sb.engine();
+    assert!(!e.note_undone("kernel.nmi_watchdog").unwrap());
+    assert!(!e.blocked().contains_key("kernel.nmi_watchdog"));
+    assert!(e.note_undone("kernel.nmi_watchdog").unwrap());
+    assert!(e.blocked()["kernel.nmi_watchdog"].contains("twice"));
+    // Other settings are not affected.
+    assert!(!e.note_undone("audio.power_save").unwrap());
+}

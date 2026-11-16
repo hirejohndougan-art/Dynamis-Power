@@ -52,7 +52,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [x] Compute power from the change in energy where a battery reports no power; say so where it reports neither (§2)
 - [ ] "It feels slow": show what is in effect, undo speed-related changes for the day, optionally make learning stricter and auto mode prefer Balanced (§3)
 - [ ] Panel tooltip shows auto mode's last reason; Activity groups auto switches per hour (§3)
-- [ ] A learned change undone by hand twice is blocked on this laptop (§3)
+- [x] A learned change undone by hand twice is blocked on this laptop (§3)
 - [x] Notice settings changed behind Dynamis Power's back, name the likely tool, and stop managing a contested setting after two outside changes in a day (§4)
 - [x] Detect GNOME without AppIndicator and explain how to show the panel icon (§5)
 - [ ] Record kernel and firmware versions with each result; re-check learned settings first after an update; drop settings whose control vanished (§6)

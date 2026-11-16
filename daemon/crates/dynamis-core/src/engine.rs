@@ -449,6 +449,23 @@ impl Engine {
         Ok(false)
     }
 
+    /// A learned change was undone by hand (everyday problem §3). The second
+    /// time for the same setting, it is blocked on this laptop: the person
+    /// has spoken. Returns whether it was blocked now.
+    pub fn note_undone(&mut self, id: &str) -> Result<bool> {
+        self.log("undone", id, None, None, "a learned change undone by hand")?;
+        let count = self
+            .journal(usize::MAX)
+            .iter()
+            .filter(|e| e.event == "undone" && e.id == id)
+            .count();
+        if count >= UNDONE_LIMIT && !self.blocked().contains_key(id) {
+            self.block(id, "you undid what learning chose for this twice")?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     /// Change one setting, following the steps in the module docs.
     pub fn apply(&mut self, req: &Request) -> Result<Outcome> {
         if let Some(why) = self.safe_mode() {
@@ -1263,6 +1280,8 @@ pub fn baseline_at(dir: &Path) -> BTreeMap<String, String> {
 /// Outside changes to one setting within [`OUTSIDE_WINDOW_S`] before it is
 /// left to the other tool.
 pub const OUTSIDE_LIMIT: usize = 2;
+/// A learned change undone by hand this many times is blocked.
+pub const UNDONE_LIMIT: usize = 2;
 const OUTSIDE_WINDOW_S: u64 = 86_400;
 
 /// The last `n` journal entries in a state directory, oldest first, without

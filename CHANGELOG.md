@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- A learned change undone by hand twice is blocked on this laptop ("you undid what learning chose for this twice"), so learning does not try it again (everyday problem §3). Engine `note_undone`, journaled as `undone`; Undo says so the second time.
+
 - GNOME: the "Dynamis Power: window in front" Shell extension (GNOME 45 and later) ships in the service package and tells the session helper which window is in front, so app priority and per-app modes work on GNOME once it is switched on in the Extensions app (decision 0024). Modes says how to turn panel icons on when the desktop shows none (no StatusNotifierWatcher, as on plain GNOME).
 
 - Hibernation readiness (decision 0025): under the sleep test, the app says whether "sleep, then hibernate when the battery runs low" could be used here and, if not, what is missing (the kernel does not offer it, kernel lockdown, not enough swap, no resume setting). Advice only: Dynamis Power never sets it up. Also in `dynamis stat`.

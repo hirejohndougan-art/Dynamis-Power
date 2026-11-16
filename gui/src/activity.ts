@@ -25,6 +25,7 @@ export function describe(e: JournalEntry): Item | null {
 
   switch (e.event) {
     case "start":
+    case "undone":
       return null;
     case "done": {
       if (e.from === e.to) return null;

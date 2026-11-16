@@ -141,7 +141,17 @@ impl Core {
         self.kept.drop_setting(id, &dir)?;
         if self.learn.learned().iter().any(|r| r.setting == id) {
             self.forget(id)?;
-            return Ok(format!("{} is back to its original value", label(id)));
+            let blocked = open_engine(&self.root, &self.state_dir)
+                .and_then(|mut e| e.note_undone(id).map_err(|e| e.to_string()))
+                .unwrap_or(false);
+            return Ok(if blocked {
+                format!(
+                    "{} is back to its original value, and learning will not try it again on this laptop",
+                    label(id)
+                )
+            } else {
+                format!("{} is back to its original value", label(id))
+            });
         }
         let mut e = open_engine(&self.root, &self.state_dir)?;
         match e.restore_one(id).map_err(|e| e.to_string())? {
