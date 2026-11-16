@@ -182,7 +182,7 @@ describe("the app with the stand-in backend", () => {
     const sw = screen.getByRole("switch", { name: /learn/i });
     if (sw.getAttribute("aria-checked") !== "true") await act(async () => fireEvent.click(sw));
     await waitFor(() => expect(screen.getByRole("note")).toBeTruthy());
-    expect(screen.getByRole("note").textContent).toMatch(/62%.*quiet moments/);
+    expect(screen.getByRole("note").textContent).toMatch(/62%.*steady use/);
     expect(screen.queryByText(/updates its power reading/)).toBeNull();
     const forget = screen.getAllByRole("button", { name: /^Forget:/ })[0];
     await act(async () => fireEvent.click(forget));
