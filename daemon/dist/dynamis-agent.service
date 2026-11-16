@@ -1,5 +1,5 @@
 [Unit]
-Description=Dynamis Power session agent (tells auto mode what the desktop is doing)
+Description=Dynamis Power session agent (panel icon; tells auto mode what the desktop is doing)
 Documentation=https://github.com/hirejohndougan-art/Dynamis-Power
 PartOf=graphical-session.target
 After=graphical-session.target

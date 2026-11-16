@@ -58,6 +58,7 @@ export function mockBackend(): Backend {
   };
   let target: { until: number } | null = null;
   let adaptive = false;
+  let tray = true;
   const predictInfo = (): Predict => {
     const n = now();
     return {
@@ -236,6 +237,8 @@ export function mockBackend(): Backend {
       target = until === 0 ? null : { until };
     },
     setAdaptiveCharging: async (on) => { refuse(); adaptive = on; },
+    trayShown: async () => delay(tray),
+    setTray: async (on) => { tray = on; },
     saveFile: async (name, contents) => {
       const url = URL.createObjectURL(new Blob([contents], { type: "text/plain" }));
       const a = document.createElement("a");

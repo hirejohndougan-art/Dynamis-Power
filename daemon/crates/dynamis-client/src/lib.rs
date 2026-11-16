@@ -245,4 +245,42 @@ impl Client {
             .await
             .map_err(explain)
     }
+
+    /// Whether the panel icon is on. The icon belongs to the session agent,
+    /// which runs as the person on the session bus, not the service.
+    pub async fn tray_shown() -> Result<bool> {
+        let session = zbus::Connection::session()
+            .await
+            .map_err(|e| e.to_string())?;
+        let p = zbus::Proxy::new(&session, AGENT, AGENT_PATH, AGENT_IFACE)
+            .await
+            .map_err(|e| e.to_string())?;
+        p.get_property::<bool>("Tray").await.map_err(|_| {
+            "the Dynamis Power session helper is not running; log out and back in".to_string()
+        })
+    }
+
+    /// Show or hide the panel icon.
+    pub async fn set_tray(on: bool) -> Result<()> {
+        let session = zbus::Connection::session()
+            .await
+            .map_err(|e| e.to_string())?;
+        session
+            .call_method(
+                Some(AGENT),
+                AGENT_PATH,
+                Some(AGENT_IFACE),
+                "SetTray",
+                &(on,),
+            )
+            .await
+            .map(|_| ())
+            .map_err(|_| {
+                "the Dynamis Power session helper is not running; log out and back in".to_string()
+            })
+    }
 }
+
+const AGENT: &str = "net.dynamis.Agent";
+const AGENT_PATH: &str = "/net/dynamis/Agent";
+const AGENT_IFACE: &str = "net.dynamis.Agent1";

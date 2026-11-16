@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Dynamis Power
+Comment=Power mode icon and session helper for Dynamis Power
+Exec=/usr/local/libexec/dynamis-agent
+Icon=dynamis-power
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+# On desktops whose sessions are run by systemd (KDE Plasma, GNOME), the
+# dynamis-agent user service starts it instead; this entry is the fallback
+# for the others. Started twice anyway, the second copy exits.
+X-systemd-skip=true

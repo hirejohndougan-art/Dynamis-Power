@@ -8,7 +8,11 @@ export function Modes(props: { status: Status; refresh: () => void }) {
   const s = props.status;
   const loaded = useLoad(() => backend.autoPrefs(), []);
   const [prefs, setPrefs] = useState<AutoPrefs | null>(null);
-  const { run, toast } = useAction(props.refresh);
+  const tray = useLoad(() => backend.trayShown(), []);
+  const { run, toast } = useAction(() => {
+    props.refresh();
+    tray.reload();
+  });
   useEffect(() => {
     if (loaded.data) setPrefs(loaded.data);
   }, [loaded.data]);
@@ -82,6 +86,15 @@ export function Modes(props: { status: Status; refresh: () => void }) {
             </div>
           </>
         )}
+      </section>
+      <section className="card" aria-labelledby="panel-heading">
+        <h2 id="panel-heading">{t("modes_panel_heading")}</h2>
+        {tray.error ? (
+          <p className="muted">{tray.error}</p>
+        ) : (
+          <Switch checked={tray.data ?? false} disabled={tray.data == null} label={t("modes_panel")} onChange={(on) => run(() => backend.setTray(on))} />
+        )}
+        <p className="muted">{t("modes_panel_desc")}</p>
       </section>
       {toast && <div className="toast" role="status">{toast}</div>}
     </>

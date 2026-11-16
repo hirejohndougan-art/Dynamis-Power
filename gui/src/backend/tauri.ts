@@ -26,5 +26,7 @@ export const tauriBackend: Backend = {
   predict: () => invoke("predict"),
   setTarget: (until) => invoke("set_target", { until }),
   setAdaptiveCharging: (on) => invoke("set_adaptive_charging", { on }),
+  trayShown: () => invoke("tray_shown"),
+  setTray: (on) => invoke("set_tray", { on }),
   saveFile: (name, contents) => invoke("save_file", { name, contents }),
 };

@@ -4,7 +4,7 @@ The app must be usable by someone who has never opened a terminal, while still g
 
 The visual mock-ups are kept with the project's design files. This document is the written specification; when the two disagree, update both.
 
-> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes, Apps, Battery (with the forecast, *Make it last* and *Follow my routine*), Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
+> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes (with the panel icon switch), Apps, Battery (with the forecast, *Make it last* and *Follow my routine*), Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
 
 ## Principles
 
@@ -14,7 +14,7 @@ The visual mock-ups are kept with the project's design files. This document is t
 4. **Nothing risky without a clear yes.** Risky settings are off until switched on individually, with a plain explanation.
 5. **Quiet.** Few notifications, none during calls or full-screen video.
 6. **Accessible.** Full keyboard use, screen-reader labels, readable contrast, scalable text, follows the desktop's light or dark theme.
-7. **Free when closed.** The window costs nothing when it isn't open. The tray icon is optional.
+7. **Free when closed.** The window costs nothing when it isn't open. The panel icon is drawn by the session agent that runs anyway, so it adds no process; it can be hidden.
 
 ## Navigation
 
@@ -87,11 +87,21 @@ Advanced opens with a one-line notice: "These controls are for experienced users
 | System | Conflicting power tools detected, desktop integration choices (who controls brightness and sleep), update channel (stable or beta), daemon resource use |
 | Developer | Dry-run mode, advisor mode (write a TLP or TuneD config instead of applying), log level, D-Bus inspector, "Restore original settings" |
 
+## Panel icon
+
+**Built.** An icon next to the clock (StatusNotifierItem with a DBusMenu menu, drawn by the session agent `dynamis-agent`), shown from login on every desktop that supports panel icons (KDE Plasma, Xfce, Cinnamon, MATE, Budgie; GNOME with the AppIndicator extension, which Ubuntu ships on).
+
+- The icon is the app's logo, coloured by mode (green Longer battery, teal Balanced, orange Faster, grey when the service is not running or safe mode is on). The tooltip says the mode, battery level and time left.
+- **Left click** opens the app.
+- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *Open Dynamis Power*; *Hide this icon*.
+- Every change goes to the service exactly as the app sends it (polkit, safe mode and every rail apply). In safe mode the controls are greyed out.
+- *Hide this icon*, or the switch on Modes, turns it off; the choice is remembered per person.
+
 ## Dialogs and notifications
 
 - **Risky setting switch:** explains what can go wrong in one sentence and requires a deliberate confirmation.
 - **Rollback notice:** one notification, at most, saying what was undone and why.
-- **Restore original settings:** available from Home's menu, Advanced, and the tray, and always works, even in safe mode.
+- **Restore original settings:** available from Home and Advanced, and always works, even in safe mode. The panel icon does not offer it, because it asks for confirmation; *Open Dynamis Power* is one click away.
 - **First run:** a four-step welcome — what the app does, hardware check, conflicts found (with a fix button), and a baseline measurement. Nothing changes until the user clicks *Start*.
 
 ## Strings and translation

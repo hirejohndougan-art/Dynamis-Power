@@ -1076,3 +1076,140 @@ fn charging_follows_when_you_usually_unplug() {
         );
     });
 }
+
+/// A StatusNotifierItem tooltip: icon name, pixmaps, title, text.
+type ToolTip = (String, Vec<(i32, i32, Vec<u8>)>, String, String);
+
+/// Stands in for the panel: records which icons registered.
+struct Watcher(Arc<std::sync::Mutex<Vec<String>>>);
+
+#[zbus::interface(name = "org.kde.StatusNotifierWatcher")]
+impl Watcher {
+    fn register_status_notifier_item(&self, service: String) {
+        self.0.lock().unwrap().push(service);
+    }
+}
+
+#[test]
+fn the_panel_icon_shows_and_changes_the_mode() {
+    let Some(env) = Env::new("tray") else { return };
+    // The agent is another package's program; it is built by a workspace
+    // `cargo test` but not by `cargo test -p dynamisd` alone.
+    let agent = Path::new(env!("CARGO_BIN_EXE_dynamisd")).with_file_name("dynamis-agent");
+    if !agent.exists() {
+        eprintln!("skipping: dynamis-agent is not built (run cargo test from daemon/)");
+        return;
+    }
+    let _d = Guard(env.daemon("state"));
+    let registered = Arc::new(std::sync::Mutex::new(Vec::new()));
+    zbus::block_on(async {
+        let panel = zbus::connection::Builder::address(env.address.as_str())
+            .serve_at("/StatusNotifierWatcher", Watcher(registered.clone()))
+            .name("org.kde.StatusNotifierWatcher")
+            .build()
+            .await
+            .unwrap();
+        wait_ready(&panel).await;
+        let _agent = Guard(
+            Command::new(&agent)
+                .arg("--report-on-session-bus")
+                .env("DBUS_SESSION_BUS_ADDRESS", &env.address)
+                .env("XDG_RUNTIME_DIR", &env.dir)
+                .env("XDG_CONFIG_HOME", env.dir.join("config"))
+                .spawn()
+                .unwrap(),
+        );
+        let dbus = zbus::fdo::DBusProxy::new(&panel).await.unwrap();
+        eventually("icon registered", async || {
+            // A call on this connection keeps it serving the watcher.
+            let _ = dbus.get_id().await;
+            !registered.lock().unwrap().is_empty()
+        })
+        .await;
+        let name = registered.lock().unwrap()[0].clone();
+        assert!(name.starts_with("org.kde.StatusNotifierItem-"), "{name}");
+
+        let item = zbus::Proxy::new(
+            &panel,
+            name.as_str(),
+            "/StatusNotifierItem",
+            "org.kde.StatusNotifierItem",
+        )
+        .await
+        .unwrap();
+        let menu_path: zbus::OwnedObjectPath = item.get_property("Menu").await.unwrap();
+        let menu = zbus::Proxy::new(&panel, name.as_str(), menu_path, "com.canonical.dbusmenu")
+            .await
+            .unwrap();
+        let tooltip: ToolTip = item.get_property("ToolTip").await.unwrap();
+        assert!(tooltip.3.starts_with("Balanced"), "{tooltip:?}");
+        let icon: Vec<(i32, i32, Vec<u8>)> = item.get_property("IconPixmap").await.unwrap();
+        assert!(icon.iter().any(|(w, _, _)| *w == 22));
+
+        // The menu: modes as radio items, the current one ticked.
+        let props: Vec<(i32, HashMap<String, zbus::OwnedVariant>)> = menu
+            .call(
+                "GetGroupProperties",
+                &(vec![10i32, 11, 12], Vec::<String>::new()),
+            )
+            .await
+            .unwrap();
+        let state = |id: i32| -> i32 {
+            props
+                .iter()
+                .find(|(i, _)| *i == id)
+                .map(|(_, p)| i32::try_from(&*p["toggle-state"]).unwrap())
+                .unwrap()
+        };
+        assert_eq!((state(10), state(11), state(12)), (0, 1, 0));
+        type Node = (
+            i32,
+            HashMap<String, zbus::OwnedVariant>,
+            Vec<zbus::OwnedVariant>,
+        );
+        let (_rev, root): (u32, Node) = menu
+            .call("GetLayout", &(0i32, -1i32, Vec::<String>::new()))
+            .await
+            .unwrap();
+        assert!(root.2.len() >= 8, "header, modes, auto, last, open, hide…");
+
+        // Clicking "Longer battery" switches the mode through the service.
+        menu.call::<_, _, ()>(
+            "Event",
+            &(10i32, "clicked", zbus::Variant::from(0i32), 0u32),
+        )
+        .await
+        .unwrap();
+        wait_for(|| env.epp() == "power");
+        // Panels read it again on NewToolTip; read it straight, uncached.
+        let props = zbus::fdo::PropertiesProxy::new(&panel, name.as_str(), "/StatusNotifierItem")
+            .await
+            .unwrap();
+        eventually("tooltip follows", async || {
+            let v = props
+                .get("org.kde.StatusNotifierItem".try_into().unwrap(), "ToolTip")
+                .await
+                .unwrap();
+            let t: ToolTip = v.try_into().unwrap();
+            t.3.starts_with("Longer battery")
+        })
+        .await;
+
+        // "Hide this icon" removes it from the panel and is remembered.
+        menu.call::<_, _, ()>(
+            "Event",
+            &(41i32, "clicked", zbus::Variant::from(0i32), 0u32),
+        )
+        .await
+        .unwrap();
+        eventually("icon gone", async || {
+            !dbus
+                .name_has_owner(name.as_str().try_into().unwrap())
+                .await
+                .unwrap()
+        })
+        .await;
+        let saved = fs::read_to_string(env.dir.join("config/dynamis-power/agent.json")).unwrap();
+        assert!(saved.contains("\"tray\":false"), "{saved}");
+    });
+}

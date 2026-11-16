@@ -180,6 +180,16 @@ async fn set_adaptive_charging(conn: State<'_, Conn>, on: bool) -> Result<(), St
     client(&conn).await?.set_adaptive_charging(on).await
 }
 
+#[tauri::command]
+async fn tray_shown() -> Result<bool, String> {
+    Client::tray_shown().await
+}
+
+#[tauri::command]
+async fn set_tray(on: bool) -> Result<(), String> {
+    Client::set_tray(on).await
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Conn::default())
@@ -207,6 +217,8 @@ fn main() {
             predict,
             set_target,
             set_adaptive_charging,
+            tray_shown,
+            set_tray,
             save_file
         ])
         .run(tauri::generate_context!())

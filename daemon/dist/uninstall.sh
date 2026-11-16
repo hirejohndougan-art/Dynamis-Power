@@ -19,7 +19,7 @@ if [ -x /usr/local/bin/dynamis ]; then
 fi
 
 rm -f /usr/local/bin/dynamis /usr/local/libexec/dynamisd /usr/local/libexec/dynamis-sync \
-      /usr/local/libexec/dynamis-agent /etc/systemd/user/dynamis-agent.service \
+      /usr/local/libexec/dynamis-agent /etc/systemd/user/dynamis-agent.service /etc/xdg/autostart/dynamis-agent.desktop \
       /etc/systemd/system/dynamisd.service \
       /etc/systemd/system/dynamis-sync.service /etc/systemd/system/dynamis-sync.timer \
       /etc/dbus-1/system.d/net.dynamis.power.conf \

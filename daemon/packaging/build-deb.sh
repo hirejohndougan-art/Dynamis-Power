@@ -36,6 +36,10 @@ for u in dynamisd.service dynamis-sync.service dynamis-sync.timer; do
 done
 install -d "$stage/usr/lib/systemd/user"
 fix_paths "$dist/dynamis-agent.service" > "$stage/usr/lib/systemd/user/dynamis-agent.service"
+# The panel icon on desktops that do not start user services with the session.
+install -d "$stage/etc/xdg/autostart"
+fix_paths "$dist/dynamis-agent.desktop" > "$stage/etc/xdg/autostart/dynamis-agent.desktop"
+chmod 644 "$stage/etc/xdg/autostart/dynamis-agent.desktop"
 install -Dm644 "$dist/net.dynamis.power.conf" "$stage/usr/share/dbus-1/system.d/net.dynamis.power.conf"
 install -Dm644 "$dist/net.dynamis.power.policy" "$stage/usr/share/polkit-1/actions/net.dynamis.power.policy"
 install -Dm644 "$root/../LICENSE" "$stage/usr/share/doc/$pkg/copyright"
@@ -47,6 +51,7 @@ printf '%s (%s) unstable; urgency=medium\n\n  * See CHANGELOG.md.gz in this fold
 chmod 644 "$stage"/usr/lib/systemd/system/* "$stage"/usr/lib/systemd/user/*
 
 install -d "$stage/DEBIAN"
+echo /etc/xdg/autostart/dynamis-agent.desktop > "$stage/DEBIAN/conffiles"
 for s in postinst prerm postrm; do
     install -m755 "$here/debian/$s" "$stage/DEBIAN/$s"
 done

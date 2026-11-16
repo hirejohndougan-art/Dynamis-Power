@@ -37,7 +37,7 @@ done
 
 echo "This will:"
 echo "  - install dynamis to /usr/local/bin; dynamisd, dynamis-sync and dynamis-agent to /usr/local/libexec"
-echo "  - start a small session agent at each login (auto mode stays off until: dynamis auto on)"
+echo "  - start a small session agent at each login: the panel icon, and what auto mode needs to know"
 echo "  - install the services, a D-Bus policy and polkit actions"
 echo "  - check daily for a signed list of settings known to break some laptops"
 [ -n "$others" ] && echo "  - stop and mask:$others (uninstall.sh turns them back on)"
@@ -51,6 +51,7 @@ install -Dm755 "$bin/dynamisd" /usr/local/libexec/dynamisd
 install -Dm755 "$bin/dynamis-sync" /usr/local/libexec/dynamis-sync
 install -Dm755 "$bin/dynamis-agent" /usr/local/libexec/dynamis-agent
 install -Dm644 "$here/dynamis-agent.service" /etc/systemd/user/dynamis-agent.service
+install -Dm644 "$here/dynamis-agent.desktop" /etc/xdg/autostart/dynamis-agent.desktop
 install -Dm644 "$here/dynamisd.service" /etc/systemd/system/dynamisd.service
 install -Dm644 "$here/dynamis-sync.service" /etc/systemd/system/dynamis-sync.service
 install -Dm644 "$here/dynamis-sync.timer" /etc/systemd/system/dynamis-sync.timer

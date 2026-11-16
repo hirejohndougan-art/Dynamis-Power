@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Panel icon ("tray"), from login on every desktop with panel icons: the mode at a glance (logo coloured by mode, tooltip with battery and time left), left click opens the app, and a menu to pick the mode, switch automatic choice, make the battery last (2/4/6 hours or stop), open the app, or hide the icon. Drawn by the session agent over the standard StatusNotifierItem and DBusMenu protocols, so the app can stay closed. A switch on Modes shows or hides it. The service package also installs an autostart entry for desktops that do not start user services, and a second agent in a session exits.
+
 - Phase 7: prediction.
   - Battery forecast at your usual use, from typical power on battery by hour of the week; the usual unplug time per weekday. Kept on this computer only (`habits.json`).
   - "Last until": saves only as hard as needed (no full speed → Longer battery → also slowing background apps), one level at a time by feedback; caps app requests; ends on plug-in, at the time, or with Restore.

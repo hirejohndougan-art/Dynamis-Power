@@ -183,6 +183,9 @@ export interface Backend {
   /** Unix seconds; 0 ends "Last until". */
   setTarget(until: number): Promise<void>;
   setAdaptiveCharging(on: boolean): Promise<void>;
+  /** The panel icon (shown by the session helper). */
+  trayShown(): Promise<boolean>;
+  setTray(on: boolean): Promise<void>;
   /** Save an exported file; returns where it went. */
   saveFile(name: string, contents: string): Promise<string>;
 }

@@ -273,6 +273,9 @@ export const en = {
   modes_boost: "Full speed for heavy work and games when plugged in",
   modes_save: "Save",
   modes_saved: "Saved.",
+  modes_panel_heading: "Panel icon",
+  modes_panel: "Show Dynamis Power in the panel",
+  modes_panel_desc: "Shows the power mode next to the clock. Click it to open the app; its menu changes the mode, switches automatic choice and makes the battery last. It starts with your computer and uses almost nothing.",
 
   // Apps
   apps_title: "Apps",

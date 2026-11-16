@@ -19,11 +19,25 @@
 //! It sends nothing else: no window titles, no app names, no media titles.
 //! The service turns the process ID into an app name itself, on this
 //! computer, for the Apps screen and per-app modes.
+//!
+//! It also shows the **panel icon** (see `tray.rs`): the power mode at a
+//! glance, and a menu to change it, switch auto mode, make the battery last,
+//! or open the app. It starts at every login, so the icon is always there
+//! without the app running. "Hide this icon" in its menu (or the app's
+//! setting) turns it off; that choice is kept in
+//! `~/.config/dynamis-power/agent.json`.
+//!
+//! Only one agent runs per session: a second copy (for example started both
+//! by systemd and by the desktop's autostart) sees the first and exits.
+
+mod strings;
+mod tray;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use clap::Parser;
 use futures_lite::{Stream, StreamExt};
@@ -65,6 +79,51 @@ struct Args {
     /// Print each report.
     #[arg(long)]
     verbose: bool,
+    /// Do not show the panel icon, whatever the saved choice says.
+    #[arg(long)]
+    no_tray: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Config {
+    v: u32,
+    tray: bool,
+}
+
+fn config_path() -> Option<PathBuf> {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
+    Some(base.join("dynamis-power").join("agent.json"))
+}
+
+/// Whether the person wants the panel icon (yes unless they hid it).
+fn tray_wanted() -> bool {
+    config_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str::<Config>(&t).ok())
+        .is_none_or(|c| c.tray)
+}
+
+/// The panel icon, once started.
+static TRAY: OnceLock<tray::Tray> = OnceLock::new();
+
+/// Show or hide the panel icon, and remember the choice.
+pub(crate) async fn set_tray_enabled(session: &Connection, on: bool) {
+    if let Some(p) = config_path() {
+        if let Some(dir) = p.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let text = serde_json::to_string(&Config { v: 1, tray: on }).unwrap_or_default();
+        let _ = std::fs::write(p, text);
+    }
+    if let Some(t) = TRAY.get() {
+        if on {
+            t.show(session).await;
+        } else {
+            t.hide(session).await;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -83,6 +142,17 @@ struct Focus(Arc<AtomicU32>);
 impl Focus {
     fn focus_changed(&self, pid: u32) {
         self.0.store(pid, Ordering::Relaxed);
+    }
+
+    /// Show or hide the panel icon (the app's setting).
+    async fn set_tray(&self, on: bool, #[zbus(connection)] conn: &Connection) {
+        set_tray_enabled(conn, on).await;
+    }
+
+    /// Whether the panel icon is on.
+    #[zbus(property)]
+    fn tray(&self) -> bool {
+        tray_wanted()
     }
 }
 
@@ -117,12 +187,17 @@ async fn run(args: Args) -> zbus::Result<()> {
         .object_server()
         .at(AGENT_PATH, Focus(focus.clone()))
         .await?;
-    // A second agent in the same session would only duplicate reports.
-    if session.request_name(AGENT_NAME).await.is_ok() {
-        if let Err(e) = load_kwin_script(&session).await {
-            if args.verbose {
-                eprintln!("dynamis-agent: no focus tracking ({e})");
-            }
+    // A second agent in the same session would only duplicate reports and
+    // icons: leave it to the first.
+    if session.request_name(AGENT_NAME).await.is_err() {
+        if args.verbose {
+            eprintln!("dynamis-agent: already running in this session");
+        }
+        return Ok(());
+    }
+    if let Err(e) = load_kwin_script(&session).await {
+        if args.verbose {
+            eprintln!("dynamis-agent: no focus tracking ({e})");
         }
     }
     let report_bus = if args.report_on_session_bus {
@@ -182,7 +257,49 @@ async fn run(args: Args) -> zbus::Result<()> {
         let (name, _, new): (String, String, String) = m.body().deserialize().ok()?;
         (name == SERVICE && !new.is_empty()).then_some(Event::ServiceStarted)
     });
-    let mut events = Box::pin(events.or(service_appeared));
+    // The panel icon follows the service: mode, auto mode, Last until.
+    let service_changed = MessageStream::for_match_rule(
+        MatchRule::builder()
+            .msg_type(Type::Signal)
+            .interface("org.freedesktop.DBus.Properties")
+            .member("PropertiesChanged")
+            .sender(SERVICE)
+            .build()?,
+        &report_bus,
+        None,
+    )
+    .await?
+    .map(|_| Event::ServiceChanged);
+    // A panel that starts after the agent needs telling about the icon.
+    let panel_appeared = MessageStream::for_match_rule(
+        rule(Some("org.freedesktop.DBus"), Some("NameOwnerChanged"), None)?,
+        &session,
+        None,
+    )
+    .await?
+    .filter_map(|m| {
+        let m = m.ok()?;
+        let (name, _, new): (String, String, String) = m.body().deserialize().ok()?;
+        (name == "org.kde.StatusNotifierWatcher" && !new.is_empty()).then_some(Event::PanelStarted)
+    });
+    let mut events = Box::pin(
+        events
+            .or(service_appeared)
+            .or(service_changed)
+            .or(panel_appeared),
+    );
+
+    if !args.no_tray {
+        match tray::Tray::start(&session, report_bus.clone(), args.verbose).await {
+            Ok(t) => {
+                if !tray_wanted() {
+                    t.hide(&session).await;
+                }
+                let _ = TRAY.set(t);
+            }
+            Err(e) => eprintln!("dynamis-agent: no panel icon: {e}"),
+        }
+    }
 
     let mut last: Option<Facts> = None;
     let mut force = true;
@@ -205,7 +322,24 @@ async fn run(args: Args) -> zbus::Result<()> {
             }
         }
         match events.next().await {
-            Some(Event::ServiceStarted) => force = true,
+            Some(Event::ServiceStarted) => {
+                force = true;
+                if let Some(t) = TRAY.get() {
+                    tray::refresh(&session, &t.shared).await;
+                }
+            }
+            Some(Event::ServiceChanged) => {
+                force = false;
+                if let Some(t) = TRAY.get() {
+                    tray::refresh(&session, &t.shared).await;
+                }
+            }
+            Some(Event::PanelStarted) => {
+                force = false;
+                if let Some(t) = TRAY.get().filter(|_| tray_wanted()) {
+                    t.show(&session).await;
+                }
+            }
             Some(Event::Session) => force = false,
             None => return Ok(()),
         }
@@ -215,6 +349,8 @@ async fn run(args: Args) -> zbus::Result<()> {
 enum Event {
     Session,
     ServiceStarted,
+    ServiceChanged,
+    PanelStarted,
 }
 
 fn rule(
