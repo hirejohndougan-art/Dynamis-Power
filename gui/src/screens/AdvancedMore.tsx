@@ -1,7 +1,7 @@
 // Advanced: Profiles, Sensors, System and Developer tabs.
 import { useEffect, useRef, useState } from "react";
 import { backend, type ProfileOverrides, type Sensors, type Status } from "../backend";
-import { Sparkline, Switch } from "../components";
+import { Choice, Sparkline, Switch } from "../components";
 import { useLoad } from "../hooks";
 import { duration, profileName, t, valueName } from "../i18n";
 import { RestoreDialog } from "./Home";
@@ -43,16 +43,15 @@ export function ProfilesTab(props: { locked: boolean; run: Run }) {
           {p.settings.map((s) => {
             const value = draft.profiles[p.profile]?.[s.id] ?? s.default ?? "";
             return (
-              <label key={s.id} className="field" style={{ marginTop: 0 }}>
-                <span className="field-label">{s.label}</span>
-                <select value={value} disabled={props.locked} onChange={(e) => set(p.profile, s.id, e.target.value, e.target.value === s.default)}>
-                  {s.choices.map((c) => (
-                    <option key={c} value={c}>
-                      {valueName(s.id, c)}{c === s.default ? ` ${t("profiles_default_mark")}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Choice
+                key={s.id}
+                name={`${p.profile}-${s.id}`}
+                label={s.label}
+                value={value}
+                disabled={props.locked}
+                options={s.choices.map((c): [string, string] => [c, `${valueName(s.id, c)}${c === s.default ? ` ${t("profiles_default_mark")}` : ""}`])}
+                onChange={(v) => set(p.profile, s.id, v, v === s.default)}
+              />
             );
           })}
         </fieldset>
@@ -279,14 +278,13 @@ export function DeveloperTab(props: { status: Status; run: Run; refresh: () => v
 
       <h3>{t("dev_inspector")}</h3>
       <p className="muted small">{t("dev_inspector_desc")}</p>
-      <label className="field" style={{ marginTop: 0 }}>
-        <span className="field-label">{t("dev_inspector_source")}</span>
-        <select value={source} onChange={(e) => load(e.target.value as (typeof SOURCES)[number])}>
-          {SOURCES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </label>
+      <Choice
+        name="dev-source"
+        label={t("dev_inspector_source")}
+        value={source}
+        options={SOURCES.map((s): [(typeof SOURCES)[number], string] => [s, s])}
+        onChange={(v) => load(v)}
+      />
       <pre className="code" aria-label={t("dev_inspector")}>{raw}</pre>
 
       <h3>{t("home_restore")}</h3>

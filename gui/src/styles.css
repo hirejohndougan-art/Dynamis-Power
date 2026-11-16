@@ -171,3 +171,11 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .progress { height: 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
 .progress > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.4s ease; }
 @media (prefers-reduced-motion: reduce) { .progress > span { transition: none; } }
+
+/* Choice: radio inputs drawn as chips */
+fieldset.choice { border: 0; padding: 0; margin-inline: 0; min-width: 0; }
+.choice-chip { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; font-size: 14px; }
+.choice-chip input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.choice-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.choice-chip:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.choice-chip:has(input:disabled) { opacity: 0.55; cursor: default; }

@@ -65,6 +65,39 @@ export function Sparkline(props: { values: number[]; label: string }) {
   );
 }
 
+/** Pick one of a few values. Every choice is visible at once, as buttons
+ * (real radio inputs underneath, so keyboards and screen readers work).
+ * Used instead of drop-down lists, which some embedded views cannot open. */
+export function Choice<T extends string | number>(props: {
+  label: string;
+  value: T;
+  options: [T, string][];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+  name: string;
+}) {
+  return (
+    <fieldset className="field choice">
+      <legend className="field-label">{props.label}</legend>
+      <div className="chips">
+        {props.options.map(([v, text]) => (
+          <label key={String(v)} className={`chip choice-chip${props.value === v ? " on" : ""}`}>
+            <input
+              type="radio"
+              name={props.name}
+              value={String(v)}
+              checked={props.value === v}
+              disabled={props.disabled}
+              onChange={() => props.onChange(v)}
+            />
+            {text}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 /** A progress bar with its value for screen readers. */
 export function ProgressBar(props: { pct: number; label?: string }) {
   const pct = Math.max(0, Math.min(100, props.pct));

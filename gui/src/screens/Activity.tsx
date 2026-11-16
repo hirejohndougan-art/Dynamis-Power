@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { backend, type JournalEntry } from "../backend";
 import { describe, type Category } from "../activity";
-import { Dialog } from "../components";
+import { Choice, Dialog } from "../components";
 import { build, summary, type ExportOptions } from "../exporter";
 import { useAction, useLoad } from "../hooks";
 import { formatTime, t } from "../i18n";
@@ -175,22 +175,20 @@ function ExportDialog(props: { open: boolean; onClose: () => void; version: stri
         {check("settings", "export_settings")}
       </fieldset>
       <div className="row">
-        <label className="field">
-          <span className="field-label">{t("export_range")}</span>
-          <select value={o.rangeDays ?? "all"} onChange={(e) => set("rangeDays", e.target.value === "all" ? null : Number(e.target.value))}>
-            <option value={1}>{t("range_24h")}</option>
-            <option value={7}>{t("range_7d")}</option>
-            <option value={30}>{t("range_30d")}</option>
-            <option value="all">{t("range_all")}</option>
-          </select>
-        </label>
-        <label className="field">
-          <span className="field-label">{t("export_format")}</span>
-          <select value={o.format} onChange={(e) => set("format", e.target.value as "json" | "text")}>
-            <option value="json">{t("format_json")}</option>
-            <option value="text">{t("format_text")}</option>
-          </select>
-        </label>
+        <Choice
+          name="export-range"
+          label={t("export_range")}
+          value={o.rangeDays ?? 0}
+          options={[[1, t("range_24h")], [7, t("range_7d")], [30, t("range_30d")], [0, t("range_all")]]}
+          onChange={(v) => set("rangeDays", v === 0 ? null : v)}
+        />
+        <Choice
+          name="export-format"
+          label={t("export_format")}
+          value={o.format}
+          options={[["json", t("format_json")], ["text", t("format_text")]]}
+          onChange={(v) => set("format", v)}
+        />
       </div>
       <label className="check" style={{ marginTop: 14 }}>
         <input type="checkbox" checked={o.privacy} onChange={(e) => set("privacy", e.target.checked)} /> {t("export_privacy")}

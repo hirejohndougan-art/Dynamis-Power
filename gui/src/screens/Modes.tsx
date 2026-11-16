@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { backend, type AutoPrefs, type Profile, type Status } from "../backend";
-import { Switch } from "../components";
+import { Choice, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { profileName, t } from "../i18n";
 
@@ -18,16 +18,16 @@ export function Modes(props: { status: Status; refresh: () => void }) {
   }, [loaded.data]);
   const set = <K extends keyof AutoPrefs>(k: K, v: AutoPrefs[K]) => prefs && setPrefs({ ...prefs, [k]: v });
 
-  const select = (k: "on_ac" | "on_battery", label: string) => (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      <select value={prefs?.[k]} onChange={(e) => set(k, e.target.value as Profile)}>
-        {s.profiles.map((p) => (
-          <option key={p} value={p}>{profileName(p)}</option>
-        ))}
-      </select>
-    </label>
-  );
+  const select = (k: "on_ac" | "on_battery", label: string) =>
+    prefs && (
+      <Choice
+        name={k}
+        label={label}
+        value={prefs[k]}
+        options={s.profiles.map((p): [Profile, string] => [p, profileName(p)])}
+        onChange={(v) => set(k, v)}
+      />
+    );
 
   return (
     <>

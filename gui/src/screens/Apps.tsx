@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { backend, type AppsInfo, type Profile, type Status } from "../backend";
 import { appName, bars, shareOf, withRule, withShare, type Share } from "../apps";
-import { Dialog, Switch } from "../components";
+import { Choice, Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { duration, profileName, t } from "../i18n";
 
@@ -171,15 +171,13 @@ function AppOptions(props: {
         ))}
         {share === "always" && <p className="muted small">{t("apps_share_always_note")}</p>}
       </fieldset>
-      <label className="field">
-        <span className="field-label">{t("apps_mode_label")}</span>
-        <select value={mode} onChange={(e) => setMode(e.target.value as Profile | "")}>
-          <option value="">{t("apps_mode_none")}</option>
-          {props.profiles.map((p) => (
-            <option key={p} value={p}>{profileName(p)}</option>
-          ))}
-        </select>
-      </label>
+      <Choice
+        name="app-mode"
+        label={t("apps_mode_label")}
+        value={mode}
+        options={[["", t("apps_mode_none")] as [Profile | "", string], ...props.profiles.map((p): [Profile | "", string] => [p, profileName(p)])]}
+        onChange={(v) => setMode(v)}
+      />
     </Dialog>
   );
 }

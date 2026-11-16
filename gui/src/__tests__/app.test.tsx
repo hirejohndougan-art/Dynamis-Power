@@ -99,8 +99,11 @@ describe("the app with the stand-in backend", () => {
   it("saves auto mode preferences and explains a refusal", async () => {
     window.location.hash = "#modes";
     render(<App />);
-    const battery = (await screen.findByLabelText("On battery")) as HTMLSelectElement;
-    await act(async () => fireEvent.change(battery, { target: { value: "power-saver" } }));
+    // All three modes are visible choices, not a drop-down.
+    const battery = await screen.findByRole("group", { name: "On battery" });
+    expect(within(battery).getAllByRole("radio").map((r) => r.parentElement?.textContent)).toEqual(["Longer battery", "Balanced", "Faster"]);
+    await act(async () => fireEvent.click(within(battery).getByRole("radio", { name: "Longer battery" })));
+    expect(within(battery).getByRole("radio", { name: "Longer battery" })).toHaveProperty("checked", true);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Saved."));
   });
@@ -113,7 +116,7 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Options: Thunderbird" })));
     const dialog = screen.getByRole("dialog", { hidden: true });
     await act(async () => fireEvent.click(within(dialog).getByRole("radio", { name: "Always slow it down", hidden: true })));
-    fireEvent.change(within(dialog).getByRole("combobox", { hidden: true }), { target: { value: "power-saver" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("radio", { name: "Longer battery", hidden: true })));
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Save", hidden: true })));
     await waitFor(() => expect(screen.getByText(/Uses Longer battery while open/)).toBeTruthy());
     expect(screen.getByText(/Slowed down/)).toBeTruthy();
@@ -148,8 +151,8 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(screen.getByRole("switch", { name: /Dry run/ })));
 
     await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Profiles" })));
-    const select = (await screen.findAllByRole("combobox"))[1];
-    fireEvent.change(select, { target: { value: "balance_power" } });
+    const balanced = await screen.findByRole("group", { name: "Balanced" });
+    await act(async () => fireEvent.click(within(within(balanced).getByRole("group")).getAllByRole("radio")[2]));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Profile settings saved/));
 
