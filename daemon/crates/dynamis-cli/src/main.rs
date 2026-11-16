@@ -132,11 +132,30 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Show, switch on or switch off safe mode (no setting is changed while it
+    /// is on; restore still works).
+    SafeMode {
+        #[arg(value_enum, default_value_t = SafeModeAction::Status)]
+        action: SafeModeAction,
+    },
+    /// Show which settings are not allowed on this machine, and why.
+    Quirks {
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
     /// Allow a setting that was blocked after a failed or unfinished change.
     Unblock {
         /// Setting ID.
         id: String,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum SafeModeAction {
+    Status,
+    On,
+    Off,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -184,6 +203,16 @@ fn main() {
         ),
         Command::Restore => changes::cmd_restore(&root, &state),
         Command::Journal { last, json } => changes::cmd_journal(&root, &state, last, json),
+        Command::SafeMode { action } => changes::cmd_safe_mode(
+            &root,
+            &state,
+            match action {
+                SafeModeAction::Status => None,
+                SafeModeAction::On => Some(true),
+                SafeModeAction::Off => Some(false),
+            },
+        ),
+        Command::Quirks { json } => changes::cmd_quirks(&root, &state, json),
         Command::Unblock { id } => changes::cmd_unblock(&root, &state, &id),
     };
     if let Err(e) = result {

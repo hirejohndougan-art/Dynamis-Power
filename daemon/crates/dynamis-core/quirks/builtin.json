@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "serial": 1,
+  "issued": "2026-11-16",
+  "quirks": [
+    {
+      "id": "builtin-0001",
+      "setting": "pcie.aspm",
+      "values": ["powersave"],
+      "match": { "wifi_driver": "rtw*8821ce" },
+      "reason": "Realtek RTL8821CE Wi-Fi is widely reported to drop out or freeze the system when PCIe link power saving is forced on.",
+      "url": "https://github.com/hirejohndougan-art/Dynamis-Power/blob/main/docs/SETTINGS.md"
+    }
+  ]
+}

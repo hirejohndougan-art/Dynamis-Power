@@ -70,4 +70,13 @@ The service, `dynamisd`, adds:
 | One owner | Refuses to start if power-profiles-daemon, tuned-ppd or a second copy owns the interface, before touching any setting |
 | Clean uninstall | `daemon/dist/uninstall.sh` stops the service, restores every original setting, removes its files and turns back on the service it replaced |
 
-Not yet built: the health monitor, the systemd watchdog, the quirk list and kill switch, pre-flight checks, the change rate limit, the "three unclean boots" trigger for safe mode, and dropping capabilities to the minimum.
+Phase 2 also adds:
+
+| Rail | How |
+| --- | --- |
+| Health monitor | During a trial, checks every second for new kernel errors and known trouble (GPU hangs, lockups, storage timeouts, device resets, firmware crashes), memory or disk thrashing beyond where it was before the trial, and temperatures over 95 °C. Any of these undoes the change at once and blocks the setting. Code: `health.rs` |
+| Quirk list and kill switch | A built-in list plus a signed, daily-downloaded list block known-bad settings per model. A newly blocked setting that is already applied is put back. The download runs as an unprivileged user; the root service only verifies and reads. See [decision 0009](decisions/0009-signed-quirk-list.md) |
+| Safe mode after unclean shutdowns | Three boots in a row that follow a freeze, crash or power cut switch safe mode on. It stays on until a person runs `dynamis safe-mode off`, so a setting that causes freezes cannot cycle back on. Code: `boots.rs` |
+| Bounded journal | The journal rotates at 1 MB, keeping one previous file |
+
+Not built, by decision: the systemd watchdog, and the change rate limit until automatic changes exist ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: pre-flight checks (battery floor, no call or full-screen video) with automatic experiments in phase 4, and dropping capabilities to the minimum after the real-hardware test.

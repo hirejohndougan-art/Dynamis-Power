@@ -62,6 +62,21 @@ async fn run(args: Args) -> Result<(), String> {
         .state_dir
         .unwrap_or_else(|| PathBuf::from(DEFAULT_STATE_DIR));
 
+    std::fs::create_dir_all(&state).map_err(|e| format!("{}: {e}", state.display()))?;
+    match dynamis_core::boots::record_start(&root, &state) {
+        Ok(b) if b.safe_mode_now_on => eprintln!(
+            "dynamisd: {} unclean shutdowns in a row; SAFE MODE is now on and stays on until \
+             `sudo dynamis safe-mode off`",
+            b.unclean_in_a_row
+        ),
+        Ok(b) if b.unclean_in_a_row > 0 => eprintln!(
+            "dynamisd: the last {} shutdown(s) were not clean (freeze, crash or power cut)",
+            b.unclean_in_a_row
+        ),
+        Ok(_) => {}
+        Err(e) => eprintln!("dynamisd: could not record this boot: {e}"),
+    }
+
     // Recovery happens here, before anything else touches a setting.
     crate::core::open_engine(&root, &state)?;
     let core = Core::new(root, state);

@@ -11,6 +11,10 @@ BusName=org.freedesktop.UPower.PowerProfiles
 ExecStart=/usr/local/libexec/dynamisd
 Restart=on-failure
 RestartSec=5
+# A normal stop (including every normal shutdown) removes the marker. A boot
+# that finds it still there follows a freeze, crash or power cut; three in a
+# row switch on safe mode. See daemon/crates/dynamis-core/src/boots.rs.
+ExecStopPost=/bin/rm -f /var/lib/dynamis-power/running
 StateDirectory=dynamis-power
 StateDirectoryMode=0700
 

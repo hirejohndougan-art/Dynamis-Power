@@ -293,8 +293,18 @@ fn trial_keep_and_revert() {
     })
     .unwrap();
     e.revert("user said no").unwrap();
+    assert!(e.blocked().is_empty(), "a plain no does not block");
     assert_eq!(sb.file("/proc/sys/vm/dirty_writeback_centisecs"), "1500");
     assert!(matches!(e.keep(), Err(EngineError::NoTrial)));
+
+    e.apply(&Request {
+        trial_secs: Some(60),
+        ..req("vm.dirty_writeback", "3000")
+    })
+    .unwrap();
+    e.revert_unhealthy("health check: GPU hang").unwrap();
+    assert_eq!(sb.file("/proc/sys/vm/dirty_writeback_centisecs"), "1500");
+    assert!(e.blocked().contains_key("vm.dirty_writeback"));
 }
 
 #[test]
@@ -453,5 +463,280 @@ mod profiles {
         );
         assert_eq!(Profile::parse("power-saver"), Some(Profile::PowerSaver));
         assert_eq!(Profile::parse("turbo"), None);
+    }
+}
+
+mod health {
+    use super::*;
+    use dynamis_core::health::{Limits, Monitor, Problem};
+
+    fn append(path: &Path, text: &str) {
+        use std::io::Write;
+        fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+            .unwrap()
+            .write_all(text.as_bytes())
+            .unwrap();
+    }
+
+    #[test]
+    fn only_new_kernel_trouble_counts() {
+        let sb = Sandbox::new();
+        let kmsg = sb.dir.join("root/dev/kmsg");
+        fs::create_dir_all(kmsg.parent().unwrap()).unwrap();
+        append(&kmsg, "3,1,1,-;old error from boot\n");
+
+        let mut m = Monitor::start(&sb.root(), Limits::default());
+        assert!(m.watching_kernel_log());
+        assert!(
+            m.check().is_empty(),
+            "messages from before the trial are ignored"
+        );
+
+        append(&kmsg, "6,2,2,-;wlan0: associated\n");
+        assert!(m.check().is_empty());
+
+        append(
+            &kmsg,
+            "4,3,3,-;mmc0: Timeout waiting for hardware interrupt.\n SUBSYSTEM=mmc\n",
+        );
+        let p = m.check();
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert!(matches!(&p[0], Problem::Kernel { message } if message.starts_with("mmc0")));
+        assert!(m.check().is_empty(), "each message is reported once");
+    }
+
+    #[test]
+    fn thrashing_and_heat() {
+        let sb = Sandbox::new();
+        let mut m = Monitor::start(&sb.root(), Limits::default());
+        assert!(
+            !m.watching_kernel_log(),
+            "fixture has no kernel log; other checks still run"
+        );
+        assert!(m.check().is_empty());
+
+        fs::write(
+            sb.dir.join("root/proc/pressure/memory"),
+            "some avg10=60.00 avg60=20.00 avg300=5.00 total=1\nfull avg10=40.00 avg60=10.00 avg300=2.00 total=1\n",
+        )
+        .unwrap();
+        let zone = fs::read_dir(sb.dir.join("root/sys/class/thermal"))
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| p.join("temp").exists())
+            .unwrap();
+        fs::write(zone.join("temp"), "99000").unwrap();
+        let p = m.check();
+        assert!(
+            p.iter()
+                .any(|x| matches!(x, Problem::MemoryThrashing { .. })),
+            "{p:?}"
+        );
+        assert!(
+            p.iter().any(|x| matches!(x, Problem::Overheating { .. })),
+            "{p:?}"
+        );
+    }
+
+    #[test]
+    fn already_busy_is_not_a_failure() {
+        let sb = Sandbox::new();
+        fs::write(
+            sb.dir.join("root/proc/pressure/io"),
+            "some avg10=80.00 avg60=0 avg300=0 total=1\nfull avg10=50.00 avg60=0 avg300=0 total=1\n",
+        )
+        .unwrap();
+        let mut m = Monitor::start(&sb.root(), Limits::default());
+        assert!(m.check().is_empty(), "same stall level as before the trial");
+    }
+}
+
+mod quirk_list {
+    use super::*;
+    use dynamis_core::quirks::{self, Downloaded};
+    use ed25519_dalek::{Signer, SigningKey};
+
+    fn key(seed: u8) -> (SigningKey, String) {
+        let k = SigningKey::from_bytes(&[seed; 32]);
+        let public = quirks::to_hex(k.verifying_key().as_bytes());
+        (k, public)
+    }
+
+    fn publish(dir: &Path, k: &SigningKey, serial: u64, quirks_json: &str) {
+        fs::create_dir_all(dir).unwrap();
+        let body = format!(r#"{{"v":1,"serial":{serial},"issued":"test","quirks":{quirks_json}}}"#);
+        fs::write(dir.join("quirks.json"), &body).unwrap();
+        fs::write(
+            dir.join("quirks.json.sig"),
+            quirks::to_hex(&k.sign(body.as_bytes()).to_bytes()),
+        )
+        .unwrap();
+    }
+
+    const BLOCK_SWAP_10: &str = r#"[{"id":"t1","setting":"vm.swappiness","values":["10"],"match":{"model":"Synthetic*"},"reason":"test block"}]"#;
+
+    #[test]
+    fn builtin_quirk_matches_this_wifi() {
+        let sb = Sandbox::new();
+        let mut e = sb.engine();
+        // The fixture has an RTL8821CE card, which the built-in list covers.
+        let err = e.apply(&req("pcie.aspm", "powersave")).unwrap_err();
+        assert!(matches!(err, EngineError::Quirk { .. }), "{err}");
+        // Only the listed value is blocked. (Writing it fails the read-back on
+        // this fixture, whose plain file cannot mimic the kernel's
+        // "[current] other" format; what matters is that no quirk refused it.)
+        let other = e.apply(&req("pcie.aspm", "performance"));
+        assert!(
+            !matches!(other, Err(EngineError::Quirk { .. })),
+            "{other:?}"
+        );
+    }
+
+    #[test]
+    fn signed_list_is_used_and_tampering_is_rejected() {
+        let sb = Sandbox::new();
+        let (k, public) = key(7);
+        let keys = [public.as_str()];
+        let sync = sb.state().join("sync");
+
+        publish(&sync, &k, 5, BLOCK_SWAP_10);
+        let a = quirks::load_with_keys(&sb.root(), &sync, 0, &keys);
+        assert!(matches!(a.downloaded, Downloaded::Used { serial: 5, .. }));
+        assert!(a.blocking("vm.swappiness", "10").is_some());
+        assert!(a.blocking("vm.swappiness", "20").is_none());
+
+        // One changed byte breaks the signature.
+        let body = fs::read_to_string(sync.join("quirks.json"))
+            .unwrap()
+            .replace("test block", "test blocK");
+        fs::write(sync.join("quirks.json"), body).unwrap();
+        let a = quirks::load_with_keys(&sb.root(), &sync, 0, &keys);
+        assert!(matches!(a.downloaded, Downloaded::Rejected { .. }));
+        assert!(a.blocking("vm.swappiness", "10").is_none());
+
+        // Signed by someone else.
+        let (other, _) = key(9);
+        publish(&sync, &other, 6, BLOCK_SWAP_10);
+        assert!(matches!(
+            quirks::load_with_keys(&sb.root(), &sync, 0, &keys).downloaded,
+            Downloaded::Rejected { .. }
+        ));
+
+        // No trusted key at all (the state of a fresh project).
+        publish(&sync, &k, 6, BLOCK_SWAP_10);
+        assert!(matches!(
+            quirks::load_with_keys(&sb.root(), &sync, 0, &[]).downloaded,
+            Downloaded::Rejected { .. }
+        ));
+
+        // An older list cannot be replayed after a newer one was accepted.
+        assert!(matches!(
+            quirks::load_with_keys(&sb.root(), &sync, 7, &keys).downloaded,
+            Downloaded::Rejected { .. }
+        ));
+    }
+
+    #[test]
+    fn kill_switch_puts_back_an_already_applied_setting() {
+        let sb = Sandbox::new();
+        let (k, public) = key(7);
+        let keys = [public.as_str()];
+        {
+            let mut e = Engine::open_with_keys(sb.root(), sb.state(), &keys).unwrap();
+            e.apply(&req("vm.swappiness", "10")).unwrap();
+        }
+        // A new list arrives blocking that exact value on this model.
+        publish(&sb.state().join("sync"), &k, 2, BLOCK_SWAP_10);
+        let e = Engine::open_with_keys(sb.root(), sb.state(), &keys).unwrap();
+        assert_eq!(sb.file("/proc/sys/vm/swappiness"), "60");
+        let last = e.journal(1).pop().unwrap();
+        assert_eq!(last.event, "quirk");
+        assert_eq!(
+            fs::read_to_string(sb.state().join("quirk-serial")).unwrap(),
+            "2"
+        );
+    }
+}
+
+mod unclean_boots {
+    use super::*;
+    use dynamis_core::boots::{self, UNCLEAN_LIMIT};
+
+    fn boot(sb: &Sandbox, id: &str) -> boots::BootCheck {
+        let p = sb.dir.join("root/proc/sys/kernel/random");
+        fs::create_dir_all(&p).unwrap();
+        fs::write(p.join("boot_id"), id).unwrap();
+        boots::record_start(&sb.root(), &sb.state()).unwrap()
+    }
+
+    fn clean_stop(sb: &Sandbox) {
+        // What the systemd unit's ExecStopPost does.
+        fs::remove_file(sb.state().join("running")).unwrap();
+    }
+
+    #[test]
+    fn three_unclean_boots_turn_on_safe_mode_until_switched_off() {
+        let sb = Sandbox::new();
+        assert_eq!(boot(&sb, "a").unclean_in_a_row, 0);
+        // Freeze: no clean stop.
+        assert_eq!(boot(&sb, "b").unclean_in_a_row, 1);
+        // The service restarting within the same boot is not a new boot.
+        assert_eq!(boot(&sb, "b").unclean_in_a_row, 1);
+        clean_stop(&sb);
+        assert_eq!(
+            boot(&sb, "c").unclean_in_a_row,
+            0,
+            "a clean shutdown resets the count"
+        );
+
+        for (i, id) in ["d", "e"].into_iter().enumerate() {
+            let r = boot(&sb, id);
+            assert_eq!(r.unclean_in_a_row, i as u32 + 1);
+            assert!(!r.safe_mode_now_on);
+        }
+        let r = boot(&sb, "f");
+        assert_eq!(r.unclean_in_a_row, UNCLEAN_LIMIT);
+        assert!(r.safe_mode_now_on);
+
+        let mut e = sb.engine();
+        assert!(e.safe_mode().unwrap().contains("unclean"));
+        assert!(matches!(
+            e.apply(&req("vm.swappiness", "10")),
+            Err(EngineError::SafeMode(_))
+        ));
+
+        // It stays on after a clean boot...
+        clean_stop(&sb);
+        drop(e);
+        boot(&sb, "g");
+        let mut e = sb.engine();
+        assert!(e.safe_mode().is_some());
+        // ...until a person switches it off.
+        e.set_safe_mode(None).unwrap();
+        assert!(e.safe_mode().is_none());
+        e.apply(&req("vm.swappiness", "10")).unwrap();
+    }
+
+    #[test]
+    fn journal_rotates_and_still_reads_back() {
+        let sb = Sandbox::new();
+        let mut e = sb.engine();
+        e.apply(&req("vm.swappiness", "10")).unwrap();
+        // Make the journal look big, then log more.
+        let path = sb.state().join("journal.jsonl");
+        let mut big = fs::read_to_string(&path).unwrap();
+        while big.len() as u64 <= dynamis_core::engine::JOURNAL_ROTATE_BYTES {
+            big.push_str(&"x".repeat(1000));
+            big.push('\n');
+        }
+        fs::write(&path, big).unwrap();
+        e.apply(&req("vm.swappiness", "20")).unwrap();
+        assert!(sb.state().join("journal.1.jsonl").exists());
+        assert!(fs::metadata(&path).unwrap().len() < 1000);
+        let events: Vec<String> = e.journal(10).into_iter().map(|j| j.event).collect();
+        assert_eq!(events, ["start", "done", "start", "done"]);
     }
 }

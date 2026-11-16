@@ -1,0 +1,13 @@
+[package]
+name = "dynamis-quirktool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+dynamis-core = { version = "0.1.0", path = "../dynamis-core" }
+ed25519-dalek = "2"
+getrandom = "0.3"

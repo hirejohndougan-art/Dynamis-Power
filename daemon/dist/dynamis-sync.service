@@ -1,0 +1,35 @@
+[Unit]
+Description=Dynamis Power: download the signed quirk list
+Documentation=https://github.com/hirejohndougan-art/Dynamis-Power
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/dynamis-sync
+# A throwaway unprivileged user, created for each run. The root service never
+# touches the network; this never runs as root.
+DynamicUser=yes
+StateDirectory=dynamis-power-sync
+StateDirectoryMode=0755
+
+# --- Hardening -------------------------------------------------------------
+RestrictAddressFamilies=AF_INET AF_INET6
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+MemoryMax=64M

@@ -23,7 +23,13 @@ daemon/
       src/selfstat.rs        the process's own CPU and memory use
       tests/                 tests against tests/fixtures/sysfs/
       src/profiles.rs        power-saver / balanced / performance, chosen from what the machine offers
+      src/health.rs          watches the kernel log, stalls and temperature during a trial
+      src/quirks.rs          built-in and signed downloaded quirk lists
+      src/boots.rs           counts unclean shutdowns for automatic safe mode
+      quirks/builtin.json    the built-in quirk list
     dynamis-cli/             the `dynamis` command
+    dynamis-sync/            downloads the signed quirk list (unprivileged; the only network use)
+    dynamis-quirktool/       maintainers only: signing keys and signing the quirk list
     dynamisd/                the system service: standard power-profiles D-Bus interface
       src/core.rs            chosen profile, holds, applying (no D-Bus; unit-tested)
       src/bus.rs             the D-Bus objects and polkit checks
@@ -66,12 +72,16 @@ sudo ./target/release/dynamis set vm.swappiness 20 --trial 60   # undone after 6
 sudo ./target/release/dynamis set cpu.turbo off                  # applied directly
 sudo ./target/release/dynamis journal                            # every change, with old and new values
 sudo ./target/release/dynamis restore                            # put everything back how it was
+sudo ./target/release/dynamis quirks                             # settings not allowed on this laptop, and why
+sudo ./target/release/dynamis safe-mode on|off                   # stop or allow all changes
 ```
+
+During a `--trial`, Dynamis Power watches the kernel log, memory and disk stalls, and temperature every second. Any trouble undoes the change at once and blocks that setting.
 
 - Changes last until reboot. Nothing is written to permanent configuration.
 - **Use `--trial` while trying things.** If the laptop freezes before you confirm, the change is undone and that setting is blocked the next time `dynamis` changes anything (`dynamis unblock <id>` allows it again). A reboot also undoes it.
 - Values outside what the machine and Dynamis Power allow are refused before anything is touched.
-- Safe mode: `sudo mkdir -p /etc/dynamis-power && sudo touch /etc/dynamis-power/disable` refuses every change. `restore` still works.
+- Safe mode: `sudo dynamis safe-mode on` refuses every change (`restore` still works). It also switches on by itself after three unclean shutdowns in a row, and stays on until `sudo dynamis safe-mode off`. The `/etc/dynamis-power/disable` file and the `dynamis.safe=1` boot option do the same from outside.
 - State is kept in `/var/lib/dynamis-power/`; see [../docs/decisions/0007-plain-file-change-journal.md](../docs/decisions/0007-plain-file-change-journal.md).
 
 On a laptop with unexplained freezes (like the project's VivoBook), a freeze during a trial does not prove the setting caused it. Check `dynamis journal` and the system log before drawing conclusions.

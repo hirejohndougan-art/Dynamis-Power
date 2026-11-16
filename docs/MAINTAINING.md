@@ -28,8 +28,30 @@ This document is for whoever looks after the project, today or in future. It sho
 1. A quirk report names a laptop model, setting ID, value and symptom.
 2. Reproduce if possible, or look for matching reports.
 3. Add an entry to the quirk list blocking that setting value for that model (and kernel range, if known).
-4. Sign and publish the updated list. Installs pick it up within hours, without an app update.
-5. If the problem is severe and widespread, also lower the setting's default risk tier in the next release.
+4. Sign and publish the updated list (below). Installations pick it up within a day, without an app update.
+5. If the problem is severe and widespread, also lower the setting's default risk tier in the next release, or add it to the built-in list (`daemon/crates/dynamis-core/quirks/builtin.json`).
+
+## The quirk list
+
+Format and folder: [quirks/README.md](../quirks/README.md). Design: [decision 0009](decisions/0009-signed-quirk-list.md).
+
+**Once, to set up signing** (on your own computer, not a server):
+
+```sh
+cd daemon
+cargo run -p dynamis-quirktool -- keygen ~/dynamis-quirk-signing.key
+```
+
+It prints a public key. Add it to `TRUSTED_KEYS` in `crates/dynamis-core/src/quirks.rs` and release. Back the secret key file up somewhere offline. **Never commit it.** Making a second key, kept offline, and adding both public keys means losing one is not an emergency.
+
+**Each time you publish:**
+
+1. Edit `quirks/quirks.json`. Increase `serial` by one. Give each new quirk a new `id`.
+2. `cargo run -p dynamis-quirktool -- sign ../quirks/quirks.json ~/dynamis-quirk-signing.key` (it refuses lists that name unknown settings).
+3. `cargo run -p dynamis-quirktool -- verify ../quirks/quirks.json <public key>`.
+4. Commit `quirks.json` and `quirks.json.sig` together and merge to `main`.
+
+A kill switch for a setting everywhere is a quirk with an empty `match` and no `values`.
 
 ## Releases
 

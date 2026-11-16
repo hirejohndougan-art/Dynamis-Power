@@ -95,7 +95,8 @@ This step **changes settings**, so do it only after the read-only test above loo
 2. Install the service: `sudo ./dist/install.sh` from the `daemon` folder.
 3. Click the battery icon in the panel and switch between the power modes. Each switch should show up in `sudo dynamis journal`, and `powerprofilesctl` should agree with the panel.
 4. Reboot. The mode you chose should still be selected, and `journalctl -u dynamisd -b` should show it being applied.
-5. Uninstall with `sudo ./dist/uninstall.sh`. `powerprofilesctl` should then show power-profiles-daemon's own driver again.
+5. Check `sudo dynamis quirks` and `systemctl list-timers dynamis-sync.timer`: the quirk list check should be scheduled.
+6. Uninstall with `sudo ./dist/uninstall.sh`. `powerprofilesctl` should then show power-profiles-daemon's own driver again.
 
 Report anything odd in a bug report with `sudo dynamis journal --last 100` attached.
 

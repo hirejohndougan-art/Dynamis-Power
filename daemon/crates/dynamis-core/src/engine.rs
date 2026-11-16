@@ -29,14 +29,24 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::fs::SysRoot;
+use crate::quirks;
 use crate::settings::{self, Probe, Setting};
 use crate::writer;
 
 pub const DEFAULT_STATE_DIR: &str = "/var/lib/dynamis-power";
+/// Present in the state directory while safe mode is switched on by
+/// Dynamis Power itself (after repeated unclean shutdowns) or by
+/// `dynamis safe-mode on`. Holds the reason.
+pub const SAFE_MODE_FILE: &str = "safe-mode";
+/// The journal is rotated when it grows past this many bytes; one previous
+/// file (`journal.1.jsonl`) is kept.
+pub const JOURNAL_ROTATE_BYTES: u64 = 1 << 20;
 /// Creating this file turns on safe mode.
 pub const DISABLE_FILE: &str = "/etc/dynamis-power/disable";
 /// Adding this to the kernel command line turns on safe mode.
 pub const SAFE_MODE_CMDLINE: &str = "dynamis.safe=1";
+/// Where the unprivileged `dynamis-sync` helper leaves downloaded files.
+pub const DEFAULT_SYNC_DIR: &str = "/var/lib/dynamis-power-sync";
 
 /// Version of `journal.jsonl` lines and the JSON state files.
 pub const STATE_FORMAT_VERSION: u32 = 1;
@@ -54,6 +64,7 @@ pub enum EngineError {
     Write(String),
     State(String),
     NoTrial,
+    Quirk { id: String, reason: String },
 }
 
 impl std::fmt::Display for EngineError {
@@ -86,6 +97,7 @@ impl std::fmt::Display for EngineError {
             Write(s) => write!(f, "could not change the setting: {s}"),
             State(s) => write!(f, "state directory problem: {s}"),
             NoTrial => write!(f, "no trial is in progress"),
+            Quirk { id, reason } => write!(f, "'{id}' is not allowed on this machine: {reason}"),
         }
     }
 }
@@ -169,23 +181,58 @@ pub struct Engine {
     dir: PathBuf,
     _lock: Lock,
     recovered: Option<Recovered>,
+    quirks: quirks::Active,
 }
 
 impl Engine {
     /// Open the state directory, take the lock, and recover from any change
     /// an earlier run left unfinished.
     pub fn open(root: SysRoot, state_dir: impl Into<PathBuf>) -> Result<Self> {
+        Self::open_with_keys(root, state_dir, quirks::TRUSTED_KEYS)
+    }
+
+    /// Like [`Engine::open`], trusting `keys` for downloaded quirk lists
+    /// instead of the built-in [`quirks::TRUSTED_KEYS`]. For tests.
+    pub fn open_with_keys(
+        root: SysRoot,
+        state_dir: impl Into<PathBuf>,
+        keys: &[&str],
+    ) -> Result<Self> {
         let dir = state_dir.into();
         fs::create_dir_all(&dir)?;
         let lock = Lock::take(&dir.join("lock"))?;
+        // The real service reads the helper's directory; anything else (tests,
+        // `--state-dir`) keeps its downloads next to its own state.
+        let sync_dir = if dir == Path::new(DEFAULT_STATE_DIR) {
+            PathBuf::from(DEFAULT_SYNC_DIR)
+        } else {
+            dir.join("sync")
+        };
+        let min_serial = fs::read_to_string(dir.join("quirk-serial"))
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0);
+        let quirks = quirks::load_with_keys(&root, &sync_dir, min_serial, keys);
+        if let quirks::Downloaded::Used { serial, .. } = quirks.downloaded {
+            if serial > min_serial {
+                fs::write(dir.join("quirk-serial"), serial.to_string())?;
+            }
+        }
         let mut engine = Engine {
             root,
             dir,
             _lock: lock,
             recovered: None,
+            quirks,
         };
         engine.recover()?;
+        engine.enforce_quirks()?;
         Ok(engine)
+    }
+
+    /// The quirks that apply to this machine, and where they came from.
+    pub fn quirks(&self) -> &quirks::Active {
+        &self.quirks
     }
 
     /// Set if [`Engine::open`] found an unfinished change and undid it.
@@ -195,6 +242,9 @@ impl Engine {
 
     /// Why safe mode is on, if it is.
     pub fn safe_mode(&self) -> Option<String> {
+        if let Ok(why) = fs::read_to_string(self.dir.join(SAFE_MODE_FILE)) {
+            return Some(why.trim().to_string());
+        }
         if self.root.exists(DISABLE_FILE) {
             return Some(format!("{DISABLE_FILE} exists"));
         }
@@ -203,6 +253,27 @@ impl Engine {
             .split_whitespace()
             .any(|w| w == SAFE_MODE_CMDLINE)
             .then(|| format!("{SAFE_MODE_CMDLINE} on the kernel command line"))
+    }
+
+    /// Switch safe mode on (`Some(reason)`) or off (`None`). Switching it off
+    /// also resets the unclean-shutdown count. Only affects the safe mode kept
+    /// in the state directory, not the `/etc` file or the boot option.
+    pub fn set_safe_mode(&mut self, on: Option<&str>) -> Result<()> {
+        let path = self.dir.join(SAFE_MODE_FILE);
+        match on {
+            Some(reason) => {
+                fs::write(&path, format!("{reason}\n"))?;
+                self.log("safe-mode-on", "", None, None, reason)
+            }
+            None => {
+                if path.exists() {
+                    fs::remove_file(&path)?;
+                    crate::boots::reset(&self.dir)?;
+                    self.log("safe-mode-off", "", None, None, "")?;
+                }
+                Ok(())
+            }
+        }
     }
 
     pub fn pending(&self) -> Option<Pending> {
@@ -224,7 +295,8 @@ impl Engine {
     /// The last `n` journal entries, oldest first. Lines that fail to parse
     /// (a torn final line after a power cut) are skipped.
     pub fn journal(&self, n: usize) -> Vec<Entry> {
-        let text = fs::read_to_string(self.dir.join("journal.jsonl")).unwrap_or_default();
+        let mut text = fs::read_to_string(self.dir.join("journal.1.jsonl")).unwrap_or_default();
+        text.push_str(&fs::read_to_string(self.dir.join("journal.jsonl")).unwrap_or_default());
         let all: Vec<Entry> = text
             .lines()
             .filter_map(|l| serde_json::from_str(l).ok())
@@ -264,6 +336,12 @@ impl Engine {
             Probe::Unsupported { reason } => return Err(EngineError::Unsupported(reason)),
         };
         let to = allowed.check(req.value).map_err(EngineError::Invalid)?;
+        if let Some(q) = self.quirks.blocking(req.id, &to) {
+            return Err(EngineError::Quirk {
+                id: req.id.into(),
+                reason: q.reason.clone(),
+            });
+        }
         let from = s
             .read(&self.root)
             .map_err(|e| EngineError::Unsupported(format!("cannot read current value: {e}")))?;
@@ -339,6 +417,15 @@ impl Engine {
         }
     }
 
+    /// Undo the trial in progress because it made the machine unhealthy, and
+    /// block the setting so it is not tried again until someone unblocks it.
+    pub fn revert_unhealthy(&mut self, reason: &str) -> Result<()> {
+        let p = self.pending().ok_or(EngineError::NoTrial)?;
+        let result = self.revert(reason);
+        self.block(&p.id, reason)?;
+        result
+    }
+
     /// Put every changed setting back to its original value. Works in safe
     /// mode and on blocked settings. Returns (id, original, ok) per setting
     /// that needed changing.
@@ -400,6 +487,35 @@ impl Engine {
             restored_to: p.from,
             ok: result == "ok",
         });
+        Ok(())
+    }
+
+    /// A quirk may have arrived after a setting was changed: put any setting
+    /// whose current value is now blocked back to its original value.
+    fn enforce_quirks(&mut self) -> Result<()> {
+        for (id, original) in self.baseline() {
+            let Some(s) = settings::by_id(&id) else {
+                continue;
+            };
+            let Ok(current) = s.read(&self.root) else {
+                continue;
+            };
+            if current == original {
+                continue;
+            }
+            let Some(q) = self.quirks.blocking(&id, &current) else {
+                continue;
+            };
+            let reason = format!("quirk {}: {}", q.id, q.reason);
+            let result = self.put_back(s, &original);
+            self.log(
+                "quirk",
+                &id,
+                Some(&current),
+                Some(&original),
+                &format!("{reason}; {result}"),
+            )?;
+        }
         Ok(())
     }
 
@@ -475,6 +591,12 @@ impl Engine {
         };
         let mut line = serde_json::to_string(&e).map_err(|e| EngineError::State(e.to_string()))?;
         line.push('\n');
+        // Rotation never affects recovery, which uses pending.json, not the
+        // journal; it only bounds the history kept on disk.
+        let current = self.dir.join("journal.jsonl");
+        if fs::metadata(&current).is_ok_and(|m| m.len() > JOURNAL_ROTATE_BYTES) {
+            fs::rename(&current, self.dir.join("journal.1.jsonl"))?;
+        }
         let mut f = OpenOptions::new()
             .create(true)
             .append(true)

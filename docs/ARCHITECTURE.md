@@ -97,6 +97,11 @@ The setting `id` is permanent. Renaming one breaks journals, learned data and sh
 | `/var/lib/dynamis-power/baseline.json` **(built)** | Original value of each changed setting | JSON, `"v": 1`; never overwritten |
 | `/var/lib/dynamis-power/blocked.json` **(built)** | Settings blocked after an unfinished change | JSON, `"v": 1` |
 | `/var/lib/dynamis-power/lock` **(built)** | Kernel file lock while changing settings; holder's PID as a hint | Text |
+| `/var/lib/dynamis-power/journal.1.jsonl` **(built)** | The previous journal, after rotation at 1 MB | As `journal.jsonl` |
+| `/var/lib/dynamis-power/safe-mode` **(built)** | Present while safe mode is on; holds the reason | Text |
+| `/var/lib/dynamis-power/running`, `unclean-boots.json` **(built)** | Unclean-shutdown detection | Text; JSON, `"v": 1` |
+| `/var/lib/dynamis-power/quirk-serial` **(built)** | Highest downloaded quirk list serial accepted | Text |
+| `/var/lib/dynamis-power-sync/quirks.json`, `.sig` **(built)** | Downloaded quirk list, written by the unprivileged helper | JSON `"v": 1`, ed25519 signature in hex |
 | `/var/lib/dynamis-power/profile.json` **(built)** | The profile the user last chose | JSON, `"v": 1` |
 | `/var/lib/dynamis-power/replaced-services` **(built)** | Services `install.sh` turned off, for uninstall | Text, one per line |
 | `/var/lib/dynamis-power/state.db` | Samples, experiment records, learned settings | SQLite, versioned with migrations |

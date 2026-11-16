@@ -3,8 +3,11 @@
 # `cargo build --release`:   sudo ./dist/install.sh
 #
 # What it does (it shows this list and asks before doing anything):
-#   - copies `dynamis` to /usr/local/bin and `dynamisd` to /usr/local/libexec
-#   - installs the systemd unit, the D-Bus policy and the polkit actions
+#   - copies `dynamis` to /usr/local/bin, `dynamisd` and `dynamis-sync` to
+#     /usr/local/libexec
+#   - installs the systemd units, the D-Bus policy and the polkit actions
+#   - enables a daily check for the signed quirk list (run as an unprivileged
+#     user; the only part that uses the network)
 #   - stops and masks power-profiles-daemon / tuned-ppd if they are enabled,
 #     and remembers which, so uninstall.sh can turn them back on
 #   - starts dynamisd
@@ -18,7 +21,7 @@ bin="$here/../target/release"
 state=/var/lib/dynamis-power
 
 [ "$(id -u)" -eq 0 ] || { echo "Run with sudo: sudo $0"; exit 1; }
-for f in "$bin/dynamis" "$bin/dynamisd"; do
+for f in "$bin/dynamis" "$bin/dynamisd" "$bin/dynamis-sync"; do
     [ -x "$f" ] || { echo "Missing $f. Build first: cargo build --release"; exit 1; }
 done
 
@@ -30,8 +33,9 @@ for svc in power-profiles-daemon tuned-ppd; do
 done
 
 echo "This will:"
-echo "  - install dynamis to /usr/local/bin and dynamisd to /usr/local/libexec"
-echo "  - install dynamisd.service, a D-Bus policy and polkit actions"
+echo "  - install dynamis to /usr/local/bin, dynamisd and dynamis-sync to /usr/local/libexec"
+echo "  - install the services, a D-Bus policy and polkit actions"
+echo "  - check daily for a signed list of settings known to break some laptops"
 [ -n "$others" ] && echo "  - stop and mask:$others (uninstall.sh turns them back on)"
 echo "  - start dynamisd, which applies the 'balanced' profile"
 printf "Continue? [y/N] "
@@ -40,7 +44,10 @@ case "$answer" in y|Y|yes) ;; *) echo "Nothing changed."; exit 0 ;; esac
 
 install -Dm755 "$bin/dynamis" /usr/local/bin/dynamis
 install -Dm755 "$bin/dynamisd" /usr/local/libexec/dynamisd
+install -Dm755 "$bin/dynamis-sync" /usr/local/libexec/dynamis-sync
 install -Dm644 "$here/dynamisd.service" /etc/systemd/system/dynamisd.service
+install -Dm644 "$here/dynamis-sync.service" /etc/systemd/system/dynamis-sync.service
+install -Dm644 "$here/dynamis-sync.timer" /etc/systemd/system/dynamis-sync.timer
 install -Dm644 "$here/net.dynamis.power.conf" /etc/dbus-1/system.d/net.dynamis.power.conf
 install -Dm644 "$here/net.dynamis.power.policy" /usr/share/polkit-1/actions/net.dynamis.power.policy
 
@@ -57,9 +64,11 @@ done
 systemctl reload dbus 2>/dev/null || systemctl reload dbus-broker 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable --now dynamisd
+systemctl enable --now dynamis-sync.timer
 
 echo
 echo "Installed. Check it with:  powerprofilesctl  (or the battery icon in your panel)"
 echo "Logs:                      journalctl -u dynamisd"
 echo "Undo all changes:          sudo dynamis restore"
+echo "Safe mode:                 sudo dynamis safe-mode on|off"
 echo "Remove completely:         sudo $here/uninstall.sh"

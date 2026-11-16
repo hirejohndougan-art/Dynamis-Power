@@ -12,6 +12,8 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0006](0006-no-llm-in-control-loop.md) | No language model in the control loop |
 | [0007](0007-plain-file-change-journal.md) | Plain files for the change journal |
 | [0008](0008-standard-profiles-through-the-engine.md) | Standard profiles go through the change engine |
+| [0009](0009-signed-quirk-list.md) | A signed quirk list, downloaded without root |
+| [0010](0010-no-systemd-watchdog-yet.md) | No systemd watchdog for now; rate limits arrive with automatic changes |
 
 ## Adding a record
 
