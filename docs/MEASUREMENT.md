@@ -31,7 +31,7 @@ Pressure stall information supports threshold triggers via `poll()`, so the daem
 
 ## Battery gauges differ
 
-Some gauges update every few seconds, others far less often; some report charge instead of power. On first run the app measures the gauge's update rate and resolution and sizes test blocks to match.
+Some gauges update every few seconds, others far less often; some report charge instead of power. While on battery the service times how often the power reading actually changes (the median of the last 20 changes) and makes each test block at least four of those periods long, with the settle time at least one period; the Learning screen says so when the period is 20 seconds or more. A battery that reports energy but not power gets power from the fall in energy between readings that differ, which changes rarely and so lengthens blocks the same way. A battery that reports neither cannot be used for learning, and the app says so.
 
 ## Plugged-in measurement
 

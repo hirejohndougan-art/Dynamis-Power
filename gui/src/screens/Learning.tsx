@@ -43,6 +43,15 @@ export function Learning(props: { status: Status; refresh: () => void }) {
             {s.status}
           </p>
         )}
+        {s.on && s.waiting && s.waiting.share_pct >= 25 && p && p.left > 0 && (
+          <div className="notice notice-info" role="note" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+            <strong>{t("learn_wait_heading", { pct: s.waiting.share_pct })}</strong>
+            <p>{t(`learn_wait_${s.waiting.reason}` as "learn_wait_busy")}</p>
+          </div>
+        )}
+        {s.power_update_s != null && s.power_update_s >= 20 && (
+          <p className="muted small">{t("learn_slow_battery", { s: Math.round(s.power_update_s) })}</p>
+        )}
       </section>
 
       <section className="card" aria-labelledby="lkept-heading">

@@ -17,6 +17,10 @@ export interface Status {
     saves_w: number;
     /** How far learning has got. Null if it could not be worked out. */
     progress?: LearningProgress | null;
+    /** The main reason it waited over about the last day, and its share. */
+    waiting?: { reason: WaitReason; share_pct: number } | null;
+    /** How often the battery's power reading changes, in seconds. */
+    power_update_s?: number | null;
   };
   power: {
     on_ac: boolean;
@@ -259,3 +263,15 @@ export interface Backend {
   /** Save an exported file; returns where it went. */
   saveFile(name: string, contents: string): Promise<string>;
 }
+
+export type WaitReason =
+  | "plugged_in"
+  | "low_battery"
+  | "power_coming"
+  | "no_power"
+  | "warm"
+  | "busy"
+  | "app_hold"
+  | "safe_mode"
+  | "trial"
+  | "dry_run";

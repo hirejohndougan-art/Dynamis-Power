@@ -16,6 +16,10 @@ pub struct Sampler {
     net: Option<(u64, f64)>,
     /// Previous PSI "some" totals for CPU, memory and disk, and when.
     stall: Option<([Option<u64>; 3], f64)>,
+    /// For batteries that report energy but not power: the last energy
+    /// reading that changed, and when; and the power worked out from it.
+    energy: Option<(f64, f64)>,
+    energy_power: Option<f64>,
 }
 
 impl Sampler {
@@ -79,28 +83,56 @@ impl Sampler {
         };
         self.stall = Some((totals, now));
 
+        let energy_wh = {
+            let e: Vec<f64> = ps
+                .batteries
+                .iter()
+                .filter_map(|b| b.energy_now_wh)
+                .collect();
+            (!e.is_empty()).then(|| e.iter().sum::<f64>())
+        };
+        let reported = if on_ac {
+            None
+        } else {
+            ps.total_battery_power_w()
+        };
+        // No power reading on battery: work it out from the fall in energy
+        // between two readings that differ (coarse, so learning lengthens
+        // its tests to match how rarely it changes).
+        let power_w = match (on_ac, reported, energy_wh) {
+            (true, _, _) => {
+                self.energy = None;
+                self.energy_power = None;
+                None
+            }
+            (false, Some(w), _) => Some(w),
+            (false, None, Some(e)) => {
+                match self.energy {
+                    Some((pe, pt)) if (pe - e).abs() > 1e-9 && now > pt => {
+                        if pe > e {
+                            self.energy_power = Some((pe - e) / (now - pt) * 3600.0);
+                        }
+                        self.energy = Some((e, now));
+                    }
+                    None => self.energy = Some((e, now)),
+                    _ => {}
+                }
+                self.energy_power
+            }
+            (false, None, None) => None,
+        };
+
         Context {
             on_ac,
             battery_pct,
             cpu_busy_pct,
             net_mb_s,
-            power_w: if on_ac {
-                None
-            } else {
-                ps.total_battery_power_w()
-            },
+            power_w,
             stall_pct,
             brightness_pct: backlight::read(root).map(|b| b.percent),
             max_temp_c: thermal::max_c(&thermal::read(root)),
             mic_in_use: mic_in_use(root),
-            energy_wh: {
-                let e: Vec<f64> = ps
-                    .batteries
-                    .iter()
-                    .filter_map(|b| b.energy_now_wh)
-                    .collect();
-                (!e.is_empty()).then(|| e.iter().sum())
-            },
+            energy_wh,
             ..Context::default()
         }
     }
@@ -241,6 +273,29 @@ mod tests {
         s.read(&root, 50.0);
         fs::write(&cpu, original).unwrap();
         assert_eq!(s.read(&root, 60.0).stall_pct, 0.0);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn power_from_energy_when_power_is_missing() {
+        let (dir, root) = sandbox("energy");
+        let bat = dir.join("sys/class/power_supply/BAT0");
+        fs::remove_file(bat.join("power_now")).unwrap();
+        let _ = fs::remove_file(bat.join("current_now"));
+        fs::write(bat.join("energy_now"), "30000000\n").unwrap();
+        let mut s = Sampler::default();
+        assert_eq!(s.read(&root, 0.0).power_w, None);
+        // Unchanged energy: still nothing to go on.
+        assert_eq!(s.read(&root, 30.0).power_w, None);
+        // 0.1 Wh in 60 s is 6 W.
+        fs::write(bat.join("energy_now"), "29900000\n").unwrap();
+        let w = s.read(&root, 60.0).power_w.unwrap();
+        assert!((w - 6.0).abs() < 1e-6, "{w}");
+        // Kept until the next change.
+        assert!((s.read(&root, 90.0).power_w.unwrap() - 6.0).abs() < 1e-6);
+        fs::write(bat.join("energy_now"), "29850000\n").unwrap();
+        let w = s.read(&root, 120.0).power_w.unwrap();
+        assert!((w - 3.0).abs() < 1e-6, "{w}");
         fs::remove_dir_all(&dir).ok();
     }
 

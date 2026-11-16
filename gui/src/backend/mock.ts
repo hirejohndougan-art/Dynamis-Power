@@ -185,6 +185,8 @@ export function mockBackend(): Backend {
         tested_settings: new Set(records.filter((r) => r.verdict !== "inconclusive").map((r) => r.setting)).size,
         kept: kept().map((r) => ({ setting: r.setting, label: label(r.setting), value: r.value, baseline: r.baseline, saves_w: -r.effect.mean, reason: r.reason })),
         saves_w: kept().reduce((a, r) => a - r.effect.mean, 0),
+        waiting: learning ? { reason: "busy", share_pct: 62 } : null,
+        power_update_s: 15,
         progress: (() => {
           const done = records.length + 1;
           const left = Math.max(0, 12 - done);

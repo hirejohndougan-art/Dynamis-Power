@@ -17,6 +17,7 @@
 //! (`dynamis_core::tune`). Their learned values depend on the power mode's
 //! own settings, so they are re-applied whenever the power mode changes.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -119,6 +120,12 @@ pub struct Learning {
     status: String,
     /// The power mode's own setting values when the overlay was last applied.
     tune_ctx: State,
+    /// Seconds spent waiting, per reason, fading over about a day.
+    waits: BTreeMap<&'static str, f64>,
+    last_tick: Option<f64>,
+    /// How often the battery's power reading actually changes.
+    power_seen: Option<(f64, f64)>,
+    power_gaps: Vec<f64>,
 }
 
 impl Learning {
@@ -148,6 +155,10 @@ impl Learning {
             display_unsaved: 0,
             status: String::new(),
             tune_ctx: State::new(),
+            waits: BTreeMap::new(),
+            last_tick: None,
+            power_seen: None,
+            power_gaps: Vec::new(),
         }
     }
 
@@ -205,6 +216,65 @@ impl Learning {
     /// Apply learned settings again at the next reading (after sleep).
     pub fn reapply_soon(&mut self) {
         self.overlay_on = None;
+    }
+
+    /// The main reason learning has been waiting over about the last day
+    /// (rests between tests do not count), with its share of the waiting.
+    pub fn main_wait(&self) -> Option<(&'static str, f64)> {
+        let total: f64 = self.waits.values().sum();
+        self.waits
+            .iter()
+            .filter(|(k, _)| **k != "resting")
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .filter(|(_, v)| **v > 0.0)
+            .map(|(k, v)| (*k, (v / total.max(1e-9) * 100.0).round()))
+    }
+
+    /// How often the battery's power reading changes (median of the last
+    /// gaps), once a few have been seen.
+    pub fn power_update_s(&self) -> Option<f64> {
+        if self.power_gaps.len() < 3 {
+            return None;
+        }
+        let mut g = self.power_gaps.clone();
+        g.sort_by(f64::total_cmp);
+        Some(g[g.len() / 2])
+    }
+
+    /// Test block length: the configured one, or four of the battery's own
+    /// update periods if that is longer, so slow-reporting batteries still
+    /// give several real readings per block.
+    fn block_s(&self) -> f64 {
+        self.timing
+            .block_s
+            .max(self.power_update_s().unwrap_or(0.0) * 4.0)
+    }
+
+    fn note_wait(&mut self, reason: &'static str, now: f64) {
+        let dt = self.last_tick.map_or(0.0, |t| (now - t).clamp(0.0, 3600.0));
+        let fade = (-dt / 86_400.0).exp();
+        for v in self.waits.values_mut() {
+            *v *= fade;
+        }
+        *self.waits.entry(reason).or_default() += dt;
+    }
+
+    fn note_power(&mut self, power_w: Option<f64>, now: f64) {
+        let Some(w) = power_w else {
+            self.power_seen = None;
+            return;
+        };
+        match self.power_seen {
+            Some((pw, pt)) if (pw - w).abs() > 1e-6 => {
+                self.power_gaps.push(now - pt);
+                if self.power_gaps.len() > 20 {
+                    self.power_gaps.remove(0);
+                }
+                self.power_seen = Some((w, now));
+            }
+            None => self.power_seen = Some((w, now)),
+            _ => {}
+        }
     }
 
     pub fn testing(&self) -> bool {
@@ -311,36 +381,59 @@ impl Core {
         if !self.learn.enabled {
             return;
         }
+        self.learn.note_power(ctx.power_w, now);
         if self.learn.running.is_some() {
             self.continue_experiment(now, ctx, workload);
-        } else if let Err(why) = self.preflight(now, ctx, workload) {
+        } else if let Err((key, why)) = self.preflight(now, ctx, workload) {
+            self.learn.note_wait(key, now);
             self.learn.status = format!("Waiting: {why}");
         } else {
             self.start_experiment(now, ctx, workload);
         }
+        self.learn.last_tick = Some(now);
     }
 
-    fn preflight(&self, now: f64, ctx: &Context, workload: Workload) -> Result<(), String> {
+    /// Whether a test may start now; if not, a reason key (counted, and
+    /// turned into advice in the app) and a line for people.
+    fn preflight(
+        &self,
+        now: f64,
+        ctx: &Context,
+        workload: Workload,
+    ) -> Result<(), (&'static str, String)> {
         if now - self.learn.last_end < self.learn.timing.cooldown_s {
-            return Err("resting between tests".into());
+            return Err(("resting", "resting between tests".into()));
         }
         if ctx.on_ac {
-            return Err("tests run on battery".into());
+            return Err(("plugged_in", "tests run on battery".into()));
         }
         if ctx.battery_pct.is_none_or(|b| b < MIN_BATTERY_PCT) {
-            return Err(format!("battery below {MIN_BATTERY_PCT:.0}%"));
+            return Err((
+                "low_battery",
+                format!("battery below {MIN_BATTERY_PCT:.0}%"),
+            ));
         }
         if ctx.power_w.is_none() {
-            return Err("the battery does not report power use".into());
+            return Err(if ctx.energy_wh.is_some() {
+                (
+                    "power_coming",
+                    "working out power use from the battery level".into(),
+                )
+            } else {
+                (
+                    "no_power",
+                    "this battery reports neither power use nor energy left, so learning cannot measure here".into(),
+                )
+            });
         }
         if ctx.max_temp_c.is_some_and(|t| t >= MAX_TEMP_C) {
-            return Err("the laptop is warm".into());
+            return Err(("warm", "the laptop is warm".into()));
         }
         if !matches!(workload, Workload::Idle | Workload::LightInteractive) {
-            return Err(format!("{} right now", workload.describe()));
+            return Err(("busy", format!("{} right now", workload.describe())));
         }
         if !self.holds.is_empty() {
-            return Err("an app is holding a power mode".into());
+            return Err(("app_hold", "an app is holding a power mode".into()));
         }
         Ok(())
     }
@@ -387,8 +480,9 @@ impl Core {
             setting: setting.into(),
             baseline,
             value,
-            block_s: t.block_s,
-            settle_s: t.settle_s,
+            block_s: self.learn.block_s(),
+            // Long blocks for a slow battery: let the reading catch up too.
+            settle_s: t.settle_s.max(self.learn.power_update_s().unwrap_or(0.0)),
             blocks: 8,
         };
         // A value this machine allows for a setting learning may change.
@@ -515,7 +609,7 @@ impl Core {
         // One test: its blocks, the settling at each switch, then the rest
         // before the next.
         let t = self.learn.timing;
-        let per_test_s = t.block_s * 8.0 + t.cooldown_s;
+        let per_test_s = self.learn.block_s() * 8.0 + t.cooldown_s;
         Some(Progress {
             pct,
             done,
@@ -536,14 +630,17 @@ impl Core {
             Ok(e) => {
                 if let Some(why) = e.safe_mode() {
                     self.learn.status = format!("Waiting: safe mode is on ({why})");
+                    self.learn.note_wait("safe_mode", now);
                     return;
                 }
                 if e.pending().is_some() {
                     self.learn.status = "Waiting: another trial is in progress".into();
+                    self.learn.note_wait("trial", now);
                     return;
                 }
                 if e.dry_run() {
                     self.learn.status = "Waiting: dry-run mode is on, so nothing is tested".into();
+                    self.learn.note_wait("dry_run", now);
                     return;
                 }
                 self.next_plan(&e)
@@ -814,5 +911,54 @@ impl Core {
             &self.state_dir.join("calibration.json"),
             &serde_json::to_string_pretty(&saved).map_err(|e| e.to_string())?,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn learning() -> Learning {
+        let dir = std::env::temp_dir().join(format!("dynamis-learn-unit-{}", std::process::id()));
+        Learning::load(&dir, Timing::default())
+    }
+
+    #[test]
+    fn the_main_reason_for_waiting_leaves_out_rests() {
+        let mut l = learning();
+        assert_eq!(l.main_wait(), None);
+        let mut t = 0.0;
+        for (reason, ticks) in [("resting", 100), ("plugged_in", 60), ("busy", 20)] {
+            for _ in 0..ticks {
+                l.note_wait(reason, t);
+                l.last_tick = Some(t);
+                t += 60.0;
+            }
+        }
+        let (main, share) = l.main_wait().unwrap();
+        assert_eq!(main, "plugged_in");
+        // About 60 of 180 minutes, the older ones faded a little.
+        assert!((25.0..40.0).contains(&share), "{share}");
+    }
+
+    #[test]
+    fn slow_batteries_get_longer_blocks() {
+        let mut l = learning();
+        assert_eq!(l.block_s(), 60.0);
+        // Power changes every 30 s, read every 5 s.
+        let mut t = 0.0;
+        for i in 0..40 {
+            l.note_power(Some(5.0 + (i / 6) as f64 * 0.1), t);
+            t += 5.0;
+        }
+        assert_eq!(l.power_update_s(), Some(30.0));
+        assert_eq!(l.block_s(), 120.0);
+        // A fast battery leaves the configured length alone.
+        let mut fast = learning();
+        for i in 0..10 {
+            fast.note_power(Some(i as f64), i as f64 * 5.0);
+        }
+        assert_eq!(fast.power_update_s(), Some(5.0));
+        assert_eq!(fast.block_s(), 60.0);
     }
 }

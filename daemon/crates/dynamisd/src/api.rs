@@ -70,6 +70,8 @@ impl Core {
                 "kept": kept,
                 "saves_w": (saves * 100.0).round() / 100.0,
                 "progress": progress,
+                "waiting": self.learn.main_wait().map(|(k, pct)| json!({"reason": k, "share_pct": pct})),
+                "power_update_s": self.learn.power_update_s(),
             },
             "power": {
                 "on_ac": on_ac,

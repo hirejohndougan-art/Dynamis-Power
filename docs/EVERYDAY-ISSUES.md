@@ -16,6 +16,8 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 
 ## 2. Learning that seems stuck
 
+**Status: built**, except learning while plugged in (a follow-up). The reasons, update period and energy-based power are in `dynamisd/src/learn.rs` and `dynamis-core/src/context.rs`; the Learning screen shows the main reason with advice once it accounts for at least a quarter of the waiting, and the battery's update period when it is 20 seconds or more.
+
 **What happens.** Learning only tests on battery when the laptop is quiet. A laptop that is always plugged in never learns; a busy one waits ("heavy work right now"); a battery that reports power coarsely gives "unclear, will retry" over and over.
 
 **Plan.**

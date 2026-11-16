@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Learning says why it waits: the service counts waiting time per reason over about the last day (plugged in, low battery, warm, busy, an app holding a mode, safe mode, another trial, dry run; rests between tests do not count), and the Learning screen shows the main one with what to do. It measures how often the battery's power reading changes and makes test blocks at least four of those periods long (the time-left estimate follows). Where a battery reports energy but not power, power is worked out from the fall in energy; where it reports neither, learning says it cannot measure. `learning.waiting` and `learning.power_update_s` in `Status`.
+
 - Kept settings: the charge limit and start (always) and any Advanced setting with "Keep after restart" are applied again at startup and after waking from sleep, with an hour's probation after which an unclean shutdown does not hold them back. Waking also re-applies the mode, learned settings and app shares, and stops a test in progress. The service notices firmware that ignores the charge limit. `SetKept`, `kept` in `Status`.
 
 - Modes on laptops without a speed preference or firmware power mode (such as the VivoBook's Celeron N4020): Longer battery and Faster now use turbo, the speed limit (or top frequency) and the governor; learning tunes per mode there; the Modes screen says why a mode is missing. Decision record 0016.
