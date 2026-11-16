@@ -895,6 +895,7 @@ fn tuning_finds_settings_that_only_help_together() {
         assert_eq!(p["stage"], "single");
         assert!(p["left"].as_u64().unwrap() >= 4, "{p}");
         assert!(p["hours_left"].as_f64().unwrap() > 0.0);
+        let start_left = p["left"].as_u64().unwrap();
         c.set_learning(true).await.unwrap();
         // It rises as tests finish (it may step back a little when a step
         // together is kept and opens new ones).
@@ -912,7 +913,9 @@ fn tuning_finds_settings_that_only_help_together() {
         assert_eq!(p["pct"], 100.0, "{p}");
         assert_eq!(p["stage"], "done");
         assert_eq!(p["left"], 0);
-        assert!(p["done"].as_u64().unwrap() >= 8, "{p}");
+        // At least every test known at the start; how many steps tuning
+        // together takes depends on the noise, so no fixed number.
+        assert!(p["done"].as_u64().unwrap() >= start_left, "{p}");
         let l = c.learned().await.unwrap();
         let turbo: Vec<&str> = l["records"]
             .as_array()
