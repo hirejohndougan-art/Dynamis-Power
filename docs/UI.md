@@ -4,6 +4,8 @@ The app must be usable by someone who has never opened a terminal, while still g
 
 The visual mock-ups are kept with the project's design files. This document is the written specification; when the two disagree, update both.
 
+> **Built so far** (see [../gui/README.md](../gui/README.md)): Home, Battery, Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
+
 ## Principles
 
 1. **Plain words first.** "Saving battery while you browse", not "EPP balance_power". Technical names appear only in Advanced and in the technical log.

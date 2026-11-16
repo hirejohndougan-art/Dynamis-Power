@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Dynamis Power",
+  "version": "0.1.0",
+  "identifier": "net.dynamis.power",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Dynamis Power",
+        "width": 1100,
+        "height": 780,
+        "minWidth": 380,
+        "minHeight": 520
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb"],
+    "category": "Utility",
+    "shortDescription": "Power manager that learns your laptop",
+    "longDescription": "Dynamis Power measures your laptop and tunes its power settings to it, keeping only changes that measurably help. This package is the app; it needs the Dynamis Power service.",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png"]
+  }
+}

@@ -1,0 +1,204 @@
+import { useMemo, useState } from "react";
+import { backend, type JournalEntry } from "../backend";
+import { describe, type Category } from "../activity";
+import { Dialog } from "../components";
+import { build, summary, type ExportOptions } from "../exporter";
+import { useAction, useLoad } from "../hooks";
+import { formatTime, t } from "../i18n";
+
+const FILTERS: { key: Category | "all"; label: Parameters<typeof t>[0] }[] = [
+  { key: "all", label: "filter_all" },
+  { key: "auto", label: "filter_auto" },
+  { key: "mine", label: "filter_mine" },
+  { key: "tests", label: "filter_tests" },
+  { key: "rollbacks", label: "filter_rollbacks" },
+  { key: "problems", label: "filter_problems" },
+];
+
+export function Activity(props: { version: string; onChange: () => void }) {
+  const journal = useLoad(() => backend.journal(500), []);
+  const { run, toast } = useAction(() => {
+    journal.reload();
+    props.onChange();
+  });
+  const [tab, setTab] = useState<"activity" | "logs">("activity");
+  const [filter, setFilter] = useState<Category | "all">("all");
+  const [exporting, setExporting] = useState(false);
+
+  const items = useMemo(
+    () => (journal.data ?? []).map(describe).filter((i) => i && (filter === "all" || i.category === filter)),
+    [journal.data, filter],
+  );
+
+  return (
+    <>
+      <header className="page-head">
+        <h1>{t("activity_title")}</h1>
+        <button type="button" className="btn" onClick={() => setExporting(true)}>{t("export")}</button>
+      </header>
+
+      <div className="tabs" role="tablist">
+        {(["activity", "logs"] as const).map((k) => (
+          <button key={k} type="button" role="tab" className="tab" aria-selected={tab === k} aria-controls={`panel-${k}`} id={`tab-${k}`} onClick={() => setTab(k)}>
+            {t(k === "activity" ? "tab_activity" : "tab_logs")}
+          </button>
+        ))}
+      </div>
+
+      {tab === "activity" ? (
+        <section id="panel-activity" role="tabpanel" aria-labelledby="tab-activity" className="card">
+          <div className="chips" role="group" aria-label={t("tab_activity")}>
+            {FILTERS.map((f) => (
+              <button key={f.key} type="button" className="chip" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+                {t(f.label)}
+              </button>
+            ))}
+          </div>
+          {items.length === 0 ? (
+            <p className="muted">{t("activity_empty")}</p>
+          ) : (
+            <ul className="entries">
+              {items.map((i, n) =>
+                i ? (
+                  <li key={n} className="entry">
+                    <div className="stack">
+                      <span>{i.title}</span>
+                      <span className="muted small">
+                        {formatTime(i.entry.time)}
+                        {i.why && ` · ${i.why}`}
+                      </span>
+                    </div>
+                    {i.undoable && (
+                      <button type="button" className="btn btn-small" aria-label={`${t("undo")}: ${i.title}`} onClick={() => run(() => backend.undo(i.entry.id).then(() => t("undone", { label: i.entry.label })))}>
+                        {t("undo")}
+                      </button>
+                    )}
+                  </li>
+                ) : null,
+              )}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <Logs entries={journal.data ?? []} />
+      )}
+
+      <ExportDialog open={exporting} onClose={() => setExporting(false)} version={props.version} journal={journal.data ?? []} />
+      {toast && <div className="toast" role="status">{toast}</div>}
+    </>
+  );
+}
+
+function Logs(props: { entries: JournalEntry[] }) {
+  const [q, setQ] = useState("");
+  const rows = props.entries.filter((e) => !q || JSON.stringify(e).toLowerCase().includes(q.toLowerCase()));
+  return (
+    <section id="panel-logs" role="tabpanel" aria-labelledby="tab-logs" className="card">
+      <label className="field">
+        <span className="visually-hidden">{t("logs_search")}</span>
+        <input type="search" placeholder={t("logs_search")} value={q} onChange={(e) => setQ(e.target.value)} />
+      </label>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{t("logs_col_time")}</th>
+              <th>{t("logs_col_event")}</th>
+              <th>{t("logs_col_setting")}</th>
+              <th>{t("logs_col_change")}</th>
+              <th>{t("logs_col_reason")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((e, n) => (
+              <tr key={n}>
+                <td className="small">{formatTime(e.time)}</td>
+                <td><code>{e.event}</code></td>
+                <td><code>{e.id}</code></td>
+                <td className="small">{e.from || e.to ? `${e.from ?? ""} → ${e.to ?? ""}` : ""}</td>
+                <td className="small">{e.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ExportDialog(props: { open: boolean; onClose: () => void; version: string; journal: JournalEntry[] }) {
+  const [o, setO] = useState<ExportOptions>({ journal: true, results: true, hardware: true, settings: true, rangeDays: 7, format: "json", privacy: true });
+  const extra = useLoad(
+    async () => (props.open ? { learned: await backend.learned(), inventory: await backend.inventory(), settings: await backend.settings() } : null),
+    [props.open],
+  );
+  const [note, setNote] = useState<string | null>(null);
+  const data = { journal: props.journal, learned: extra.data?.learned ?? null, inventory: extra.data?.inventory ?? null, settings: extra.data?.settings ?? [], version: props.version };
+  const text = build(o, data);
+  const set = <K extends keyof ExportOptions>(k: K, v: ExportOptions[K]) => setO({ ...o, [k]: v });
+  const check = (k: "journal" | "results" | "hardware" | "settings", label: Parameters<typeof t>[0]) => (
+    <label className="check">
+      <input type="checkbox" checked={o[k]} onChange={(e) => set(k, e.target.checked)} /> {t(label)}
+    </label>
+  );
+
+  return (
+    <Dialog
+      open={props.open}
+      onClose={props.onClose}
+      title={t("export_title")}
+      actions={
+        <>
+          <button type="button" className="btn" onClick={async () => { await navigator.clipboard?.writeText(summary(data)); setNote(t("export_copied")); }}>
+            {t("export_copy")}
+          </button>
+          <button type="button" className="btn" onClick={props.onClose}>{t("close")}</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={async () => {
+              const stamp = new Date().toISOString().slice(0, 10);
+              const where = await backend.saveFile(`dynamis-logs-${stamp}.${o.format === "json" ? "json" : "txt"}`, text).catch((e) => String(e));
+              setNote(t("export_saved", { where }));
+            }}
+          >
+            {t("export_save")}
+          </button>
+        </>
+      }
+    >
+      <fieldset>
+        <legend className="field-label">{t("export_include")}</legend>
+        {check("journal", "export_journal")}
+        {check("results", "export_results")}
+        {check("hardware", "export_hardware")}
+        {check("settings", "export_settings")}
+      </fieldset>
+      <div className="row">
+        <label className="field">
+          <span className="field-label">{t("export_range")}</span>
+          <select value={o.rangeDays ?? "all"} onChange={(e) => set("rangeDays", e.target.value === "all" ? null : Number(e.target.value))}>
+            <option value={1}>{t("range_24h")}</option>
+            <option value={7}>{t("range_7d")}</option>
+            <option value={30}>{t("range_30d")}</option>
+            <option value="all">{t("range_all")}</option>
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">{t("export_format")}</span>
+          <select value={o.format} onChange={(e) => set("format", e.target.value as "json" | "text")}>
+            <option value="json">{t("format_json")}</option>
+            <option value="text">{t("format_text")}</option>
+          </select>
+        </label>
+      </div>
+      <label className="check" style={{ marginTop: 14 }}>
+        <input type="checkbox" checked={o.privacy} onChange={(e) => set("privacy", e.target.checked)} /> {t("export_privacy")}
+      </label>
+      <p className="muted small">{t("export_privacy_desc")}</p>
+      <p className="field-label" style={{ marginTop: 14 }}>{t("export_preview")}</p>
+      <pre className="preview" tabIndex={0}>{text.slice(0, 4000)}</pre>
+      <p className="muted small">{note ?? t("export_note")}</p>
+    </Dialog>
+  );
+}

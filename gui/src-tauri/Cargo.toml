@@ -1,0 +1,26 @@
+[package]
+name = "dynamis-power-app"
+version = "0.1.0"
+description = "Dynamis Power desktop app"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/hirejohndougan-art/Dynamis-Power"
+rust-version = "1.89"
+
+# Kept out of the daemon workspace on purpose: the app needs WebKitGTK to
+# build, the service must not.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+dynamis-client = { path = "../../daemon/crates/dynamis-client" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "s"

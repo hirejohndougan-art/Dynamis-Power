@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- The desktop app (Tauri + React), started ahead of phase 8:
+  - Home (battery time, power mode and auto mode, live power, learning, last change with Undo, Restore original settings), Battery, Activity (plain-language history, filters, Undo, logs, export with a privacy filter and preview), Advanced (settings, learning results, safety).
+  - Every string through a translation layer; plain names for setting values; light and dark; keyboard and screen-reader labels; costs nothing when closed.
+  - Builds as a 2.2 MB `.deb`; CI builds it on every push.
+- Service API for the app on `net.dynamis.Power1`: `Status`, `Journal`, `Settings`, `Inventory`, `Undo`, `Restore`, `SetSetting`, `SetSafeMode`; and `dynamis-client`, the Rust client the app uses.
+- Engine: undo one setting (`restore_one`); `overview` module for setting summaries.
+
 - Phase 4: learning.
   - Calibration tests one setting at a time in alternating blocks at quiet moments on battery, and keeps a change only when it saves power with confidence and adds no lag. Every result is recorded with its measured effect.
   - Learned settings apply on battery and go back to their original values on mains; `dynamis learned forget` undoes one; switching learning off undoes all.
