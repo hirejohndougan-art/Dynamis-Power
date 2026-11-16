@@ -4,7 +4,7 @@ Two `.deb` packages, for Ubuntu, KDE neon, Debian and relatives:
 
 | Package | Contents | Built by |
 | --- | --- | --- |
-| `dynamis-power-service` | `dynamisd`, the `dynamis` command, the session agent, the quirk-list downloader, their systemd units, D-Bus policy and polkit actions | `daemon/packaging/build-deb.sh` |
+| `dynamis-power-service` | `dynamisd`, the `dynamis` command, the session agent, the quirk-list downloader, their systemd units, D-Bus policy and polkit actions, and the GNOME extension that says which window is in front (off until switched on in the Extensions app) | `daemon/packaging/build-deb.sh` |
 | `dynamis-power` | The app. Depends on `dynamis-power-service` | `cd gui && npx tauri build --bundles deb` |
 
 CI builds both on every push; download them from the run's *Artifacts*.

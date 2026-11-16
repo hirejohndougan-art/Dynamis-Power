@@ -290,6 +290,8 @@ export interface Backend {
   /** The panel icon (shown by the session helper). */
   trayShown(): Promise<boolean>;
   setTray(on: boolean): Promise<void>;
+  /** Whether the desktop shows panel icons at all (GNOME needs an extension). */
+  trayHost(): Promise<boolean>;
   profiles(): Promise<ProfileSettings>;
   setProfileOverrides(o: ProfileOverrides): Promise<void>;
   sensors(): Promise<Sensors>;

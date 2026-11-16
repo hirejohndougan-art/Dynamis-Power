@@ -54,7 +54,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [ ] Panel tooltip shows auto mode's last reason; Activity groups auto switches per hour (§3)
 - [ ] A learned change undone by hand twice is blocked on this laptop (§3)
 - [x] Notice settings changed behind Dynamis Power's back, name the likely tool, and stop managing a contested setting after two outside changes in a day (§4)
-- [ ] Detect GNOME without AppIndicator and explain how to show the panel icon (§5)
+- [x] Detect GNOME without AppIndicator and explain how to show the panel icon (§5)
 - [ ] Record kernel and firmware versions with each result; re-check learned settings first after an update; drop settings whose control vanished (§6)
 - [ ] Quirk list entries with kernel and firmware version ranges (§6)
 - [x] Keep settings chosen by hand (charge limit and start, Advanced "Keep after restart"): re-apply at startup and after sleep, never in safe mode or right after an unclean shutdown (§7)
@@ -86,7 +86,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [x] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)
 - [x] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
 - [x] Desktops: hide battery features without a battery; the welcome says which features apply (0023)
-- [ ] GNOME extension in the package, with help switching it on (0024)
+- [x] GNOME extension in the package, with help switching it on (0024)
 - [x] Hibernation readiness check and plain advice, in the sleep test report (0025)
 
 ## To do: fully replace TLP

@@ -40,6 +40,11 @@ fix_paths "$dist/dynamis-agent.service" > "$stage/usr/lib/systemd/user/dynamis-a
 install -d "$stage/etc/xdg/autostart"
 fix_paths "$dist/dynamis-agent.desktop" > "$stage/etc/xdg/autostart/dynamis-agent.desktop"
 chmod 644 "$stage/etc/xdg/autostart/dynamis-agent.desktop"
+# GNOME: the extension that says which window is in front (decision 0024).
+for f in metadata.json extension.js; do
+    install -Dm644 "$dist/gnome-extension/dynamis-focus@dynamis.net/$f" \
+        "$stage/usr/share/gnome-shell/extensions/dynamis-focus@dynamis.net/$f"
+done
 install -Dm644 "$dist/net.dynamis.power.conf" "$stage/usr/share/dbus-1/system.d/net.dynamis.power.conf"
 install -Dm644 "$dist/net.dynamis.power.policy" "$stage/usr/share/polkit-1/actions/net.dynamis.power.policy"
 install -Dm644 "$root/../LICENSE" "$stage/usr/share/doc/$pkg/copyright"

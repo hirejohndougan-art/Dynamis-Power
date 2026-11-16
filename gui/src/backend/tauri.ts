@@ -46,6 +46,7 @@ export const tauriBackend: Backend = {
   chargeFullyOnce: (on) => invoke("charge_fully_once", { on }),
   trayShown: () => invoke("tray_shown"),
   setTray: (on) => invoke("set_tray", { on }),
+  trayHost: () => invoke("tray_host"),
   profiles: () => invoke("profiles"),
   setProfileOverrides: (overrides) => invoke("set_profile_overrides", { overrides }),
   sensors: () => invoke("sensors"),

@@ -23,6 +23,8 @@ rm -f /usr/local/bin/dynamis /usr/local/libexec/dynamisd /usr/local/libexec/dyna
       /etc/systemd/system/dynamisd.service \
       /etc/systemd/system/dynamis-sync.service /etc/systemd/system/dynamis-sync.timer \
       /etc/dbus-1/system.d/net.dynamis.power.conf \
+      /usr/local/share/gnome-shell/extensions/dynamis-focus@dynamis.net/metadata.json \
+      /usr/local/share/gnome-shell/extensions/dynamis-focus@dynamis.net/extension.js \
       /usr/share/polkit-1/actions/net.dynamis.power.policy
 systemctl daemon-reload
 systemctl reload dbus 2>/dev/null || systemctl reload dbus-broker 2>/dev/null || true

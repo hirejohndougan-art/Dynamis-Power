@@ -611,6 +611,7 @@ export function mockBackend(): Backend {
       dryRun = on;
       log({ event: on ? "dry-run-on" : "dry-run-off", id: "", label: "", reason: "" });
     },
+    trayHost: async () => true,
     setTray: async (on) => { tray = on; },
     saveFile: async (name, contents) => {
       const url = URL.createObjectURL(new Blob([contents], { type: "text/plain" }));

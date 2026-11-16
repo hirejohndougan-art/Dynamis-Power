@@ -1,0 +1,8 @@
+{
+  "uuid": "dynamis-focus@dynamis.net",
+  "name": "Dynamis Power: window in front",
+  "description": "Tells Dynamis Power which app is in front, so it can give that app priority and slow background apps on battery. Sends only the process ID of the window in front, only to Dynamis Power's session helper on this computer.",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "url": "https://github.com/hirejohndougan-art/Dynamis-Power",
+  "version": 1
+}

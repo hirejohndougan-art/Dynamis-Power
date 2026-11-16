@@ -55,6 +55,10 @@ install -Dm644 "$here/dynamis-agent.desktop" /etc/xdg/autostart/dynamis-agent.de
 install -Dm644 "$here/dynamisd.service" /etc/systemd/system/dynamisd.service
 install -Dm644 "$here/dynamis-sync.service" /etc/systemd/system/dynamis-sync.service
 install -Dm644 "$here/dynamis-sync.timer" /etc/systemd/system/dynamis-sync.timer
+for f in metadata.json extension.js; do
+    install -Dm644 "$here/gnome-extension/dynamis-focus@dynamis.net/$f" \
+        "/usr/local/share/gnome-shell/extensions/dynamis-focus@dynamis.net/$f"
+done
 install -Dm644 "$here/net.dynamis.power.conf" /etc/dbus-1/system.d/net.dynamis.power.conf
 install -Dm644 "$here/net.dynamis.power.policy" /usr/share/polkit-1/actions/net.dynamis.power.policy
 

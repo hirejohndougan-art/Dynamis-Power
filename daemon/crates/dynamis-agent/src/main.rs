@@ -11,7 +11,7 @@
 //! | `screen_inhibited` | An app asked the desktop not to dim the screen (KDE PolicyAgent, or GNOME's idle inhibit) |
 //! | `game_running` | A game registered with Feral GameMode |
 //! | `user_idle` | Not reported yet: the screen lock covers walking away |
-//! | `focused_pid` | Process ID of the window in front (KDE Plasma: a tiny KWin script tells the agent; 0 elsewhere) |
+//! | `focused_pid` | Process ID of the window in front (KDE Plasma: a tiny KWin script tells the agent; GNOME: the "Dynamis Power: window in front" extension, once switched on; 0 elsewhere) |
 //!
 //! It never polls. It waits for D-Bus signals, re-reads the facts when one
 //! arrives, and reports only when something changed. Every source is
@@ -48,7 +48,8 @@ const SERVICE: &str = "net.dynamis.Power";
 const SERVICE_PATH: &str = "/net/dynamis/Power";
 const SERVICE_IFACE: &str = "net.dynamis.Power1";
 
-/// The agent's own name on the session bus, for the KWin script to call.
+/// The agent's own name on the session bus, for the KWin script and the
+/// GNOME extension to call.
 const AGENT_NAME: &str = "net.dynamis.Agent";
 const AGENT_PATH: &str = "/net/dynamis/Agent";
 const AGENT_IFACE: &str = "net.dynamis.Agent1";

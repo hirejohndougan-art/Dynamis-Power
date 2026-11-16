@@ -271,6 +271,11 @@ async fn tray_shown() -> Result<bool, String> {
 }
 
 #[tauri::command]
+async fn tray_host() -> Result<bool, String> {
+    Client::tray_host().await
+}
+
+#[tauri::command]
 async fn set_tray(on: bool) -> Result<(), String> {
     Client::set_tray(on).await
 }
@@ -355,6 +360,7 @@ fn main() {
             set_adaptive_charging,
             charge_fully_once,
             tray_shown,
+            tray_host,
             set_tray,
             profiles,
             set_profile_overrides,

@@ -59,6 +59,8 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 - **A small GNOME Shell extension** shipped in the app package (not on by default) that tells the session agent which window is in front, as the KWin script does. See Follow-up for distribution.
 - **Say who did what.** When the screen dims or the laptop sleeps, that is the desktop; Activity only lists Dynamis Power's own changes, and Advanced → System already says that brightness and sleep belong to the desktop. Battery gains a line linking to the desktop's power settings.
 
+**Status: built**, except the line on Battery and the check in the welcome. Modes says how to turn panel icons on when the panel icon is switched on but no StatusNotifierWatcher runs (`Client::tray_host`). The GNOME extension "Dynamis Power: window in front" (`daemon/dist/gnome-extension/dynamis-focus@dynamis.net`, GNOME 45 and later) ships in the service package under `/usr/share/gnome-shell/extensions/` and calls the agent's `FocusChanged` with the process ID, as the KWin script does; the Apps screen says to switch it on in the Extensions app ([decision 0024](decisions/0024-gnome-extension-in-the-package.md)).
+
 ## 6. Kernel and firmware updates
 
 **What happens.** An update adds, removes or changes controls (new drivers, new AMD modes, a renamed file). Learned results may no longer be true; a setting may vanish.

@@ -106,6 +106,7 @@ export function Modes(props: { status: Status; refresh: () => void }) {
   const loaded = useLoad(() => backend.autoPrefs(), []);
   const [prefs, setPrefs] = useState<AutoPrefs | null>(null);
   const tray = useLoad(() => backend.trayShown(), []);
+  const host = useLoad(() => backend.trayHost(), []);
   const bright = useBrightness(props.refresh);
   const { run, toast } = useAction(() => {
     props.refresh();
@@ -232,6 +233,7 @@ export function Modes(props: { status: Status; refresh: () => void }) {
           <Switch checked={tray.data ?? false} disabled={tray.data == null} label={t("modes_panel")} onChange={(on) => run(() => backend.setTray(on))} />
         )}
         <p className="muted">{t("modes_panel_desc")}</p>
+        {tray.data && host.data === false && <p className="notice notice-info">{t("modes_panel_no_host")}</p>}
       </section>
       {toast && <div className="toast" role="status">{toast}</div>}
     </>

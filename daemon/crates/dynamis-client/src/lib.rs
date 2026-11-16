@@ -389,6 +389,20 @@ impl Client {
         })
     }
 
+    /// Whether the desktop shows panel icons at all (a StatusNotifierItem
+    /// host is running). GNOME does not without the AppIndicator extension.
+    pub async fn tray_host() -> Result<bool> {
+        let session = zbus::Connection::session()
+            .await
+            .map_err(|e| e.to_string())?;
+        let dbus = zbus::fdo::DBusProxy::new(&session)
+            .await
+            .map_err(|e| e.to_string())?;
+        let name = zbus::names::BusName::try_from("org.kde.StatusNotifierWatcher")
+            .map_err(|e| e.to_string())?;
+        dbus.name_has_owner(name).await.map_err(|e| e.to_string())
+    }
+
     /// Show or hide the panel icon.
     pub async fn set_tray(on: bool) -> Result<()> {
         let session = zbus::Connection::session()
