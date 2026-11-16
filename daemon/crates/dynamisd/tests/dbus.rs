@@ -1430,7 +1430,8 @@ fn settings_set_by_hand_survive_sleep_and_restarts() {
         let conn = env.client().await;
         wait_ready(&conn).await;
     });
-    assert_eq!((limit().as_str(), swappiness().as_str()), ("80", "20"));
+    // Kept settings are applied just after the service is on the bus.
+    wait_for(|| limit() == "80" && swappiness() == "20");
 
     // Plugged in and charging past the limit: the firmware ignores it.
     fs::write(root.join("sys/class/power_supply/AC0/online"), "1").unwrap();
