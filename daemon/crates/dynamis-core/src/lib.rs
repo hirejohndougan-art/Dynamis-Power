@@ -8,8 +8,11 @@
 //! directories instead of the real `/sys` and `/proc`.
 
 pub mod fs;
+pub mod gauge;
 pub mod inventory;
 pub mod logfmt;
+pub mod report;
+pub mod selfstat;
 pub mod sensors;
 
 pub use fs::SysRoot;

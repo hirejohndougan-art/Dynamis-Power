@@ -10,7 +10,11 @@ use serde::Serialize;
 use crate::sensors::{self, cpu::Turbo, pressure::Psi, thermal, Snapshot};
 
 /// Version of the row layout below.
-pub const LOG_FORMAT_VERSION: u32 = 1;
+pub const LOG_FORMAT_VERSION: u32 = 2;
+
+// Format history:
+// 1 — first version.
+// 2 — added self_cpu_pct and self_rss_mb (the logger's own overhead).
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Row {
@@ -35,10 +39,15 @@ pub struct Row {
     pub stall_io_pct: Option<f64>,
     pub max_temp_c: Option<f64>,
     pub brightness_pct: Option<f64>,
+    /// CPU used by the logging process itself over the interval, as a percent
+    /// of one core. Filled in by the caller; see [`crate::selfstat`].
+    pub self_cpu_pct: Option<f64>,
+    /// Memory used by the logging process itself, in MB.
+    pub self_rss_mb: Option<f64>,
 }
 
 impl Row {
-    pub const CSV_HEADER: &'static str = "time,interval_s,on_ac,battery_pct,battery_w,cpu_pkg_w,cpu_avg_mhz,turbo,epp,stall_cpu_pct,stall_mem_pct,stall_io_pct,max_temp_c,brightness_pct";
+    pub const CSV_HEADER: &'static str = "time,interval_s,on_ac,battery_pct,battery_w,cpu_pkg_w,cpu_avg_mhz,turbo,epp,stall_cpu_pct,stall_mem_pct,stall_io_pct,max_temp_c,brightness_pct,self_cpu_pct,self_rss_mb";
 
     pub fn between(before: &Snapshot, after: &Snapshot) -> Row {
         let interval = (after.time - before.time).max(0.0);
@@ -62,6 +71,8 @@ impl Row {
             stall_io_pct: stall_pct(before.pressure.io, after.pressure.io, interval),
             max_temp_c: thermal::max_c(&after.thermal),
             brightness_pct: after.backlight.as_ref().map(|b| b.percent),
+            self_cpu_pct: None,
+            self_rss_mb: None,
         }
     }
 
@@ -89,6 +100,8 @@ impl Row {
             o(&self.stall_io_pct),
             o(&self.max_temp_c),
             o(&self.brightness_pct),
+            o(&self.self_cpu_pct),
+            o(&self.self_rss_mb),
         ]
         .join(",")
     }

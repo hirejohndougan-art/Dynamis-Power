@@ -9,8 +9,11 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use dynamis_core::gauge;
 use dynamis_core::inventory::{self, Inventory};
 use dynamis_core::logfmt::{Row, LOG_FORMAT_VERSION};
+use dynamis_core::report::{self, Report, Stat};
+use dynamis_core::selfstat::SelfUsage;
 use dynamis_core::sensors::{self, cpu::Turbo};
 use dynamis_core::SysRoot;
 
@@ -61,6 +64,27 @@ enum Command {
         #[arg(long, value_enum, default_value_t = Format::Csv)]
         format: Format,
     },
+    /// Summarise a CSV log recorded with `dynamis log`.
+    Report {
+        /// The CSV log file.
+        file: PathBuf,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Measure how often the battery gauge updates, and how finely.
+    /// Run it on battery for the most useful answer.
+    Gauge {
+        /// Seconds to watch.
+        #[arg(long, default_value_t = 120.0)]
+        duration: f64,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print a hardware report to paste into a GitHub "Hardware report" issue.
+    /// Contains no serial numbers, usernames or network names.
+    HardwareReport,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -81,6 +105,9 @@ fn main() {
             output,
             format,
         } => cmd_log(&root, interval, duration, output, format),
+        Command::Report { file, json } => cmd_report(&root, &file, json),
+        Command::Gauge { duration, json } => cmd_gauge(&root, duration, json),
+        Command::HardwareReport => cmd_hardware_report(&root),
     };
     if let Err(e) = result {
         // A closed pipe (for example `dynamis log | head`) is a normal way to stop.
@@ -300,10 +327,17 @@ fn cmd_log(
     }
     let start = sensors::now_secs();
     let mut prev = sensors::snapshot(root);
+    let mut prev_self = SelfUsage::read();
     loop {
         sleep(Duration::from_secs_f64(interval));
         let cur = sensors::snapshot(root);
-        let row = Row::between(&prev, &cur);
+        let cur_self = SelfUsage::read();
+        let mut row = Row::between(&prev, &cur);
+        if let (Some(a), Some(b)) = (prev_self, cur_self) {
+            row.self_cpu_pct = b.cpu_pct_since(&a, cur.time - prev.time);
+            row.self_rss_mb = b.rss_mb;
+        }
+        prev_self = cur_self;
         match format {
             Format::Csv => writeln!(out, "{}", row.to_csv())?,
             Format::Jsonl => {
@@ -318,4 +352,177 @@ fn cmd_log(
             return Ok(());
         }
     }
+}
+
+fn cmd_report(root: &SysRoot, file: &PathBuf, json: bool) -> io::Result<()> {
+    let text = std::fs::read_to_string(file)?;
+    let rep = report::from_csv(&text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut out = io::stdout().lock();
+    if json {
+        serde_json::to_writer_pretty(&mut out, &rep)?;
+        return writeln!(out);
+    }
+    print_report(&mut out, root, &rep)
+}
+
+fn print_report(out: &mut impl Write, root: &SysRoot, r: &Report) -> io::Result<()> {
+    fn line(
+        out: &mut impl Write,
+        label: &str,
+        s: &Option<Stat>,
+        unit: &str,
+        places: usize,
+    ) -> io::Result<()> {
+        match s {
+            Some(s) => writeln!(
+                out,
+                "  {label:<22} average {:.p$}{unit}   typical {:.p$}{unit}   range {:.p$}–{:.p$}{unit}",
+                s.mean,
+                s.median,
+                s.min,
+                s.max,
+                p = places
+            ),
+            None => writeln!(out, "  {label:<22} not recorded"),
+        }
+    }
+    let hours = r.duration_h;
+    let span = if hours >= 1.0 {
+        format!("{hours:.1} hours")
+    } else {
+        format!("{:.0} minutes", hours * 60.0)
+    };
+    writeln!(
+        out,
+        "Power report: {span}, {} readings, {:.0}% on battery",
+        r.rows, r.on_battery_share_pct
+    )?;
+    writeln!(out)?;
+    writeln!(out, "Battery (readings taken on battery only)")?;
+    line(out, "Whole system", &r.battery_w, " W", 2)?;
+    if let Some(p) = r.battery_pct_used {
+        writeln!(out, "  {:<22} {p} percentage points", "Charge used")?;
+    }
+    // Estimate using this machine's current full capacity, when there is a battery.
+    let cap = sensors::power::read(root)
+        .batteries
+        .first()
+        .and_then(|b| b.energy_full_wh);
+    if let Some(h) = cap.and_then(|c| report::hours_at_mean(r, c)) {
+        writeln!(
+            out,
+            "  {:<22} about {h} h from full at this rate (using this laptop's current capacity)",
+            "Estimated battery life"
+        )?;
+    }
+    writeln!(out)?;
+    writeln!(out, "Processor")?;
+    line(out, "CPU power", &r.cpu_pkg_w, " W", 2)?;
+    line(out, "CPU speed", &r.cpu_avg_mhz, " MHz", 0)?;
+    writeln!(out)?;
+    writeln!(out, "Lag (share of time apps waited)")?;
+    line(out, "Waiting for CPU", &r.stall_cpu_pct, "%", 1)?;
+    line(out, "Waiting for memory", &r.stall_mem_pct, "%", 1)?;
+    line(out, "Waiting for disk", &r.stall_io_pct, "%", 1)?;
+    writeln!(out)?;
+    writeln!(out, "Other")?;
+    line(out, "Hottest sensor", &r.max_temp_c, " °C", 0)?;
+    line(out, "Screen brightness", &r.brightness_pct, "%", 0)?;
+    writeln!(out)?;
+    writeln!(out, "Dynamis Power's own cost while logging")?;
+    line(out, "CPU", &r.self_cpu_pct, "% of one core", 2)?;
+    line(out, "Memory", &r.self_rss_mb, " MB", 1)?;
+    if let (Some(c), Some(m)) = (&r.self_cpu_pct, &r.self_rss_mb) {
+        let ok = c.mean < 0.5 && m.max < 20.0;
+        writeln!(
+            out,
+            "  {:<22} {}",
+            "Budget (0.5% CPU, 20 MB)",
+            if ok { "within budget" } else { "OVER BUDGET" }
+        )?;
+    }
+    writeln!(out)?;
+    writeln!(out, "Battery gauge")?;
+    writeln!(out, "  {}", r.gauge.verdict)?;
+    Ok(())
+}
+
+fn cmd_gauge(root: &SysRoot, duration: f64, json: bool) -> io::Result<()> {
+    let duration = duration.clamp(5.0, 3600.0);
+    let supplies = sensors::power::read(root);
+    if supplies.batteries.is_empty() {
+        eprintln!("No battery found, so there is no gauge to measure.");
+        return Ok(());
+    }
+    if supplies.on_ac() && !json {
+        eprintln!(
+            "Note: the charger is connected. Many gauges only report useful power on battery."
+        );
+    }
+    if !json {
+        eprintln!("Watching the battery gauge for {duration:.0} s (one reading every 0.5 s)…");
+    }
+    let start = sensors::now_secs();
+    let mut series = Vec::new();
+    while sensors::now_secs() - start < duration {
+        if let Some(w) = sensors::power::read(root).total_battery_power_w() {
+            series.push((sensors::now_secs(), w));
+        }
+        sleep(Duration::from_millis(500));
+    }
+    let g = gauge::analyse(&series);
+    let mut out = io::stdout().lock();
+    if json {
+        serde_json::to_writer_pretty(&mut out, &g)?;
+        return writeln!(out);
+    }
+    writeln!(out, "Readings        {}", g.samples)?;
+    writeln!(out, "Changes seen    {}", g.changes)?;
+    writeln!(
+        out,
+        "Updates every   {}",
+        g.update_interval_s
+            .map_or("unknown".into(), |s| format!("about {s} s"))
+    )?;
+    writeln!(
+        out,
+        "Smallest step   {}",
+        g.resolution_w
+            .map_or("unknown".into(), |w| format!("{w} W"))
+    )?;
+    writeln!(out, "{}", g.verdict)
+}
+
+fn cmd_hardware_report(root: &SysRoot) -> io::Result<()> {
+    let inv = inventory::read(root);
+    let mut out = io::stdout().lock();
+    let env = |k: &str| std::env::var(k).unwrap_or_else(|_| "unknown".into());
+    writeln!(out, "<!-- Paste this into a new \"Hardware report\" issue. It contains no serial numbers, usernames or network names. -->")?;
+    writeln!(
+        out,
+        "**Laptop:** {} {}",
+        inv.machine.vendor.clone().unwrap_or_default(),
+        inv.machine.model.clone().unwrap_or_default()
+    )?;
+    writeln!(
+        out,
+        "**System:** {}, kernel {}, desktop {} on {}",
+        inv.software.distro.clone().unwrap_or_default(),
+        inv.software.kernel.clone().unwrap_or_default(),
+        env("XDG_CURRENT_DESKTOP"),
+        env("XDG_SESSION_TYPE")
+    )?;
+    writeln!(out, "**Dynamis Power:** {}", env!("CARGO_PKG_VERSION"))?;
+    writeln!(out)?;
+    writeln!(out, "```text")?;
+    print_inventory(&mut out, &inv)?;
+    writeln!(out, "```")?;
+    writeln!(out)?;
+    writeln!(out, "<details><summary>Full inventory (JSON)</summary>")?;
+    writeln!(out)?;
+    writeln!(out, "```json")?;
+    serde_json::to_writer_pretty(&mut out, &inv)?;
+    writeln!(out)?;
+    writeln!(out, "```")?;
+    writeln!(out, "</details>")
 }

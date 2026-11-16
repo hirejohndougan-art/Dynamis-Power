@@ -15,6 +15,9 @@ daemon/
       src/sensors/           one module per signal: power, cpu, pressure, thermal, rapl, backlight
       src/inventory.rs       what the machine is and which settings it exposes
       src/logfmt.rs          CSV / JSON Lines rows built from two snapshots
+      src/report.rs          summaries of a recorded log
+      src/gauge.rs           battery gauge update rate and resolution
+      src/selfstat.rs        the process's own CPU and memory use
       tests/                 tests against tests/fixtures/sysfs/
     dynamis-cli/             the `dynamis` command
 ```
@@ -41,7 +44,12 @@ The program is then at `target/release/dynamis` (under 1 MB).
 ./target/release/dynamis inventory          # what this machine is and what can be tuned
 ./target/release/dynamis status             # power, speed, lag and temperature right now
 ./target/release/dynamis log -o power.csv   # record a reading every 5 s until Ctrl+C
+./target/release/dynamis report power.csv   # summarise a recording
+./target/release/dynamis gauge              # how often the battery gauge updates (run on battery)
+./target/release/dynamis hardware-report    # text to paste into a GitHub hardware report
 ```
+
+For the full phase 1 test on a real laptop, follow [../docs/TESTING-ON-HARDWARE.md](../docs/TESTING-ON-HARDWARE.md).
 
 Useful options:
 
@@ -52,12 +60,14 @@ Useful options:
 | `log` | `--interval 10` | Seconds between readings |
 | `log` | `--duration 3600` | Stop after an hour |
 | `log` | `--format jsonl` | JSON Lines instead of CSV |
+| `report` | `--json` | Machine-readable summary |
+| `gauge` | `--duration 300` | Watch the gauge for 5 minutes |
 
 **Run with `sudo` to see CPU power.** On recent kernels the CPU energy counters can only be read by root. Everything else works as a normal user. Reading is all the program does, with or without `sudo`.
 
 ### Log columns
 
-The CSV starts with `# dynamis log format 1`, then these columns. Each row covers the time since the previous row.
+The CSV starts with `# dynamis log format 2`, then these columns. Each row covers the time since the previous row.
 
 | Column | Meaning |
 | --- | --- |
@@ -73,6 +83,8 @@ The CSV starts with `# dynamis log format 1`, then these columns. Each row cover
 | `stall_cpu_pct`, `stall_mem_pct`, `stall_io_pct` | Share of the interval in which tasks waited for CPU, memory or disk — the lag measure |
 | `max_temp_c` | Hottest temperature sensor |
 | `brightness_pct` | Screen brightness |
+| `self_cpu_pct` | CPU used by the logger itself, as % of one core (format 2) |
+| `self_rss_mb` | Memory used by the logger itself (format 2) |
 
 Columns are only ever added at the end, with a format version bump. See `LOG_FORMAT_VERSION` in `crates/dynamis-core/src/logfmt.rs`.
 

@@ -21,6 +21,7 @@ Start here. Each document has one job, so you can read only what you need.
 | [MEASUREMENT.md](MEASUREMENT.md) | How power and responsiveness are measured, and why it's hard |
 | [SHARING.md](SHARING.md) | The results format and the submission service |
 | [../daemon/README.md](../daemon/README.md) | Building, running and extending the Rust code |
+| [TESTING-ON-HARDWARE.md](TESTING-ON-HARDWARE.md) | Step-by-step test on a real laptop |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | How to contribute |
 | [GLOSSARY.md](GLOSSARY.md) | Terms used throughout the project |
 
