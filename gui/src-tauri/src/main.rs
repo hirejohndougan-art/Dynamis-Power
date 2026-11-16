@@ -191,6 +191,21 @@ async fn set_device_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), S
 }
 
 #[tauri::command]
+async fn learn_session(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.learn_session().await
+}
+
+#[tauri::command]
+async fn start_learn_session(conn: State<'_, Conn>, workload: bool) -> Result<(), String> {
+    client(&conn).await?.start_learn_session(workload).await
+}
+
+#[tauri::command]
+async fn stop_learn_session(conn: State<'_, Conn>) -> Result<(), String> {
+    client(&conn).await?.stop_learn_session().await
+}
+
+#[tauri::command]
 async fn brightness(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.brightness().await
 }
@@ -298,6 +313,9 @@ fn main() {
             set_device_policy,
             brightness,
             set_brightness_prefs,
+            learn_session,
+            start_learn_session,
+            stop_learn_session,
             diagnostics,
             sleep_test,
             start_sleep_test,

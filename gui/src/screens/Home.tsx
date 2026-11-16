@@ -254,7 +254,7 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
             <button type="button" className="btn-link" onClick={() => props.go("learning")}>
               {t("learn_details")}
             </button>
-            {backend.learnSession && s.learning.progress && s.learning.progress.left > 0 && (
+            {s.learning.progress && s.learning.progress.left > 0 && (
               <button type="button" className="btn-link" onClick={() => props.go("learning")}>
                 {t("learn_now_link")}
               </button>

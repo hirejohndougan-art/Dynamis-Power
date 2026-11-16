@@ -41,8 +41,8 @@ use crate::core::{open_engine, write_atomic, Core};
 const FORMAT_VERSION: u32 = 2;
 /// Inconclusive results are retried up to this many times in all.
 const MAX_TRIES: usize = 3;
-const MIN_BATTERY_PCT: f64 = 40.0;
-const MAX_TEMP_C: f64 = 80.0;
+pub(crate) const MIN_BATTERY_PCT: f64 = 40.0;
+pub(crate) const MAX_TEMP_C: f64 = 80.0;
 
 /// Timing, adjustable for tests.
 #[derive(Debug, Clone, Copy)]
@@ -82,10 +82,15 @@ pub struct Progress {
     pub stage: &'static str,
     /// Quiet time on battery the tests left need, roughly.
     pub hours_left: f64,
+    /// Of `left`: settings tested on their own, and steps tuned together.
+    #[serde(skip)]
+    pub singles_left: usize,
+    #[serde(skip)]
+    pub together_left: usize,
 }
 
-struct Running {
-    exp: Experiment,
+pub(crate) struct Running {
+    pub(crate) exp: Experiment,
     monitor: Monitor,
     workload: Workload,
     profile: Profile,
@@ -112,12 +117,14 @@ pub struct Learning {
     pub records: Vec<Record>,
     pub display: DisplayModel,
     pub timing: Timing,
-    running: Option<Running>,
+    pub(crate) running: Option<Running>,
     last_end: f64,
+    /// "Learn now": a session started by hand (`crate::learnnow`).
+    pub(crate) session: Option<crate::learnnow::Session>,
     /// Whether learned settings are currently applied (on battery).
     overlay_on: Option<bool>,
     display_unsaved: usize,
-    status: String,
+    pub(crate) status: String,
     /// The power mode's own setting values when the overlay was last applied.
     tune_ctx: State,
     /// Seconds spent waiting, per reason, fading over about a day.
@@ -150,6 +157,7 @@ impl Learning {
                 .unwrap_or_else(DisplayModel::new),
             timing,
             running: None,
+            session: None,
             last_end: f64::MIN,
             overlay_on: None,
             display_unsaved: 0,
@@ -244,13 +252,13 @@ impl Learning {
     /// Test block length: the configured one, or four of the battery's own
     /// update periods if that is longer, so slow-reporting batteries still
     /// give several real readings per block.
-    fn block_s(&self) -> f64 {
+    pub(crate) fn block_s(&self) -> f64 {
         self.timing
             .block_s
             .max(self.power_update_s().unwrap_or(0.0) * 4.0)
     }
 
-    fn note_wait(&mut self, reason: &'static str, now: f64) {
+    pub(crate) fn note_wait(&mut self, reason: &'static str, now: f64) {
         let dt = self.last_tick.map_or(0.0, |t| (now - t).clamp(0.0, 3600.0));
         let fade = (-dt / 86_400.0).exp();
         for v in self.waits.values_mut() {
@@ -302,6 +310,7 @@ impl Core {
     pub fn set_learning(&mut self, on: bool) -> Result<(), String> {
         self.learn.enabled = on;
         if !on {
+            self.stop_learn_session("learning was switched off");
             // Off means off: no tests, and learned settings back to original.
             self.stop_experiment("learning was switched off");
             for r in self.learn.learned() {
@@ -382,26 +391,33 @@ impl Core {
             return;
         }
         self.learn.note_power(ctx.power_w, now);
+        if self.learn.session.as_ref().is_some_and(|s| s.active()) {
+            self.session_tick(now, ctx, workload);
+            self.learn.last_tick = Some(now);
+            return;
+        }
         if self.learn.running.is_some() {
             self.continue_experiment(now, ctx, workload);
-        } else if let Err((key, why)) = self.preflight(now, ctx, workload) {
+        } else if let Err((key, why)) = self.preflight(now, ctx, workload, false) {
             self.learn.note_wait(key, now);
             self.learn.status = format!("Waiting: {why}");
         } else {
-            self.start_experiment(now, ctx, workload);
+            self.start_experiment(now, ctx, workload, true);
         }
         self.learn.last_tick = Some(now);
     }
 
     /// Whether a test may start now; if not, a reason key (counted, and
     /// turned into advice in the app) and a line for people.
-    fn preflight(
+    /// In a Learn now session (`session`) there are no rests between tests.
+    pub(crate) fn preflight(
         &self,
         now: f64,
         ctx: &Context,
         workload: Workload,
+        session: bool,
     ) -> Result<(), (&'static str, String)> {
-        if now - self.learn.last_end < self.learn.timing.cooldown_s {
+        if !session && now - self.learn.last_end < self.learn.timing.cooldown_s {
             return Err(("resting", "resting between tests".into()));
         }
         if ctx.on_ac {
@@ -473,7 +489,12 @@ impl Core {
     }
 
     /// The next experiment, and the tuned values to record with it.
-    fn next_plan(&self, engine: &dynamis_core::engine::Engine) -> Option<(Plan, State)> {
+    /// Without `with_tune`, only settings tested on their own.
+    pub(crate) fn next_plan(
+        &self,
+        engine: &dynamis_core::engine::Engine,
+        with_tune: bool,
+    ) -> Option<(Plan, State)> {
         let blocked = engine.blocked();
         let t = self.learn.timing;
         let plan = |setting: &str, baseline: String, value: String| Plan {
@@ -501,6 +522,9 @@ impl Core {
         // Phase 4: every setting on its own first.
         if let Some(p) = self.single_tests(engine).into_iter().find(|p| !p.done) {
             return Some((plan(p.setting, p.current, p.value), State::new()));
+        }
+        if !with_tune {
+            return None;
         }
 
         // Phase 5: the processor settings that affect each other, together.
@@ -622,10 +646,18 @@ impl Core {
                 "done"
             },
             hours_left: left as f64 * per_test_s / 3600.0,
+            singles_left,
+            together_left,
         })
     }
 
-    fn start_experiment(&mut self, now: f64, _ctx: &Context, workload: Workload) {
+    pub(crate) fn start_experiment(
+        &mut self,
+        now: f64,
+        _ctx: &Context,
+        workload: Workload,
+        with_tune: bool,
+    ) {
         let plan = match open_engine(&self.root, &self.state_dir) {
             Ok(e) => {
                 if let Some(why) = e.safe_mode() {
@@ -643,7 +675,7 @@ impl Core {
                     self.learn.note_wait("dry_run", now);
                     return;
                 }
-                self.next_plan(&e)
+                self.next_plan(&e, with_tune)
             }
             Err(e) => {
                 self.learn.status = format!("Waiting: {e}");
@@ -672,17 +704,22 @@ impl Core {
         });
     }
 
-    fn continue_experiment(&mut self, now: f64, ctx: &Context, workload: Workload) {
+    pub(crate) fn continue_experiment(&mut self, now: f64, ctx: &Context, workload: Workload) {
         // Read these before borrowing the running experiment mutably.
         let active = self.active();
         let holds_empty = self.holds.is_empty();
+        // In a Learn now session, nobody is at the laptop: the step between
+        // idle and light use is the built-in light load or the screen going
+        // off, not a person, so it does not end a test.
+        let quiet = |w: Workload| matches!(w, Workload::Idle | Workload::LightInteractive);
+        let lenient = self.learn.session.as_ref().is_some_and(|s| s.active());
         let Some(run) = self.learn.running.as_mut() else {
             return;
         };
         let problems = run.monitor.check();
         let changed = if ctx.on_ac {
             Some("the charger was plugged in".to_string())
-        } else if workload != run.workload {
+        } else if workload != run.workload && !(lenient && quiet(workload) && quiet(run.workload)) {
             Some(format!("{} started", workload.describe()))
         } else if active != run.profile {
             Some("the power mode changed".to_string())
@@ -789,7 +826,7 @@ impl Core {
         self.stop_experiment(why);
     }
 
-    fn stop_experiment(&mut self, why: &str) {
+    pub(crate) fn stop_experiment(&mut self, why: &str) {
         let Some(run) = self.learn.running.take() else {
             return;
         };

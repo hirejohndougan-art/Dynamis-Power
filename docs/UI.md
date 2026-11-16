@@ -28,7 +28,7 @@ A sidebar, in this order: Dashboard, Modes, Apps, Battery, Devices, Learning, Ac
 | Modes | Everyone | Choose or schedule profiles; "Last until" |
 | Battery | Everyone | Health, charge limit, forecast, charging |
 | Devices | Everyone | Let idle USB devices and built-in hardware sleep on battery; every device listed by its friendly name (from the system's `pci.ids` and `usb.ids`, as `lspci` and `lsusb` use), with why some stay awake and *Keep awake* per device |
-| Learning | Everyone | How far learning has got (a percentage, tests and quiet time left), what it kept with Forget, the tests so far, *Learn now* (planned) and the sleep test |
+| Learning | Everyone | How far learning has got (a percentage, tests and quiet time left), what it kept with Forget, the tests so far, *Learn now* and the sleep test |
 | Apps | Everyone | What uses power; per-app rules. Dynamis Power's own app and panel icon are never listed |
 | Activity | Everyone | Plain-language history of changes, with Undo; logs and export |
 | Sharing | Everyone | Opt-in results sharing, what's sent, delete my data |
@@ -62,7 +62,7 @@ A ranked list of apps by estimated energy today and this week, clearly marked as
 
 ## Learning
 
-**Learn now** (planned; mocked up in the app, marked *Planned*): start a baseline session, leave the laptop unplugged and alone for about two hours, and every test runs back to back, with a light workload for the settings whose cost is lag. Shows what it needs, the test running and time left, and each result; any use of the laptop stops it. See the roadmap, "To do: Learn now".
+**Learn now** (built): start a baseline session, leave the laptop unplugged and alone for about two hours, and every test runs back to back, with a light workload for the settings whose cost is lag (a checkbox in the confirmation; without it those settings are left for everyday learning). It waits for the screen to turn off before the first test (and says so, or that the session helper is not running so it cannot tell). Shows what it needs, the test running and time left, and each result as Kept, Not kept or Unclear; any use of the laptop, plugging in, a low battery, warmth or a call stops it and says why, keeping the tests already finished. Learning stays on afterwards.
 
 **Built.** Its own place in the main menu. The top card shows the switch and progress as a percentage of the tests this laptop needs, with a bar, the stage (one setting at a time, or processor settings together), and about how many tests and how much quiet time on battery are left. The percentage is an estimate: while settings are tuned together, a kept change can open a step or two more, so it can step back slightly; it reads 100% only when nothing is left to test. Below: what it kept (plain names, what each was, what it saves, *Forget*) and the tests so far. The technical table stays in Advanced → Learning. Home's learning card shows the same percentage and bar.
 

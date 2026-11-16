@@ -137,6 +137,29 @@ impl Client {
             .map_err(explain)
     }
 
+    /// "Learn now": phase, progress and results.
+    pub async fn learn_session(&self) -> Result<Value> {
+        self.json("LearnSession", &()).await
+    }
+
+    /// Start "Learn now" (`workload`: measure lag-costing settings with a
+    /// built-in light load).
+    pub async fn start_learn_session(&self, workload: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("StartLearnSession", &(workload,))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn stop_learn_session(&self) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("StopLearnSession", &())
+            .await
+            .map_err(explain)
+    }
+
     pub async fn undo(&self, setting: &str) -> Result<String> {
         self.own()
             .await?

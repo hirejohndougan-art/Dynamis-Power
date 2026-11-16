@@ -1930,3 +1930,146 @@ fn brightness_follows_the_mode() {
         );
     });
 }
+
+/// Learn now: waits for the screen to turn off, runs every test back to
+/// back (the settings that cost lag under the light load), then learning
+/// carries on. Touching the laptop stops it; the charger refuses it.
+#[test]
+fn learn_now_runs_every_test_back_to_back() {
+    let Some(env) = Env::new("learnnow") else {
+        return;
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    let plant = spawn_plant(env.dir.join("root"), stop.clone());
+    let _d = Guard(env.daemon_with(
+        "state",
+        &[
+            "--tick-secs",
+            "0.02",
+            "--calib-block-secs",
+            "0.3",
+            "--calib-settle-secs",
+            "0.05",
+            // Long rests: Learn now must not wait for them.
+            "--calib-cooldown-secs",
+            "3600",
+        ],
+    ));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        // Plugged in: refused with a reason.
+        fs::write(env.dir.join("root/sys/class/power_supply/AC0/online"), "1").unwrap();
+        let err = c.start_learn_session(true).await.unwrap_err();
+        assert!(err.contains("Unplug the charger"), "{err}");
+        fs::write(env.dir.join("root/sys/class/power_supply/AC0/online"), "0").unwrap();
+
+        // The session helper: the person is at the laptop.
+        let agent = env.client().await;
+        let ap = zbus::Proxy::new(
+            &agent,
+            "net.dynamis.Power",
+            "/net/dynamis/Power",
+            "net.dynamis.Power1",
+        )
+        .await
+        .unwrap();
+        let report =
+            |idle: bool| HashMap::from([("user_idle".to_string(), zbus::OwnedVariant::from(idle))]);
+        ap.call::<_, _, ()>("ReportSession", &(report(false),))
+            .await
+            .unwrap();
+
+        c.start_learn_session(true).await.unwrap();
+        assert_eq!(
+            c.status().await.unwrap()["learning"]["on"],
+            true,
+            "Learn now switches learning on"
+        );
+        std::thread::sleep(Duration::from_millis(300));
+        let s = c.learn_session().await.unwrap();
+        assert_eq!(s["phase"], "waiting_screen", "{s}");
+        assert!(s["waiting"]
+            .as_str()
+            .unwrap()
+            .contains("screen to turn off"));
+        assert!(s["total"].as_u64().unwrap() >= 3, "{s}");
+
+        // The screen turns off: tests run back to back to the end.
+        ap.call::<_, _, ()>("ReportSession", &(report(true),))
+            .await
+            .unwrap();
+        let start = Instant::now();
+        let mut saw_load = false;
+        let s = loop {
+            let _ = zbus::fdo::DBusProxy::new(&agent)
+                .await
+                .unwrap()
+                .get_id()
+                .await;
+            let s = c.learn_session().await.unwrap();
+            if s["current"]["under_load"] == true {
+                saw_load = true;
+            }
+            if s["phase"] != "waiting_screen" && s["phase"] != "testing" {
+                break s;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(120),
+                "Learn now did not finish: {s}"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        assert_eq!(s["phase"], "done", "{s}");
+        assert!(
+            saw_load,
+            "turbo and the speed limit are tested under the light load"
+        );
+        let results = s["results"].as_array().unwrap();
+        let find = |id: &str, v: &str| {
+            results
+                .iter()
+                .find(|r| r["setting"] == id && r["value"] == v)
+                .cloned()
+                .unwrap_or_else(|| panic!("no result for {id}={v}: {s}"))
+        };
+        assert_eq!(find("kernel.nmi_watchdog", "off")["verdict"], "keep");
+        assert_eq!(find("cpu.turbo", "off")["verdict"], "reject");
+        assert_eq!(find("cpu.turbo", "off")["under_load"], true);
+        assert!(s["saves_w"].as_f64().unwrap() > 0.1, "{s}");
+        assert_eq!(s["done"], s["total"]);
+        assert_eq!(
+            c.status().await.unwrap()["learning"]["on"],
+            true,
+            "learning carries on afterwards"
+        );
+
+        // A second session: using the laptop stops it.
+        c.forget("kernel.nmi_watchdog").await.unwrap();
+        c.start_learn_session(false).await.unwrap();
+        eventually("a test running", async || {
+            c.learn_session().await.unwrap()["current"].is_object()
+        })
+        .await;
+        ap.call::<_, _, ()>("ReportSession", &(report(false),))
+            .await
+            .unwrap();
+        eventually("stopped by use", async || {
+            let s = c.learn_session().await.unwrap();
+            s["phase"] == "stopped" && s["stopped_reason"] == "you used the laptop"
+        })
+        .await;
+        // The test in progress was undone.
+        assert_eq!(
+            fs::read_to_string(env.dir.join("root/proc/sys/kernel/nmi_watchdog"))
+                .unwrap()
+                .trim(),
+            "1"
+        );
+    });
+    stop.store(true, Ordering::Relaxed);
+    plant.join().unwrap();
+}

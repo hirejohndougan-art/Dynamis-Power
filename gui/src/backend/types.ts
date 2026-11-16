@@ -255,11 +255,10 @@ export interface Backend {
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
   /** "Learn now": a session that runs every test back to back while the
-   * laptop is left alone. Optional: planned, not in the service yet, so the
-   * real app hides it; the demo shows a mockup. */
-  learnSession?(): Promise<LearnSession>;
-  startLearnSession?(withWorkload: boolean): Promise<void>;
-  stopLearnSession?(): Promise<void>;
+   * laptop is left alone. */
+  learnSession(): Promise<LearnSession>;
+  startLearnSession(withWorkload: boolean): Promise<void>;
+  stopLearnSession(): Promise<void>;
   /** The guided sleep test. */
   sleepTest(): Promise<SleepTestInfo>;
   startSleepTest(minutes: number): Promise<void>;
@@ -407,6 +406,7 @@ export type LearnSession = {
   results: LearnSessionResult[];
   stopped_reason: string | null;
   saves_w: number;
-  /** Shown as a mockup (not built in the service yet). */
-  preview?: boolean;
+  /** The session helper is not running, so the screen turning off cannot be seen. */
+  agent_missing?: boolean;
+  with_workload?: boolean;
 };

@@ -22,6 +22,7 @@ mod devices;
 mod fullcharge;
 mod kept;
 mod learn;
+mod learnnow;
 mod outside;
 mod predict;
 mod sleeptest;
@@ -306,6 +307,39 @@ fn spawn_auto_thread(conn: zbus::Connection, svc: Service, tick_secs: f64) {
                     format!("{}|{}", c.auto_status().1, c.learn.status()),
                 )
             };
+            // Learn now keeps the laptop awake: a logind sleep inhibitor,
+            // asked for outside the lock and held until the session ends.
+            let inhibit = svc
+                .core
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .learn
+                .session
+                .as_mut()
+                .is_some_and(|s| s.take_inhibit_request());
+            if inhibit {
+                let r = zbus::block_on(conn.call_method(
+                    Some("org.freedesktop.login1"),
+                    "/org/freedesktop/login1",
+                    Some("org.freedesktop.login1.Manager"),
+                    "Inhibit",
+                    &(
+                        "sleep",
+                        "Dynamis Power",
+                        "Learn now is running tests; closing the lid still puts the laptop to sleep",
+                        "block",
+                    ),
+                ));
+                match r.and_then(|m| m.body().deserialize::<zbus::OwnedFd>()) {
+                    Ok(fd) => {
+                        let mut c = svc.core.lock().unwrap_or_else(|p| p.into_inner());
+                        if let Some(s) = c.learn.session.as_mut().filter(|s| s.active()) {
+                            s.inhibit = Some(fd);
+                        }
+                    }
+                    Err(e) => eprintln!("dynamisd: learn now: cannot keep the laptop awake: {e}"),
+                }
+            }
             // The sleep test asks the system to sleep (logind), outside the lock.
             let suspend = svc
                 .core

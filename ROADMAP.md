@@ -146,14 +146,14 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 ## To do: Learn now (a baseline session)
 
-Start learning by hand and leave the laptop alone: every test runs back to back (no waiting for quiet moments, no rests between tests) to set a baseline in about two hours, and learning carries on in everyday use afterwards. Mocked up in the app (Learning screen, marked *Planned*; the demo plays it out). Decisions taken, as recommended:
+Start learning by hand and leave the laptop alone: every test runs back to back (no waiting for quiet moments, no rests between tests) to set a baseline in about two hours, and learning carries on in everyday use afterwards. Built in the service and the app (Learning screen); the demo plays it out. Decisions taken, as recommended:
 
-- [ ] **Idle plus a light, steady workload.** Settings whose cost is lag (turbo, speed limit, speed preference) are measured with a built-in, repeatable light load so lag can be judged; the others idle. The person can untick the workload; those settings are then left for everyday learning.
-- [ ] **Wait for the screen to turn off** before the first test, so every test is measured in the same state.
-- [ ] **Battery only** (from at least 40%, 60% recommended). Running from the battery while plugged in stays on the follow-up list.
-- [ ] **Stops and hands the laptop back** on any keyboard or mouse use (logind idle hint / session agent), plugging in, battery below 40%, warmth, a call or safe mode; finished tests are kept and the rest run later.
-- [ ] **Keeps the laptop awake** during the session (a logind `idle:sleep` block inhibitor, released at the end); the lid still sleeps it.
-- [ ] Service: `LearnSession()`, `StartLearnSession(workload)`, `StopLearnSession()`; the session reuses calibration (`calibrate.rs`) with cooldown 0 and blocks sized to the battery's update period.
+- [x] **Idle plus a light, steady workload.** Settings whose cost is lag (turbo, speed limit, speed preference) are measured with a built-in, repeatable light load so lag can be judged; the others idle. The person can untick the workload; those settings are then left for everyday learning.
+- [x] **Wait for the screen to turn off** before the first test, so every test is measured in the same state.
+- [x] **Battery only** (from at least 40%, 60% recommended). Running from the battery while plugged in stays on the follow-up list.
+- [x] **Stops and hands the laptop back** on any keyboard or mouse use (logind idle hint / session agent), plugging in, battery below 40%, warmth, a call or safe mode; finished tests are kept and the rest run later.
+- [x] **Keeps the laptop awake** during the session (a logind `idle:sleep` block inhibitor, released at the end); the lid still sleeps it.
+- [x] Service: `LearnSession()`, `StartLearnSession(workload)`, `StopLearnSession()`; the session reuses calibration (`calibrate.rs`) with cooldown 0 and blocks sized to the battery's update period.
 - [ ] **Per-activity learning afterwards:** keep results separately for idle, light use, video and heavy work, and apply each in its own context (needs a decision record).
 
 ## To do: from the Power Daemon design (the earlier "Building a project with GUI" chat)

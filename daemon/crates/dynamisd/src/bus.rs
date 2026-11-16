@@ -433,6 +433,43 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// "Learn now": the session's phase, progress and results (JSON).
+    fn learn_session(&self) -> String {
+        self.0.lock().learn_session_json().to_string()
+    }
+
+    /// Start "Learn now": every test back to back while the laptop is left
+    /// alone on battery. `workload`: measure the settings that cost lag
+    /// with a built-in light load (else they are left for everyday use).
+    async fn start_learn_session(
+        &self,
+        workload: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .start_learn_session(workload)
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        notify_auto(conn, &self.0).await;
+        Ok(())
+    }
+
+    /// Stop "Learn now". The test in progress is undone; finished tests
+    /// are kept and learning carries on in everyday use.
+    async fn stop_learn_session(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0.lock().stop_learn_session("you stopped it");
+        self.0.ticker.poke();
+        Ok(())
+    }
+
     /// One plain-language line on what learning is doing.
     #[zbus(property(emits_changed_signal = "false"))]
     fn learning_status(&self) -> String {

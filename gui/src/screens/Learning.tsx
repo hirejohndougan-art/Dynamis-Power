@@ -56,7 +56,7 @@ export function Learning(props: { status: Status; refresh: () => void }) {
         )}
       </section>
 
-      {backend.learnSession && <LearnNow status={props.status} run={run} />}
+      <LearnNow status={props.status} run={run} />
       {props.status.power.has_battery && <SleepTest locked={!!props.status.safe_mode} run={run} />}
 
       <section className="card" aria-labelledby="lkept-heading">
@@ -129,7 +129,7 @@ function LearnNow(props: { status: Status; run: (a: () => Promise<string | void>
   const [d, setD] = useState<LearnSession | null>(null);
   const [asking, setAsking] = useState(false);
   const [workload, setWorkload] = useState(true);
-  const load = () => backend.learnSession?.().then(setD).catch(() => setD(null));
+  const load = () => backend.learnSession().then(setD).catch(() => setD(null));
   useEffect(() => {
     load();
     const again = () => load();
@@ -152,10 +152,7 @@ function LearnNow(props: { status: Status; run: (a: () => Promise<string | void>
   const minutesSaved = pw.full_wh && d.saves_w > 0 ? Math.round((pw.full_wh / Math.max(0.5, (pw.watts ?? 6) - d.saves_w) - pw.full_wh / (pw.watts ?? 6)) * 60) : null;
   return (
     <section className="card" aria-labelledby="lnow-heading">
-      <div className="row spread">
-        <h2 id="lnow-heading">{t("lnow_heading")}</h2>
-        {d.preview && <span className="badge">{t("lnow_preview")}</span>}
-      </div>
+      <h2 id="lnow-heading">{t("lnow_heading")}</h2>
       <p className="muted">{t("lnow_intro")}</p>
 
       {running && (
@@ -164,11 +161,11 @@ function LearnNow(props: { status: Status; run: (a: () => Promise<string | void>
           <div className="notice notice-info" role="status">
             <span>
               {d.phase === "waiting_screen"
-                ? t("lnow_waiting_screen")
+                ? t(d.agent_missing ? "lnow_waiting_agent" : "lnow_waiting_screen")
                 : t("lnow_testing", { n: d.done + 1, total: d.total, label: d.current?.label ?? "", value: valueName(d.current?.setting ?? "", d.current?.value ?? null) })}
               {d.current?.under_load && ` ${t("lnow_under_load")}`}
             </span>
-            <button type="button" className="btn btn-small" onClick={() => act(() => backend.stopLearnSession!())}>
+            <button type="button" className="btn btn-small" onClick={() => act(() => backend.stopLearnSession())}>
               {t("lnow_stop")}
             </button>
           </div>
@@ -202,8 +199,8 @@ function LearnNow(props: { status: Status; run: (a: () => Promise<string | void>
 
       {d.results.length > 0 && (
         <ul className="entries" aria-label={t("lnow_results")}>
-          {d.results.map((r) => (
-            <li key={r.setting} className="entry">
+          {d.results.map((r, i) => (
+            <li key={`${i}-${r.setting}-${r.value}`} className="entry">
               <div className="stack" style={{ gap: 2 }}>
                 <span>
                   {r.label}: {valueName(r.setting, r.value)}
@@ -229,7 +226,7 @@ function LearnNow(props: { status: Status; run: (a: () => Promise<string | void>
               className="btn btn-primary"
               onClick={() => {
                 setAsking(false);
-                act(() => backend.startLearnSession!(workload));
+                act(() => backend.startLearnSession(workload));
               }}
             >
               {t("lnow_confirm")}

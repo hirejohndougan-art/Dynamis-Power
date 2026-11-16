@@ -139,6 +139,13 @@ On the VivoBook (and any laptop where Modes used to show only Balanced):
 3. Plug the charger in: every device goes back to what it was. *Restore original settings* does the same and switches both off.
 4. Compare power on battery with the switches off and on (`sudo dynamis gauge`), with the same light use.
 
+### Learn now
+
+1. Charge to at least 60%, unplug, and in the app press *Learning → Start learning now* (leave the light workload ticked). Leave the laptop alone.
+2. The screen should turn off as usual, the laptop should not go to sleep, and the session should run for about two hours. Afterwards open the app: it should say how many changes it kept and the power saved.
+3. Start it again and move the mouse once the screen is off: it should stop within a few seconds and say "you used the laptop".
+4. Send `dynamis learned` and the journal (`dynamis journal`).
+
 ### Screen brightness for each mode
 
 1. In the app, on Modes, switch on *Set the screen brightness for this mode* for Longer battery and move it to 30%. Switch to Longer battery: the screen should dim to about 30% once.

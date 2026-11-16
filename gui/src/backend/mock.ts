@@ -174,7 +174,7 @@ export function mockBackend(): Backend {
     ["cpu.max_perf_pct", "CPU speed limit", "90", true, "keep", "saves 0.21 W with no measurable lag", 0.21],
     ["storage.sata_alpm", "SATA link power saving", "med_power_with_dipm", false, "keep", "saves 0.08 W (about 1%)", 0.08],
   ];
-  let session: LearnSession = { phase: "idle", total: PLAN.length, done: 0, current: null, minutes_left: null, results: [], stopped_reason: null, saves_w: 0, preview: true };
+  let session: LearnSession = { phase: "idle", total: PLAN.length, done: 0, current: null, minutes_left: null, results: [], stopped_reason: null, saves_w: 0 };
   let sessionTimer: ReturnType<typeof setTimeout> | undefined;
   let sessionLoad = true;
   const sessionStep = () => {

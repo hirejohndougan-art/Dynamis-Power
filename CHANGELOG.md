@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- *Learn now* in the service (it was a mockup): every test back to back while the laptop is left alone on battery, waiting for the screen to turn off first, with turbo and the speed limit measured under a built-in light load (about 10% of one core) unless the person leaves it out. Stops and keeps finished tests on any use of the laptop, plugging in, battery below 40%, warmth, a call, sleep or safe mode; keeps the laptop from sleeping meanwhile (logind inhibitor; the lid still works). Learning stays on afterwards. `LearnSession`, `StartLearnSession`, `StopLearnSession`.
+
 - Screen brightness for each mode (Modes screen): pick a level per mode, with what the screen uses there and how many minutes more or less the battery lasts. Set once when the mode starts (by hand, auto mode, an app or *Make it last*), so the brightness keys still win in between. Engine `set_brightness` (journaled as `brightness`, 5–100%); `Brightness`, `SetBrightnessPrefs`. Restore forgets the levels.
 - Battery screen: the four cards two by two, and *What uses the battery* at the bottom (screen, processor, graphics, everything else, measured while the page is open).
 

@@ -57,9 +57,9 @@ struct SavedAuto {
 pub struct AutoState {
     pub enabled: bool,
     rules: Auto,
-    sampler: Sampler,
+    pub(crate) sampler: Sampler,
     session: SessionReport,
-    session_owner: Option<String>,
+    pub(crate) session_owner: Option<String>,
     /// Set when a person picked a profile by hand while auto mode was on:
     /// auto mode then waits until the charger is plugged in or out (the value
     /// here is the charger state at the time).
@@ -434,6 +434,7 @@ impl Core {
         self.sleeptest.on_resume(&root, &dir, unix_now());
         self.outside
             .quiet_until(unix_now() + crate::outside::AFTER_WAKE_S);
+        self.stop_learn_session("the laptop went to sleep");
         self.stop_experiment_for("the laptop slept");
         if let Err(e) = self.apply_active("woke from sleep") {
             eprintln!("dynamisd: {e}");
