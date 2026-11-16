@@ -32,6 +32,7 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &StorageIoScheduler,
         &StorageSataAlpm,
         &WifiPowerSave,
+        &NetWakeOnLan,
         &GpuAmdPowerLevel,
         &BatteryChargeLimit,
         &BatteryChargeStart,
@@ -1147,6 +1148,76 @@ impl Setting for WifiPowerSave {
             .map(|(i, _)| Write {
                 path: format!("nl80211:{i}/power_save"),
                 contents: value.into(),
+            })
+            .collect())
+    }
+}
+
+/// Wake-on-LAN: whether wired network cards may wake the laptop from sleep
+/// (TLP's `WOL_DISABLE`). Through the standard device wake-up switch
+/// (`/sys/class/net/<card>/device/power/wakeup`), every wired card at once.
+/// Wi-Fi cards are left alone (wake on wireless is a separate feature).
+pub struct NetWakeOnLan;
+
+impl NetWakeOnLan {
+    fn files(root: &SysRoot) -> Vec<String> {
+        let mut out: Vec<String> = root
+            .list_dir("/sys/class/net")
+            .into_iter()
+            .filter(|n| crate::wifi::valid_name(n))
+            .filter(|n| {
+                !root.exists(&format!("/sys/class/net/{n}/wireless"))
+                    && !root.exists(&format!("/sys/class/net/{n}/phy80211"))
+            })
+            .map(|n| format!("/sys/class/net/{n}/device/power/wakeup"))
+            .filter(|f| root.exists(f))
+            .collect();
+        out.sort();
+        out
+    }
+}
+
+impl Setting for NetWakeOnLan {
+    fn id(&self) -> &'static str {
+        "net.wake_on_lan"
+    }
+    fn label(&self) -> &'static str {
+        "Wake from the wired network"
+    }
+    fn risk(&self) -> RiskTier {
+        // Off only means the network cannot wake a sleeping laptop.
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if NetWakeOnLan::files(root).is_empty() {
+            return unsupported("no wired network card that can wake the laptop");
+        }
+        Probe::Supported {
+            allowed: Allowed::OnOff,
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let files = NetWakeOnLan::files(root);
+        if files.is_empty() {
+            return Err(ReadError::Missing);
+        }
+        let mut seen: Option<bool> = None;
+        for f in &files {
+            let on = root.read_string(f)?.trim() == "enabled";
+            if seen.is_some_and(|s| s != on) {
+                return Ok("mixed".into());
+            }
+            seen = Some(on);
+        }
+        Ok(if seen == Some(true) { "on" } else { "off" }.into())
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let v = if value == "on" { "enabled" } else { "disabled" };
+        Ok(NetWakeOnLan::files(root)
+            .into_iter()
+            .map(|path| Write {
+                path,
+                contents: v.into(),
             })
             .collect())
     }

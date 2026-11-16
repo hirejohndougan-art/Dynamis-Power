@@ -1430,3 +1430,30 @@ fn a_learned_change_undone_twice_is_blocked() {
     // Other settings are not affected.
     assert!(!e.note_undone("audio.power_save").unwrap());
 }
+
+#[test]
+fn wake_on_lan_for_wired_cards_only() {
+    let sb = Sandbox::new();
+    let eth = sb.dir.join("root/sys/class/net/enp2s0/device/power");
+    std::fs::create_dir_all(&eth).unwrap();
+    std::fs::write(eth.join("wakeup"), "enabled\n").unwrap();
+    // The fixture's Wi-Fi card has a wake-up switch too: left alone.
+    let wl = sb.dir.join("root/sys/class/net/wlan0/device/power");
+    std::fs::create_dir_all(&wl).unwrap();
+    std::fs::write(wl.join("wakeup"), "enabled\n").unwrap();
+    let mut e = sb.engine();
+    e.apply(&req("net.wake_on_lan", "off")).unwrap();
+    assert_eq!(
+        sb.file("/sys/class/net/enp2s0/device/power/wakeup").trim(),
+        "disabled"
+    );
+    assert_eq!(
+        sb.file("/sys/class/net/wlan0/device/power/wakeup").trim(),
+        "enabled"
+    );
+    e.restore().unwrap();
+    assert_eq!(
+        sb.file("/sys/class/net/enp2s0/device/power/wakeup").trim(),
+        "enabled"
+    );
+}

@@ -158,11 +158,17 @@ impl Core {
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
             ..AutoState::default()
         };
+        // The mode chosen for startup, else the one last used.
+        let start_mode = prefs
+            .startup_mode
+            .filter(|p| available.contains(p))
+            .or(saved)
+            .unwrap_or(Profile::Balanced);
         let mut core = Core {
             root,
             state_dir,
             available,
-            chosen: saved.unwrap_or(Profile::Balanced),
+            chosen: start_mode,
             holds: BTreeMap::new(),
             next_cookie: 1,
             auto,
@@ -863,6 +869,25 @@ mod tests {
         assert!(ok, "copying the fixture failed");
         let core = Core::new(SysRoot::at(dir.join("root")), dir.join("state"));
         (dir, core)
+    }
+
+    #[test]
+    fn the_startup_mode_wins_over_the_last_one() {
+        let (dir, mut core) = sandbox("startup");
+        core.choose(Profile::Performance).unwrap();
+        let mut p = core.auto_prefs().clone();
+        p.startup_mode = Some(Profile::PowerSaver);
+        core.set_auto_prefs(p, 0.0).unwrap();
+        let again = Core::new(SysRoot::at(dir.join("root")), dir.join("state"));
+        assert_eq!(again.chosen, Profile::PowerSaver);
+        // Without one, the last mode used.
+        let mut p = again.auto_prefs().clone();
+        p.startup_mode = None;
+        let mut again = again;
+        again.set_auto_prefs(p, 0.0).unwrap();
+        let third = Core::new(SysRoot::at(dir.join("root")), dir.join("state"));
+        assert_eq!(third.chosen, Profile::Performance);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     fn epp(dir: &Path) -> String {

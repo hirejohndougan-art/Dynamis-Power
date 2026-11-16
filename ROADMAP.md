@@ -99,7 +99,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] A per-device "keep awake" list the person can add to (by device model, so it holds in any port)
 - [x] Runtime power management for idle PCI devices, with a per-driver "never" list *(in SETTINGS: `pci.runtime_pm`)*
 - [x] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
-- [ ] Wake-on-LAN off
+- [x] Wake-on-LAN off
 - [x] Sound controller power saving as well as the codec (`audio.controller_power`)
 - [ ] Discrete and integrated GPU: runtime power-down of a second GPU *(in SETTINGS: `gpu.dgpu_runtime_pm`)*, Intel GPU frequency limits *(in SETTINGS: `gpu.max_freq`; needs real hardware to learn how the driver rounds)*, AMD GPU power level *(done: `gpu.amd_power_level`)*
 
@@ -138,7 +138,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] Re-apply settings after resume from sleep (mode, kept, learned settings, app shares)
 - [x] Apply settings to devices plugged in later (USB, Thunderbolt), as TLP does (at the next reading)
 - [x] Ignore a charger that reports wrongly (TLP's `TLP_PS_IGNORE`): Advanced → System
-- [ ] A mode to use at boot before auto mode decides (TLP's `TLP_DEFAULT_MODE`; today the last chosen mode is used)
+- [x] A mode to use at boot before auto mode decides (TLP's `TLP_DEFAULT_MODE`; today the last chosen mode is used)
 - [x] A full diagnostic report like `tlp-stat`: `dynamis stat`, `Diagnostics()`, and in the app's Export
 - [x] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export), as decided in [0017](docs/decisions/0017-importing-a-tlp-configuration.md)
 

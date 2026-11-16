@@ -128,6 +128,9 @@ pub struct Prefs {
     /// `mains` or `battery` (for chargers that report wrongly; TLP's
     /// `TLP_PS_IGNORE`). Applies to everything, not only auto mode.
     pub power_source: PowerSource,
+    /// The mode to start with (TLP's `TLP_DEFAULT_MODE`); `None` is the
+    /// mode last used. Auto mode, when on, decides from the first reading.
+    pub startup_mode: Option<Profile>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -166,6 +169,7 @@ impl Default for Prefs {
             max_switches_per_hour: 12,
             app_rules: Vec::new(),
             power_source: PowerSource::Detect,
+            startup_mode: None,
         }
     }
 }

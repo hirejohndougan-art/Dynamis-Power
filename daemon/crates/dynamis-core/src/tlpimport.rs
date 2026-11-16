@@ -140,6 +140,14 @@ fn on_off(v: &str) -> Option<String> {
         _ => None,
     }
 }
+/// `WOL_DISABLE=Y` means Wake-on-LAN off.
+fn wol(v: &str) -> Option<String> {
+    match v {
+        "Y" | "y" | "1" => Some("off".into()),
+        "N" | "n" | "0" => Some("on".into()),
+        _ => None,
+    }
+}
 fn khz_to_mhz(v: &str) -> Option<String> {
     v.parse::<u64>().ok().map(|k| (k / 1000).to_string())
 }
@@ -188,6 +196,7 @@ const SINGLE: &[(&str, &str, Convert)] = &[
     ("START_CHARGE_THRESH_BAT0", "battery.charge_start", same),
     ("STOP_CHARGE_THRESH_BAT0", "battery.charge_limit", same),
     ("DISK_IOSCHED", "storage.io_scheduler", list),
+    ("WOL_DISABLE", "net.wake_on_lan", wol),
 ];
 
 /// TLP keys Dynamis Power handles another way, with where.

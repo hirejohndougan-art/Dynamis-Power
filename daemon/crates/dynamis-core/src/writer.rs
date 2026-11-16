@@ -38,6 +38,8 @@ const ONE_FILE_ONLY: &[(&str, &str)] = &[
     ("/sys/class/scsi_host/", "/link_power_management_policy"),
     // The wake-up alarm, for the sleep test only.
     ("/sys/class/rtc/", "/wakealarm"),
+    // Whether a wired network card may wake the laptop (Wake-on-LAN).
+    ("/sys/class/net/", "/device/power/wakeup"),
     // Screen brightness, for the brightness the person chose for each mode.
     ("/sys/class/backlight/", "/brightness"),
     // Runtime power management of one USB device or PCI function.
@@ -122,6 +124,8 @@ mod tests {
             "/sys/bus/pci/devices/0000:00:14.0/remove",
             "/sys/bus/pci/devices/0000:00:14.0/power/control/../../remove",
             "/sys/class/backlight/intel_backlight/bl_power",
+            "/sys/class/net/eth0/device/power/control",
+            "/sys/class/net/eth0/address",
             "nl80211:wlan0/ps",
             "nl80211:../x/power_save",
             "nl80211:wlan0/../../power_save",

@@ -217,6 +217,13 @@ export function Modes(props: { status: Status; refresh: () => void }) {
               </label>
             )}
             <Switch checked={prefs.boost_on_ac} onChange={(v) => set("boost_on_ac", v)} label={t("modes_boost")} />
+            <Choice
+              name="startup_mode"
+              label={t("modes_startup")}
+              value={prefs.startup_mode ?? "last"}
+              options={[["last", t("modes_startup_last")] as ["last", string], ...s.profiles.map((p): [Profile, string] => [p, profileName(p)])]}
+              onChange={(v) => set("startup_mode", v === "last" ? null : (v as Profile))}
+            />
             <div>
               <button type="button" className="btn btn-primary" onClick={() => run(() => backend.setAutoPrefs(prefs).then(() => t("modes_saved")))}>
                 {t("modes_save")}

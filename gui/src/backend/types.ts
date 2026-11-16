@@ -166,6 +166,8 @@ export interface AutoPrefs {
   app_rules?: AppRule[];
   /** What to believe about the charger (for chargers that report wrongly). */
   power_source?: "detect" | "mains" | "battery";
+  /** The mode to start with; null is the mode last used. */
+  startup_mode?: Profile | null;
   [other: string]: unknown;
 }
 
