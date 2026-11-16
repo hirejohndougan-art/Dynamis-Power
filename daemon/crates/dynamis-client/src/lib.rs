@@ -1,0 +1,176 @@
+//! A small client for the Dynamis Power service, used by the app's Tauri
+//! shell. Every call goes over D-Bus to `dynamisd`; nothing here touches the
+//! system directly, and nothing here needs root.
+//!
+//! Errors are plain sentences, ready to show to people.
+//!
+//! The service is on the system bus. Set `DYNAMIS_BUS=session` to use the
+//! session bus instead (for development against a test service).
+
+use serde_json::Value;
+use zbus::Connection;
+
+const NAME: &str = "net.dynamis.Power";
+const PATH: &str = "/net/dynamis/Power";
+const IFACE: &str = "net.dynamis.Power1";
+const PPD: &str = "org.freedesktop.UPower.PowerProfiles";
+const PPD_PATH: &str = "/org/freedesktop/UPower/PowerProfiles";
+
+pub type Result<T> = std::result::Result<T, String>;
+
+fn explain(e: impl std::fmt::Display) -> String {
+    let t = e.to_string();
+    if t.contains("ServiceUnknown")
+        || t.contains("was not provided")
+        || t.contains("NameHasNoOwner")
+    {
+        "Dynamis Power's service is not running. Install it, or start it with: sudo systemctl start dynamisd".into()
+    } else if t.contains("AccessDenied") {
+        "You are not allowed to change this. Only the person at the laptop can.".into()
+    } else {
+        // Strip the D-Bus error name prefix, keep the human part.
+        t.split_once(": ")
+            .map(|(_, rest)| rest.to_string())
+            .unwrap_or(t)
+    }
+}
+
+#[derive(Clone)]
+pub struct Client {
+    conn: Connection,
+}
+
+impl Client {
+    pub async fn connect() -> Result<Client> {
+        let conn = if std::env::var("DYNAMIS_BUS").as_deref() == Ok("session") {
+            Connection::session().await
+        } else {
+            Connection::system().await
+        }
+        .map_err(explain)?;
+        Ok(Client { conn })
+    }
+
+    pub async fn connect_to(address: &str) -> Result<Client> {
+        let conn = zbus::connection::Builder::address(address)
+            .build()
+            .await
+            .map_err(explain)?;
+        Ok(Client { conn })
+    }
+
+    async fn proxy(
+        &self,
+        dest: &'static str,
+        path: &'static str,
+        iface: &'static str,
+    ) -> Result<zbus::Proxy<'static>> {
+        zbus::proxy::Builder::new(&self.conn)
+            .destination(dest)
+            .path(path)
+            .interface(iface)
+            .cache_properties(zbus::proxy::CacheProperties::No)
+            .build()
+            .await
+            .map_err(explain)
+    }
+
+    async fn own(&self) -> Result<zbus::Proxy<'static>> {
+        self.proxy(NAME, PATH, IFACE).await
+    }
+
+    async fn json(
+        &self,
+        method: &str,
+        body: &(impl serde::Serialize + zbus::wire::DynamicType),
+    ) -> Result<Value> {
+        let text: String = self
+            .own()
+            .await?
+            .call(method, body)
+            .await
+            .map_err(explain)?;
+        serde_json::from_str(&text).map_err(explain)
+    }
+
+    pub async fn status(&self) -> Result<Value> {
+        self.json("Status", &()).await
+    }
+
+    pub async fn journal(&self, n: u32) -> Result<Value> {
+        self.json("Journal", &(n,)).await
+    }
+
+    pub async fn settings(&self) -> Result<Value> {
+        self.json("Settings", &()).await
+    }
+
+    pub async fn inventory(&self) -> Result<Value> {
+        self.json("Inventory", &()).await
+    }
+
+    pub async fn learned(&self) -> Result<Value> {
+        self.json("LearnedJson", &()).await
+    }
+
+    pub async fn set_profile(&self, profile: &str) -> Result<()> {
+        self.proxy(PPD, PPD_PATH, PPD)
+            .await?
+            .set_property("ActiveProfile", profile)
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn set_auto(&self, on: bool) -> Result<()> {
+        self.own()
+            .await?
+            .set_property("AutoMode", on)
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn set_learning(&self, on: bool) -> Result<()> {
+        self.own()
+            .await?
+            .set_property("Learning", on)
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn undo(&self, setting: &str) -> Result<String> {
+        self.own()
+            .await?
+            .call("Undo", &(setting,))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn restore(&self) -> Result<Value> {
+        self.json("Restore", &()).await
+    }
+
+    pub async fn set_setting(&self, setting: &str, value: &str, allow_risky: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetSetting", &(setting, value, allow_risky))
+            .await
+            .map_err(explain)
+    }
+
+    /// Returns why safe mode is still on ("" if it is off).
+    pub async fn set_safe_mode(&self, on: bool) -> Result<String> {
+        self.own()
+            .await?
+            .call("SetSafeMode", &(on,))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn forget(&self, setting: &str) -> Result<bool> {
+        self.own()
+            .await?
+            .call("Forget", &(setting,))
+            .await
+            .map_err(explain)
+    }
+}

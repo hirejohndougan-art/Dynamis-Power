@@ -598,3 +598,102 @@ fn learning_keeps_only_what_saves_power_without_lag() {
     stop.store(true, Ordering::Relaxed);
     plant.join().unwrap();
 }
+
+#[test]
+fn the_app_client_can_do_everything_it_needs() {
+    let Some(env) = Env::new("client") else {
+        return;
+    };
+    let _d = Guard(env.daemon("state"));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+
+        let s = c.status().await.unwrap();
+        assert_eq!(s["profile"], "balanced");
+        assert_eq!(s["power"]["battery_pct"], 79);
+        assert_eq!(s["power"]["on_ac"], false);
+        assert!(
+            s["power"]["hours_left"].as_f64().unwrap() > 1.0,
+            "{}",
+            s["power"]
+        );
+        assert_eq!(s["safe_mode"], serde_json::Value::Null);
+
+        c.set_profile("power-saver").await.unwrap();
+        assert_eq!(c.status().await.unwrap()["profile"], "power-saver");
+
+        c.set_setting("kernel.nmi_watchdog", "off", false)
+            .await
+            .unwrap();
+        assert_eq!(env.epp(), "power");
+        let settings = c.settings().await.unwrap();
+        let nmi = settings
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == "kernel.nmi_watchdog")
+            .unwrap()
+            .clone();
+        assert_eq!(
+            (nmi["current"].as_str(), nmi["original"].as_str()),
+            (Some("off"), Some("on"))
+        );
+
+        let msg = c.undo("kernel.nmi_watchdog").await.unwrap();
+        assert!(msg.contains("back to on"), "{msg}");
+
+        let journal = c.journal(50).await.unwrap();
+        let first = &journal.as_array().unwrap()[0];
+        assert_eq!(first["event"], "restore", "newest first: {first}");
+        assert_eq!(first["label"], "Watchdog wakeups");
+
+        // Risky settings are refused without an explicit yes.
+        let err = c.set_setting("cpu.turbo", "off", false).await;
+        assert!(err.is_ok(), "turbo is Safe, so this works: {err:?}");
+
+        // Restore puts everything back and switches auto mode off.
+        c.set_auto(true).await.unwrap();
+        let restored = c.restore().await.unwrap();
+        assert!(
+            restored
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|r| r["id"] == "cpu.turbo"),
+            "{restored}"
+        );
+        assert_eq!(env.epp(), "balance_performance");
+        assert_eq!(c.status().await.unwrap()["auto"]["on"], false);
+
+        // Safe mode blocks changes, with a sentence a person can read.
+        assert!(c.set_safe_mode(true).await.unwrap().contains("app"));
+        let err = c.set_profile("performance").await.unwrap_err();
+        assert!(err.contains("safe mode"), "{err}");
+        assert_eq!(c.set_safe_mode(false).await.unwrap(), "");
+
+        let inv = c.inventory().await.unwrap();
+        assert_eq!(inv["machine"]["model"], "Synthetic Laptop 14");
+        assert!(c.learned().await.unwrap()["records"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    });
+}
+
+#[test]
+fn the_client_explains_a_missing_service() {
+    let Some(env) = Env::new("noservice") else {
+        return;
+    };
+    zbus::block_on(async {
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let err = c.status().await.unwrap_err();
+        assert!(err.contains("not running"), "{err}");
+    });
+}

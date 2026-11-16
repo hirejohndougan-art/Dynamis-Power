@@ -19,6 +19,7 @@ pub mod gauge;
 pub mod health;
 pub mod inventory;
 pub mod logfmt;
+pub mod overview;
 pub mod profiles;
 pub mod quirks;
 pub mod report;

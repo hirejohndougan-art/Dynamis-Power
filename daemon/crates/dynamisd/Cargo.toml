@@ -13,3 +13,6 @@ futures-lite = "2.6.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 zbus = "6"
+
+[dev-dependencies]
+dynamis-client = { path = "../dynamis-client" }

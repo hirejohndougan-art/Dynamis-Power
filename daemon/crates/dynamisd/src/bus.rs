@@ -437,6 +437,101 @@ impl DynamisPower {
         self.0.lock().learn.status()
     }
 
+    // --- For the app. Reads need no permission; changes ask polkit. -------
+
+    /// Status summary for the app (JSON).
+    fn status(&self) -> String {
+        self.0.lock().status_json().to_string()
+    }
+
+    /// The last `n` journal entries, newest first (JSON).
+    fn journal(&self, n: u32) -> fdo::Result<String> {
+        self.0
+            .lock()
+            .journal_json(n as usize)
+            .map(|v| v.to_string())
+            .map_err(fdo::Error::Failed)
+    }
+
+    /// Every setting with its current and original value (JSON).
+    fn settings(&self) -> fdo::Result<String> {
+        self.0
+            .lock()
+            .settings_json()
+            .map(|v| v.to_string())
+            .map_err(fdo::Error::Failed)
+    }
+
+    /// Hardware summary (no serial numbers) for exported logs (JSON).
+    fn inventory(&self) -> String {
+        self.0.lock().inventory_json().to_string()
+    }
+
+    /// Put one setting back to its original value. Returns a sentence.
+    async fn undo(
+        &self,
+        setting: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<String> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let r = self.0.lock().undo(&setting).map_err(fdo::Error::Failed);
+        notify_auto(conn, &self.0).await;
+        r
+    }
+
+    /// Restore every original setting; also switches auto mode and learning
+    /// off. Works in safe mode. Returns what was restored (JSON).
+    async fn restore(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<String> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let now = self.0.epoch.elapsed().as_secs_f64();
+        let r = self
+            .0
+            .lock()
+            .restore_all(now)
+            .map(|v| v.to_string())
+            .map_err(fdo::Error::Failed);
+        notify(conn, &self.0).await;
+        notify_auto(conn, &self.0).await;
+        r
+    }
+
+    /// Change one setting (Advanced). `allow_risky` must be true for risky
+    /// and experimental settings; the app sends it only after an explicit yes.
+    async fn set_setting(
+        &self,
+        setting: String,
+        value: String,
+        allow_risky: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .set_setting(&setting, &value, allow_risky)
+            .map_err(fdo::Error::Failed)
+    }
+
+    /// Switch safe mode on or off. Returns why it is still on, or "".
+    async fn set_safe_mode(
+        &self,
+        on: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<String> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .set_safe_mode(on)
+            .map(|w| w.unwrap_or_default())
+            .map_err(fdo::Error::Failed)
+    }
+
     /// Every calibration result and the display model, as JSON.
     fn learned_json(&self) -> String {
         let c = self.0.lock();

@@ -11,6 +11,7 @@
 //! It never wakes up on its own: with nobody calling it, it sleeps until a
 //! D-Bus message arrives. It has no network access (see the systemd unit).
 
+mod api;
 mod bus;
 mod core;
 mod learn;

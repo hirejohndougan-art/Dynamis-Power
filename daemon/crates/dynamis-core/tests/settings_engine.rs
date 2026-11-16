@@ -771,3 +771,31 @@ mod unclean_boots {
         assert_eq!(events, ["start", "done", "start", "done"]);
     }
 }
+
+#[test]
+fn undo_one_setting() {
+    let sb = Sandbox::new();
+    let mut e = sb.engine();
+    e.apply(&req("vm.swappiness", "10")).unwrap();
+    e.apply(&req("kernel.nmi_watchdog", "off")).unwrap();
+    assert_eq!(e.restore_one("vm.swappiness").unwrap(), Some("60".into()));
+    assert_eq!(sb.file("/proc/sys/vm/swappiness"), "60");
+    assert_eq!(
+        sb.file("/proc/sys/kernel/nmi_watchdog"),
+        "0",
+        "only the one setting"
+    );
+    assert_eq!(
+        e.restore_one("audio.power_save").unwrap(),
+        None,
+        "never changed"
+    );
+    let rows = dynamis_core::overview::settings(&sb.root(), &e);
+    let nmi = rows.iter().find(|r| r.id == "kernel.nmi_watchdog").unwrap();
+    assert_eq!(
+        (nmi.current.as_deref(), nmi.original.as_deref()),
+        (Some("off"), Some("on"))
+    );
+    let aspm = rows.iter().find(|r| r.id == "pcie.aspm").unwrap();
+    assert!(!aspm.not_allowed.is_empty(), "quirk shown");
+}

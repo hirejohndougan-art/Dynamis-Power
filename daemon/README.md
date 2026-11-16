@@ -142,6 +142,22 @@ dynamis auto off
 - Media, screen lock and games are reported by `dynamis-agent`, which starts at login (log out and in once after installing).
 - The rules and every scenario they are tested against are in `crates/dynamis-core/src/auto.rs` and `../tests/scenarios/`. To add a case, copy a scenario file. `sudo dynamis journal` shows it; `sudo dynamis unblock <id>` allows it again.
 
+### The service's own D-Bus interface
+
+`net.dynamis.Power` at `/net/dynamis/Power`, interface `net.dynamis.Power1`. Reads need no permission; changes ask polkit (the person at the laptop is allowed). The app uses it through `crates/dynamis-client`.
+
+| Member | Kind | What |
+| --- | --- | --- |
+| `AutoMode`, `Learning` | property (read/write) | Switch auto mode or learning |
+| `Workload`, `AutoReason`, `LearningStatus` | property | What auto mode sees and why; what learning is doing |
+| `Status()` | method → JSON | Everything the app's Home and Battery screens show |
+| `Journal(n)` | method → JSON | Last `n` journal entries, newest first, with plain names |
+| `Settings()`, `Inventory()`, `LearnedJson()` | method → JSON | Settings overview; hardware summary; test results and display model |
+| `Undo(setting)`, `Forget(setting)` | method | Put one setting back; forget what was learned about it |
+| `Restore()` | method → JSON | Restore every original setting (switches auto mode and learning off; works in safe mode) |
+| `SetSetting(setting, value, allow_risky)`, `SetSafeMode(on)` | method | Change one setting; safe mode on or off |
+| `ReportSession(facts)` | method | For the session agent only |
+
 ### Learning
 
 ```sh

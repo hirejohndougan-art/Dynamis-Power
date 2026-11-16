@@ -494,6 +494,34 @@ impl Engine {
         Ok(done)
     }
 
+    /// Put one setting back to its original value (Undo in the app).
+    /// Returns the original value, or `None` if it was never changed.
+    pub fn restore_one(&mut self, id: &str) -> Result<Option<String>> {
+        if self.pending().is_some_and(|p| p.id == id) {
+            self.revert("undo requested")?;
+        }
+        let Some(original) = self.baseline().get(id).cloned() else {
+            return Ok(None);
+        };
+        let s = settings::by_id(id).ok_or_else(|| EngineError::UnknownSetting(id.into()))?;
+        if s.read(&self.root).ok().as_deref() == Some(original.as_str()) {
+            return Ok(Some(original));
+        }
+        let result = self.put_back(s, &original);
+        self.log(
+            "restore",
+            id,
+            None,
+            Some(&original),
+            &format!("undo; {result}"),
+        )?;
+        if result == "ok" {
+            Ok(Some(original))
+        } else {
+            Err(EngineError::Write(result))
+        }
+    }
+
     pub fn unblock(&mut self, id: &str) -> Result<bool> {
         let mut b: Blocked = read_json(&self.dir.join("blocked.json")).unwrap_or_default();
         let was = b.blocked.remove(id).is_some();
