@@ -119,6 +119,36 @@ async fn set_auto_prefs(conn: State<'_, Conn>, prefs: Value) -> Result<(), Strin
     client(&conn).await?.set_auto_prefs(&prefs).await
 }
 
+/// Open the project's new-issue page with a title and body filled in, in
+/// the person's browser. Only this one address is ever opened.
+#[tauri::command]
+fn open_issue(title: String, body: String) -> Result<(), String> {
+    fn enc(s: &str) -> String {
+        let mut out = String::new();
+        for b in s.bytes() {
+            if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
+                out.push(b as char);
+            } else {
+                out.push_str(&format!("%{b:02X}"));
+            }
+        }
+        out
+    }
+    // Keep the address a sensible length; the file carries the details.
+    let body: String = body.chars().take(4000).collect();
+    let title: String = title.chars().take(200).collect();
+    let url = format!(
+        "https://github.com/hirejohndougan-art/Dynamis-Power/issues/new?title={}&body={}",
+        enc(&title),
+        enc(&body)
+    );
+    std::process::Command::new("xdg-open")
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("could not open the browser: {e}"))
+}
+
 /// Save an exported log into the person's Downloads folder (or home folder
 /// if there is none). Returns the full path, to show to them.
 #[tauri::command]
@@ -381,7 +411,8 @@ fn main() {
             advise,
             set_dry_run,
             set_kept,
-            save_file
+            save_file,
+            open_issue
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Dynamis Power app");

@@ -46,6 +46,8 @@ export interface Status {
   /** "It feels slow" is in force until this time. */
   relief?: number | null;
   learning_strict?: boolean;
+  /** Parts of the system the app needs that are missing. */
+  missing_parts?: ("systemd" | "polkit")[];
   /** Settings set by hand that are applied again after restarts and sleep. */
   kept?: {
     settings: { id: string; label: string; value: string; trusted: boolean }[];
@@ -307,6 +309,8 @@ export interface Backend {
   /** "tlp" or "tuned": text only, nothing is written. */
   advise(format: string): Promise<string>;
   setDryRun(on: boolean): Promise<void>;
+  /** Open the project's new-issue page, filled in, in the browser. */
+  openIssue(title: string, body: string): Promise<void>;
   /** Save an exported file; returns where it went. */
   saveFile(name: string, contents: string): Promise<string>;
 }

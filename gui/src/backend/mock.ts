@@ -627,6 +627,7 @@ export function mockBackend(): Backend {
       dryRun = on;
       log({ event: on ? "dry-run-on" : "dry-run-off", id: "", label: "", reason: "" });
     },
+    openIssue: async () => {},
     trayHost: async () => true,
     setTray: async (on) => { tray = on; },
     saveFile: async (name, contents) => {

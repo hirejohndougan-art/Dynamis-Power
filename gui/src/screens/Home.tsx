@@ -165,6 +165,11 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
       </header>
 
       <UncleanNotice s={s} />
+      {(s.missing_parts ?? []).length > 0 && (
+        <p className="notice" role="alert">
+          {(s.missing_parts ?? []).map((m) => t(m === "polkit" ? "missing_polkit" : "missing_systemd")).join(" ")}
+        </p>
+      )}
       {s.safe_mode && (
         <div className="notice" role="alert">
           <div className="stack" style={{ gap: 4 }}>

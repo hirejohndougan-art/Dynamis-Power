@@ -49,6 +49,7 @@ export const tauriBackend: Backend = {
   trayShown: () => invoke("tray_shown"),
   setTray: (on) => invoke("set_tray", { on }),
   trayHost: () => invoke("tray_host"),
+  openIssue: (title, body) => invoke("open_issue", { title, body }),
   profiles: () => invoke("profiles"),
   setProfileOverrides: (overrides) => invoke("set_profile_overrides", { overrides }),
   sensors: () => invoke("sensors"),

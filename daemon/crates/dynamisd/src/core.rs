@@ -108,6 +108,9 @@ pub struct Core {
     pub recal: crate::recal::Recal,
     /// "It feels slow", for the rest of the day.
     pub relief: crate::relief::Relief,
+    /// Parts of the system the app needs that are missing (`systemd`,
+    /// `polkit`), found at startup.
+    pub missing_parts: Vec<&'static str>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -184,6 +187,7 @@ impl Core {
             brightness,
             recal,
             relief,
+            missing_parts: Vec::new(),
         };
         let on = core.relief.active(unix_now());
         core.learn.relief = on;

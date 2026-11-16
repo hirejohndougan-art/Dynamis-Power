@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- *Report a problem* in Activity (everyday problem §10): one file with everything useful, privacy filter on, saved to Downloads, then the project's new-issue page opens with the description and a short summary filled in. The app opens only that one address.
+- The service checks for systemd and polkit at startup and the Dashboard says what is missing (`missing_parts` in `Status`), instead of changes failing quietly.
+
 - `net.wake_on_lan`: whether wired network cards may wake the laptop from sleep, through the standard device wake-up switch (TLP's `WOL_DISABLE`, which imports to it).
 - The mode to start with (TLP's `TLP_DEFAULT_MODE`): Modes → "When the computer starts", the mode last used (as before) or a chosen mode. `startup_mode` in the auto preferences.
 

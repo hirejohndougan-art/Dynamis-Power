@@ -195,6 +195,45 @@ async fn run(args: Args) -> Result<(), String> {
             other => format!("could not connect to D-Bus: {other}"),
         })?;
 
+    // What the system lacks for the app to work (everyday problem §9):
+    // said once in the log and shown by the app, instead of failing quietly.
+    if svc.polkit {
+        let mut missing = Vec::new();
+        if !std::path::Path::new("/run/systemd/system").exists() {
+            missing.push("systemd");
+        }
+        let polkit = zbus::fdo::DBusProxy::new(&conn)
+            .await
+            .ok()
+            .map(|d| async move {
+                let name = zbus::names::BusName::try_from("org.freedesktop.PolicyKit1").ok()?;
+                let owned = d.name_has_owner(name.clone()).await.unwrap_or(false);
+                let activatable = d
+                    .list_activatable_names()
+                    .await
+                    .map(|l| l.iter().any(|n| n.as_str() == "org.freedesktop.PolicyKit1"))
+                    .unwrap_or(false);
+                Some(owned || activatable)
+            });
+        let has_polkit = match polkit {
+            Some(f) => f.await.unwrap_or(false),
+            None => false,
+        };
+        if !has_polkit {
+            missing.push("polkit");
+        }
+        for m in &missing {
+            eprintln!(
+                "dynamisd: {m} is missing: the app cannot change settings without it \
+                 (the command line with sudo still works)"
+            );
+        }
+        svc.core
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .missing_parts = missing;
+    }
+
     {
         let mut core = svc.core.lock().unwrap_or_else(|p| p.into_inner());
         let names: Vec<&str> = core.available().iter().map(|p| p.as_str()).collect();

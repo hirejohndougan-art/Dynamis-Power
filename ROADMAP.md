@@ -61,8 +61,8 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [x] Notice when firmware ignores the charge limit, and say so (§7)
 - [x] After an unclean shutdown, say what was happening (sleep, wake, driver error, a recent change); if freezes continue in safe mode, say Dynamis Power is unlikely to be the cause (§8)
 - [ ] Fedora RPM and Arch PKGBUILD, built by CI (§9)
-- [ ] Clear message when systemd or polkit is missing (§9)
-- [ ] "Report a problem": one file with everything useful, privacy filter on, and a pre-filled issue page (§10)
+- [x] Clear message when systemd or polkit is missing (§9)
+- [x] "Report a problem": one file with everything useful, privacy filter on, and a pre-filled issue page (§10)
 
 **Follow-up (needs research, real hardware or a decision first):**
 

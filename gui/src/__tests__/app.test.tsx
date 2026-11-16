@@ -418,4 +418,20 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.queryByText(/Faster settings until/)).toBeNull());
     await backend.setProfile("balanced");
   });
+  it("reports a problem: one file, then the issue page", async () => {
+    const open = vi.spyOn(backend, "openIssue");
+    // jsdom has no file downloads.
+    URL.createObjectURL = vi.fn(() => "blob:test");
+    URL.revokeObjectURL = vi.fn();
+    window.location.hash = "#activity";
+    render(<App />);
+    await screen.findByRole("button", { name: "Export logs" });
+    await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Report a problem" })));
+    const dialog = screen.getByRole("dialog", { name: "Report a problem", hidden: true });
+    await act(async () => fireEvent.change(within(dialog).getByRole("textbox", { hidden: true }), { target: { value: "Wi-Fi drops after sleep" } }));
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Save the file and open the page", hidden: true })));
+    await waitFor(() => expect(dialog.textContent).toMatch(/Saved to/), { timeout: 3000 });
+    expect(open).toHaveBeenCalledWith("Problem: Wi-Fi drops after sleep", expect.stringContaining("Please attach the file"));
+    open.mockRestore();
+  });
 });

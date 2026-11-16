@@ -24,6 +24,7 @@ export function Activity(props: { version: string; onChange: () => void }) {
   const [tab, setTab] = useState<"activity" | "logs">("activity");
   const [filter, setFilter] = useState<Category | "all">("all");
   const [exporting, setExporting] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   const items = useMemo(
     () => groupAuto((journal.data ?? []).map(describe).filter((i): i is Item => !!i && (filter === "all" || i.category === filter))),
@@ -34,7 +35,10 @@ export function Activity(props: { version: string; onChange: () => void }) {
     <>
       <header className="page-head">
         <h1>{t("activity_title")}</h1>
-        <button type="button" className="btn" onClick={() => setExporting(true)}>{t("export")}</button>
+        <div className="row">
+          <button type="button" className="btn" onClick={() => setReporting(true)}>{t("report_button")}</button>
+          <button type="button" className="btn" onClick={() => setExporting(true)}>{t("export")}</button>
+        </div>
       </header>
 
       <div className="tabs" role="tablist">
@@ -96,6 +100,7 @@ export function Activity(props: { version: string; onChange: () => void }) {
         <Logs entries={journal.data ?? []} />
       )}
 
+      {reporting && <ReportDialog onClose={() => setReporting(false)} version={props.version} journal={journal.data ?? []} />}
       <ExportDialog open={exporting} onClose={() => setExporting(false)} version={props.version} journal={journal.data ?? []} />
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
@@ -211,6 +216,76 @@ function ExportDialog(props: { open: boolean; onClose: () => void; version: stri
       <p className="field-label" style={{ marginTop: 14 }}>{t("export_preview")}</p>
       <pre className="preview" tabIndex={0}>{text.slice(0, 4000)}</pre>
       <p className="muted small">{note ?? t("export_note")}</p>
+    </Dialog>
+  );
+}
+
+/** "Report a problem" (everyday problem §10): one file with everything
+ * useful, privacy filter on, then a filled-in issue page to attach it to. */
+function ReportDialog(props: { onClose: () => void; version: string; journal: JournalEntry[] }) {
+  const [what, setWhat] = useState("");
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const send = async () => {
+    setError(null);
+    try {
+      const [learned, inventory, settings, diagnostics] = await Promise.all([
+        backend.learned(),
+        backend.inventory(),
+        backend.settings(),
+        backend.diagnostics().catch(() => null),
+      ]);
+      const data = { journal: props.journal, learned, inventory, settings, diagnostics, version: props.version };
+      const opts: ExportOptions = { journal: true, results: true, hardware: true, settings: true, diagnostics: true, rangeDays: 7, format: "text", privacy: true };
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+      const name = `dynamis-problem-${stamp}.txt`;
+      const where = await backend.saveFile(name, build(opts, data));
+      const first = what.trim().split("\n")[0].slice(0, 80);
+      const body = [
+        "**What went wrong**",
+        what.trim() || "(not described)",
+        "",
+        "**Summary** (no personal data)",
+        "```",
+        summary(data),
+        "```",
+        "",
+        `Please attach the file \`${name}\` (saved by the app; personal data removed).`,
+      ].join("\n");
+      await backend.openIssue(first ? `Problem: ${first}` : "A problem with Dynamis Power", body);
+      setDone(t("report_done", { where }));
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e));
+    }
+  };
+  return (
+    <Dialog
+      open
+      onClose={props.onClose}
+      title={t("report_title")}
+      actions={
+        done ? (
+          <button type="button" className="btn btn-primary" onClick={props.onClose}>{t("close")}</button>
+        ) : (
+          <>
+            <button type="button" className="btn" onClick={props.onClose}>{t("cancel")}</button>
+            <button type="button" className="btn btn-primary" onClick={send}>{t("report_send")}</button>
+          </>
+        )
+      }
+    >
+      {done ? (
+        <p role="status">{done}</p>
+      ) : (
+        <>
+          <p>{t("report_desc")}</p>
+          <label className="field">
+            <span className="field-label">{t("report_what")}</span>
+            <textarea rows={4} value={what} onChange={(e) => setWhat(e.target.value)} />
+          </label>
+          {error && <p className="notice" role="alert">{error}</p>}
+        </>
+      )}
     </Dialog>
   );
 }

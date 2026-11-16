@@ -97,6 +97,7 @@ impl Core {
             // "It feels slow" in force until this time (Unix seconds).
             "relief": self.relief.until.filter(|u| *u > crate::core::unix_now()),
             "learning_strict": self.learn.strict,
+            "missing_parts": self.missing_parts,
             "missing_modes": profiles::missing(&self.root).into_iter().map(|(p, why)| json!({"profile": p.as_str(), "why": why})).collect::<Vec<_>>(),
             "pending": engine.as_ref().and_then(|e| e.pending()).map(|p| json!({
                 "id": p.id, "label": label(&p.id), "to": p.to, "trial": p.trial_deadline.is_some(),
