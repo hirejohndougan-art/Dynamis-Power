@@ -1,0 +1,30 @@
+#!/bin/sh
+# dynamis-power-service: after removing or purging.
+set -e
+
+state=/var/lib/dynamis-power
+
+case "$1" in
+    remove|purge)
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+            systemctl reload dbus 2>/dev/null || systemctl reload dbus-broker 2>/dev/null || true
+            # Turn back on whatever the install switched off.
+            if [ -f "$state/replaced-services" ]; then
+                while read -r svc; do
+                    [ -n "$svc" ] || continue
+                    systemctl unmask "$svc" 2>/dev/null || true
+                    systemctl enable --now "$svc" 2>/dev/null || true
+                done < "$state/replaced-services"
+            fi
+        fi
+        rm -f "$state/replaced-services"
+        ;;
+esac
+
+if [ "$1" = "purge" ]; then
+    # The journal, learned settings and downloaded quirk list.
+    rm -rf "$state" /var/lib/dynamis-power-sync /var/lib/private/dynamis-power-sync
+fi
+
+exit 0

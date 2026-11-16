@@ -45,7 +45,13 @@ jobs:
       - name: CLI runs against the fixture
         run: cargo run -q -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
       - name: Install scripts pass shellcheck
-        run: shellcheck dist/install.sh dist/uninstall.sh scripts/phase1-test.sh
+        run: shellcheck dist/install.sh dist/uninstall.sh scripts/phase1-test.sh packaging/build-deb.sh packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm
+      - name: Build the service package
+        run: ./packaging/build-deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynamis-power-service-deb
+          path: daemon/target/deb/*.deb
       - name: CLI changes and restores a copy of the fixture
         run: |
           cp -a ../tests/fixtures/sysfs/synthetic-laptop "$RUNNER_TEMP/fx"

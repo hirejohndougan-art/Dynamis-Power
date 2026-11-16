@@ -1,0 +1,15 @@
+#!/bin/sh
+# dynamis-power-service: before removing (not before an upgrade).
+set -e
+
+if [ "$1" = "remove" ]; then
+    if [ -d /run/systemd/system ]; then
+        # Stop first, so nothing re-applies a change while restoring.
+        systemctl disable --now dynamisd.service dynamis-sync.timer 2>/dev/null || true
+        systemctl --global disable dynamis-agent.service 2>/dev/null || true
+    fi
+    # Put every original setting back while the program is still here.
+    /usr/bin/dynamis restore >/dev/null 2>&1 || echo "dynamis-power: restore reported a problem; settings return to normal at the next reboot anyway" >&2
+fi
+
+exit 0

@@ -1,0 +1,38 @@
+#!/bin/sh
+# dynamis-power-service: after installing or upgrading.
+set -e
+
+state=/var/lib/dynamis-power
+
+if [ "$1" = "configure" ]; then
+    install -d -m 700 "$state"
+
+    # Only touch services when systemd is actually running (not in a
+    # container or chroot build).
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl reload dbus 2>/dev/null || systemctl reload dbus-broker 2>/dev/null || true
+
+        if [ -z "$2" ]; then
+            # First install: switch off any other power-profile service, and
+            # remember which, so removing this package turns it back on.
+            : > "$state/replaced-services"
+            for svc in power-profiles-daemon tuned-ppd; do
+                if systemctl is-enabled --quiet "$svc" 2>/dev/null || systemctl is-active --quiet "$svc" 2>/dev/null; then
+                    echo "$svc" >> "$state/replaced-services"
+                    systemctl disable --now "$svc" 2>/dev/null || true
+                    systemctl mask "$svc" 2>/dev/null || true
+                fi
+            done
+            systemctl enable --now dynamisd.service || true
+            systemctl enable --now dynamis-sync.timer || true
+            # For every user, from their next login.
+            systemctl --global enable dynamis-agent.service || true
+        else
+            # Upgrade: pick up the new program.
+            systemctl try-restart dynamisd.service || true
+        fi
+    fi
+fi
+
+exit 0

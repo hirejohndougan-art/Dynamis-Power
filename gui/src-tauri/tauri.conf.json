@@ -26,10 +26,24 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb"],
+    "targets": [
+      "deb"
+    ],
     "category": "Utility",
     "shortDescription": "Power manager that learns your laptop",
     "longDescription": "Dynamis Power measures your laptop and tunes its power settings to it, keeping only changes that measurably help. This package is the app; it needs the Dynamis Power service.",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png"]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "dynamis-power-service"
+        ]
+      }
+    }
   }
 }

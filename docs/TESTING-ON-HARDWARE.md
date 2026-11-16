@@ -92,11 +92,11 @@ This step **changes settings**, so do it only after the read-only test above loo
 
    Use the laptop for a minute, then type `y` to keep it or let it time out. Then `sudo dynamis restore`.
 
-2. Install the service: `sudo ./dist/install.sh` from the `daemon` folder.
+2. Install the service: either the packages (see "Installing from packages" in [../daemon/README.md](../daemon/README.md)), or `sudo ./dist/install.sh` from the `daemon` folder.
 3. Click the battery icon in the panel and switch between the power modes. Each switch should show up in `sudo dynamis journal`, and `powerprofilesctl` should agree with the panel.
 4. Reboot. The mode you chose should still be selected, and `journalctl -u dynamisd -b` should show it being applied.
 5. Check `sudo dynamis quirks` and `systemctl list-timers dynamis-sync.timer`: the quirk list check should be scheduled.
-6. Uninstall with `sudo ./dist/uninstall.sh`. `powerprofilesctl` should then show power-profiles-daemon's own driver again.
+6. Uninstall with `sudo apt remove dynamis-power dynamis-power-service` (packages) or `sudo ./dist/uninstall.sh` (script). `powerprofilesctl` should then show power-profiles-daemon's own driver again.
 
 ### Auto mode (phase 3)
 

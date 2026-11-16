@@ -19,7 +19,7 @@ Phase 3 is built: auto mode with rules over eight workload classes, the session 
 
 Phase 4 is built: calibration experiments, learned settings applied on battery, the display power model, and `dynamis learn` / `dynamis learned`. On a simulated laptop it finds real savings and rejects changes that add lag. Whether it beats stock Balanced on real laptops is what the gate measures.
 
-The desktop app (part of phase 8) was started early, because it does not depend on the phase 4 result and makes phases 1–4 usable without a terminal: Home, Battery, Activity with export, and Advanced. See [gui/README.md](gui/README.md).
+The desktop app and `.deb` packages for it and the service (part of phase 8) were started early, because it does not depend on the phase 4 result and makes phases 1–4 usable without a terminal: Home, Battery, Activity with export, and Advanced. See [gui/README.md](gui/README.md).
 
 **Phase 4 is the go/no-go point.** If per-setting calibration cannot beat stock settings on battery, the approach gets rethought before more is built.
 

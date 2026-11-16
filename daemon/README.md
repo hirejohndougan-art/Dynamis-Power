@@ -112,6 +112,18 @@ Useful options:
 
 **Run with `sudo` to see CPU power.** On recent kernels the CPU energy counters can only be read by root. Everything else works as a normal user. Reading is all the program does, with or without `sudo`.
 
+## Installing from packages
+
+The easy way, with no compiling on the laptop once the packages exist:
+
+```sh
+cd daemon && ./packaging/build-deb.sh                  # the service package
+cd ../gui && npm install && npx tauri build --bundles deb   # the app package
+cd .. && sudo apt install ./daemon/target/deb/dynamis-power-service_*.deb ./gui/src-tauri/target/release/bundle/deb/*.deb
+```
+
+Or download both `.deb` files from a CI run's *Artifacts* and install them the same way. `sudo apt remove dynamis-power dynamis-power-service` restores every original setting and turns power-profiles-daemon back on. Details: [packaging/README.md](packaging/README.md).
+
 ## Running the service
 
 `dynamisd` replaces power-profiles-daemon: it serves the same D-Bus interface, so KDE's battery applet, GNOME's power menu and `powerprofilesctl` work unchanged.
