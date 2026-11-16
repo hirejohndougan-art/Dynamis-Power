@@ -17,7 +17,7 @@ The safety state lives in small plain files in `/var/lib/dynamis-power/`, separa
 | `pending.json` | The change in flight; its presence at start-up means the last change never finished |
 | `baseline.json` | Each setting's original value, recorded the first time it is changed and never overwritten |
 | `blocked.json` | Settings blocked after an unfinished or failed change, with the reason |
-| `lock` | PID of the process allowed to change settings |
+| `lock` | Kernel file lock (`flock`) held while changing settings; contains the holder's PID as a hint ([0008](0008-standard-profiles-through-the-engine.md)) |
 
 Every record carries `"v": 1`. The JSON files are written to a temporary file and renamed into place, so a crash leaves either the old file or the new one.
 

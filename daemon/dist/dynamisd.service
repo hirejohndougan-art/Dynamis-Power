@@ -1,0 +1,46 @@
+[Unit]
+Description=Dynamis Power (power profiles that learn your laptop)
+Documentation=https://github.com/hirejohndougan-art/Dynamis-Power
+# Only one service may own the power-profiles interface.
+Conflicts=power-profiles-daemon.service tuned-ppd.service
+After=dbus.service
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.UPower.PowerProfiles
+ExecStart=/usr/local/libexec/dynamisd
+Restart=on-failure
+RestartSec=5
+StateDirectory=dynamis-power
+StateDirectoryMode=0700
+
+# --- Hardening -------------------------------------------------------------
+# No network at all: the daemon only speaks D-Bus over a local socket.
+PrivateNetwork=yes
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+# The whole filesystem is read-only except the state directory and the kernel
+# interfaces under /sys and /proc/sys it tunes. ProtectKernelTunables= is
+# deliberately NOT set: it would make those read-only too.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+NoNewPrivileges=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# Well above the 20 MB target; a runaway daemon is stopped, not the laptop.
+MemoryMax=64M
+# TODO after the real-hardware test: drop capabilities to the minimum the
+# settings need (CapabilityBoundingSet=).
+
+[Install]
+WantedBy=graphical.target

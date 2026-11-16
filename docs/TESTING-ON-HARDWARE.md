@@ -65,6 +65,28 @@ dynamis report power.csv
 
 Attach `power.csv` and the report output to the hardware report issue. The log contains no personal information: only times, power, speed, lag, temperature and brightness.
 
+## Phase 2: the service (after phase 1 passes)
+
+This step **changes settings**, so do it only after the read-only test above looks right. Everything it changes is undone by `sudo dynamis restore`, by uninstalling, or by rebooting before the service is installed.
+
+1. Try one change by hand, with a trial so it undoes itself if the laptop misbehaves:
+
+   ```sh
+   sudo dynamis settings
+   sudo dynamis set cpu.epp power --trial 120
+   ```
+
+   Use the laptop for a minute, then type `y` to keep it or let it time out. Then `sudo dynamis restore`.
+
+2. Install the service: `sudo ./dist/install.sh` from the `daemon` folder.
+3. Click the battery icon in the panel and switch between the power modes. Each switch should show up in `sudo dynamis journal`, and `powerprofilesctl` should agree with the panel.
+4. Reboot. The mode you chose should still be selected, and `journalctl -u dynamisd -b` should show it being applied.
+5. Uninstall with `sudo ./dist/uninstall.sh`. `powerprofilesctl` should then show power-profiles-daemon's own driver again.
+
+Report anything odd in a bug report with `sudo dynamis journal --last 100` attached.
+
+**On a laptop that already freezes** (like the project's VivoBook), a freeze during these steps does not prove Dynamis Power caused it. After the reboot, check `sudo dynamis journal`: a `recover` line means a change was in progress at the time; no such line means nothing was being changed.
+
 ## Known limits
 
 - Whole-system power is only meaningful on battery. Plugged in, most laptops report nothing useful.

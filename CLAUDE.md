@@ -8,7 +8,7 @@ The project owner is a developer experienced in Electron and React who is newer 
 
 Phase 1 in progress: read-only sensors, hardware inventory and the `dynamis` CLI (`inventory`, `status`, `log`, `report`, `gauge`, `hardware-report`) are in `daemon/`. Remaining for the phase 1 gate: run docs/TESTING-ON-HARDWARE.md on real laptops and fix what it finds.
 
-Phase 2 started (fixture-tested only): setting plugins in `dynamis-core/src/settings/`, the change engine in `engine.rs` (journal, baseline, trials, crash recovery, safe mode, lock), the only write path in `writer.rs`, and CLI commands `settings`, `set`, `restore`, `journal`, `unblock`. Not yet: the daemon, D-Bus, health monitor, quirk list. See `ROADMAP.md`, `daemon/README.md` and the "What is implemented today" section of `docs/SAFETY.md`.
+Phase 2 started (fixture-tested only): setting plugins in `dynamis-core/src/settings/`, the change engine in `engine.rs` (journal, baseline, trials, crash recovery, safe mode, lock), the only write path in `writer.rs`, and CLI commands `settings`, `set`, `restore`, `journal`, `unblock`. `dynamisd` (in `daemon/crates/dynamisd/`) serves the standard power-profiles D-Bus interface with three profiles from `dynamis-core/src/profiles.rs`; install files in `daemon/dist/`. Not yet: health monitor, quirk list, fast loop, learner, app. See `ROADMAP.md`, `daemon/README.md` and the "What is implemented today" section of `docs/SAFETY.md`.
 
 Build and check: `cd daemon && cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test`.
 

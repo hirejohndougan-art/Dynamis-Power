@@ -37,11 +37,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: daemon
+      - name: Install D-Bus and shellcheck for the service tests
+        run: sudo apt-get update && sudo apt-get install -y dbus shellcheck
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - name: CLI runs against the fixture
         run: cargo run -q -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
+      - name: Install scripts pass shellcheck
+        run: shellcheck dist/install.sh dist/uninstall.sh
       - name: CLI changes and restores a copy of the fixture
         run: |
           cp -a ../tests/fixtures/sysfs/synthetic-laptop "$RUNNER_TEMP/fx"

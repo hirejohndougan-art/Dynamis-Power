@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Who may change power profiles. Installed to /usr/share/polkit-1/actions/.
+
+  The person sitting at the laptop (an active local session) may switch and
+  hold profiles without a password, as with other power-profile services.
+  Remote logins and background sessions may not.
+-->
+<policyconfig>
+  <vendor>Dynamis Power</vendor>
+  <vendor_url>https://github.com/hirejohndougan-art/Dynamis-Power</vendor_url>
+
+  <action id="net.dynamis.power.switch-profile">
+    <description>Switch the power profile</description>
+    <message>Authentication is required to switch the power profile.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="net.dynamis.power.hold-profile">
+    <description>Temporarily hold a power profile</description>
+    <message>Authentication is required to hold a power profile.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

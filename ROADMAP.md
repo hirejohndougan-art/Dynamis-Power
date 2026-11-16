@@ -13,7 +13,7 @@ Dynamis Power is built in eight phases. Each phase is usable on its own and ends
 | 7. Predict | "Last until" mode, adaptive charging, habits | Time targets are met within a margin |
 | 8. Release | Full app, shared results, optional AI helper | Public release with published benchmark data |
 
-Phase 2 groundwork (setting plugins, journal, trials, restore) was started while the phase 1 hardware test is pending, because it can be tested entirely on fixtures. Phase 2 does not count as done, and nothing from it should run on real hardware by default, until the phase 1 gate passes.
+Phase 2 so far: setting plugins, journal, trials, restore, the three standard profiles, and the `dynamisd` service with the standard D-Bus interface, install and clean uninstall. Still to do for phase 2: the quirk list and the health monitor. This was started while the phase 1 hardware test is pending, because it can be tested entirely on fixtures. Phase 2 does not count as done, and nothing from it should run on real hardware by default, until the phase 1 gate passes.
 
 **Phase 4 is the go/no-go point.** If per-setting calibration cannot beat stock settings on battery, the approach gets rethought before more is built.
 

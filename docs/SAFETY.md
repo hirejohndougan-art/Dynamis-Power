@@ -59,4 +59,15 @@ Phase 2 has started. These rails exist in code (`daemon/crates/dynamis-core/src/
 | Risk tiers | Risky and Experimental settings need `--allow-risky`; Advisory settings are never applied |
 | Runtime only | Plugins write only live kernel values under `/sys` and `/proc/sys`. Nothing is written to persistent configuration, so a reboot also undoes everything |
 
-Not yet built: the health monitor, the systemd watchdog, the quirk list and kill switch, pre-flight checks, the change rate limit, and the "three unclean boots" trigger for safe mode. Until the daemon exists, recovery runs the next time any `dynamis` command that changes settings is started, not at boot.
+The service, `dynamisd`, adds:
+
+| Rail | How |
+| --- | --- |
+| Recovery at boot | `dynamisd` opens the engine before anything else at start, so an unfinished change is undone and blocked at boot |
+| No network | The systemd unit sets `PrivateNetwork=yes`, `IPAddressDeny=any` and allows only local sockets |
+| Hardened service | Read-only filesystem except the state directory and the kernel settings it tunes, no new privileges, 64 MB memory cap, and more; see `daemon/dist/dynamisd.service` |
+| Who may change profiles | polkit: the person at the laptop yes, remote or background sessions no. If polkit cannot be asked, the answer is no |
+| One owner | Refuses to start if power-profiles-daemon, tuned-ppd or a second copy owns the interface, before touching any setting |
+| Clean uninstall | `daemon/dist/uninstall.sh` stops the service, restores every original setting, removes its files and turns back on the service it replaced |
+
+Not yet built: the health monitor, the systemd watchdog, the quirk list and kill switch, pre-flight checks, the change rate limit, the "three unclean boots" trigger for safe mode, and dropping capabilities to the minimum.

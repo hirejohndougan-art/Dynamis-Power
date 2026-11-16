@@ -1,6 +1,6 @@
 # daemon
 
-The Rust side of Dynamis Power. Today it holds phase 1 (sensors, a hardware inventory, logging) and the start of phase 2 (setting plugins and a safe change engine), all driven by the `dynamis` command line. The system service (`dynamisd`) comes later in phase 2.
+The Rust side of Dynamis Power. Today it holds phase 1 (sensors, a hardware inventory, logging) and phase 2 so far: setting plugins, a safe change engine, the three standard power profiles, and the `dynamisd` system service that the desktop's power slider talks to.
 
 **Only `set`, `restore` and `unblock` change anything.** Every other command only reads.
 
@@ -22,14 +22,20 @@ daemon/
       src/gauge.rs           battery gauge update rate and resolution
       src/selfstat.rs        the process's own CPU and memory use
       tests/                 tests against tests/fixtures/sysfs/
+      src/profiles.rs        power-saver / balanced / performance, chosen from what the machine offers
     dynamis-cli/             the `dynamis` command
+    dynamisd/                the system service: standard power-profiles D-Bus interface
+      src/core.rs            chosen profile, holds, applying (no D-Bus; unit-tested)
+      src/bus.rs             the D-Bus objects and polkit checks
+      tests/dbus.rs          end-to-end test on a private bus and a fixture copy
+  dist/                      systemd unit, D-Bus policy, polkit actions, install.sh, uninstall.sh
 ```
 
 Everything reads through `SysRoot`, so tests point it at a fixture directory instead of the real system. See [../tests/fixtures/README.md](../tests/fixtures/README.md).
 
 ## Building
 
-You need Rust 1.80 or newer. On Ubuntu, KDE neon or Debian:
+You need Rust 1.89 or newer. On Ubuntu, KDE neon or Debian:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # installs Rust; follow the prompts
@@ -39,7 +45,7 @@ cd dynamis-power/daemon
 cargo build --release
 ```
 
-The program is then at `target/release/dynamis` (under 1 MB).
+The programs are then at `target/release/dynamis` (under 1 MB) and `target/release/dynamisd` (about 2.5 MB).
 
 ## Using it
 
@@ -89,6 +95,24 @@ Useful options:
 | `journal` | `--last 100`, `--json` | More entries; JSON Lines |
 
 **Run with `sudo` to see CPU power.** On recent kernels the CPU energy counters can only be read by root. Everything else works as a normal user. Reading is all the program does, with or without `sudo`.
+
+## Running the service
+
+`dynamisd` replaces power-profiles-daemon: it serves the same D-Bus interface, so KDE's battery applet, GNOME's power menu and `powerprofilesctl` work unchanged.
+
+```sh
+cargo build --release
+sudo ./dist/install.sh        # shows what it will do and asks first
+powerprofilesctl              # should list the profiles, driver "dynamis"
+journalctl -u dynamisd        # what it did and why
+sudo ./dist/uninstall.sh      # restores every setting and turns power-profiles-daemon back on
+```
+
+- Today a profile changes the firmware power mode and the CPU speed preference, where the machine has them. Nothing is learned yet.
+- The profile you choose is remembered across reboots and re-applied at start.
+- `sudo dynamis restore` puts the original values back at any time, with or without the service.
+- The service refuses to start if power-profiles-daemon or tuned-ppd is running, before touching anything. `install.sh` stops and masks them, and `uninstall.sh` turns them back on.
+- If a change was interrupted (a freeze, a power cut), the service undoes it at start and blocks that setting. `sudo dynamis journal` shows it; `sudo dynamis unblock <id>` allows it again.
 
 ### Log columns
 
@@ -142,6 +166,19 @@ cargo run -- --root /tmp/fx --state-dir /tmp/fx-state set vm.swappiness 10 --tri
 4. Add the files it reads to a fixture, and a test in `crates/dynamis-core/tests/`.
 5. If it adds a log column, append it to `Row`, its CSV header and `to_csv`, and bump `LOG_FORMAT_VERSION`.
 6. Document it in [../docs/MEASUREMENT.md](../docs/MEASUREMENT.md).
+
+Run the service against a fixture copy on a private bus, with no polkit and no root:
+
+```sh
+cp -a ../tests/fixtures/sysfs/synthetic-laptop /tmp/fx
+dbus-daemon --session --address=unix:path=/tmp/fx-bus --nofork &
+DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/fx-bus cargo run -p dynamisd -- --session --root /tmp/fx --state-dir /tmp/fx-state
+# in another terminal, with the same DBUS_SESSION_BUS_ADDRESS:
+busctl --user set-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles \
+  org.freedesktop.UPower.PowerProfiles ActiveProfile s power-saver
+```
+
+`--session` only works together with `--root`, so the service can never change the real system without polkit.
 
 ### Adding a setting plugin
 

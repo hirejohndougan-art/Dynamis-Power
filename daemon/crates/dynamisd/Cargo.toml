@@ -1,0 +1,15 @@
+[package]
+name = "dynamisd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap.workspace = true
+dynamis-core = { version = "0.1.0", path = "../dynamis-core" }
+futures-lite = "2.6.1"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+zbus = "6"

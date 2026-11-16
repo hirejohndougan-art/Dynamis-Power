@@ -30,7 +30,7 @@ Dynamis Power is a small privileged daemon, a per-user session agent, and thin f
 
 ## Current state
 
-Code lives in `daemon/crates/`: `dynamis-core` (sensors, inventory, log format, setting plugins and the change engine) and `dynamis-cli` (the `dynamis` command). Phase 1 (measure) is waiting on its real-hardware test; phase 2 has started with setting plugins, the journal, trials, crash recovery, restore and safe mode, all driven from the command line. There is no daemon, D-Bus API or app yet. Everything below marked *planned* does not exist yet.
+Code lives in `daemon/crates/`: `dynamis-core` (sensors, inventory, log format, setting plugins, the change engine and the standard profiles), `dynamis-cli` (the `dynamis` command) and `dynamisd` (the system service serving the standard power-profiles D-Bus interface). Install files are in `daemon/dist/`. Phase 1 (measure) is waiting on its real-hardware test; phase 2 has setting plugins, the journal, trials, crash recovery, restore, safe mode, the three standard profiles and the service. There is no fast loop, learner or app yet. Everything below marked *planned* does not exist yet.
 
 How a change flows today:
 
@@ -96,7 +96,9 @@ The setting `id` is permanent. Renaming one breaks journals, learned data and sh
 | `/var/lib/dynamis-power/pending.json` **(built)** | The change in flight or under trial | JSON, `"v": 1`; present at start-up means recover |
 | `/var/lib/dynamis-power/baseline.json` **(built)** | Original value of each changed setting | JSON, `"v": 1`; never overwritten |
 | `/var/lib/dynamis-power/blocked.json` **(built)** | Settings blocked after an unfinished change | JSON, `"v": 1` |
-| `/var/lib/dynamis-power/lock` **(built)** | PID of the process changing settings | Text |
+| `/var/lib/dynamis-power/lock` **(built)** | Kernel file lock while changing settings; holder's PID as a hint | Text |
+| `/var/lib/dynamis-power/profile.json` **(built)** | The profile the user last chose | JSON, `"v": 1` |
+| `/var/lib/dynamis-power/replaced-services` **(built)** | Services `install.sh` turned off, for uninstall | Text, one per line |
 | `/var/lib/dynamis-power/state.db` | Samples, experiment records, learned settings | SQLite, versioned with migrations |
 | `/var/lib/dynamis-power/quirks/` | Downloaded signed quirk list | Signed JSON |
 | `/etc/dynamis-power/config.toml` | Admin settings and pinned values | TOML |

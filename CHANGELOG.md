@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Phase 2: the `dynamisd` system service.
+  - Serves the standard power-profiles D-Bus interface under both names, so the desktop's power slider and `powerprofilesctl` work. Includes profile holds, which end when the app that made them exits.
+  - Three standard profiles chosen from what each machine offers, applied through the change engine. The chosen profile is remembered across reboots.
+  - Recovery at boot; refuses to start alongside another power profile service; polkit decides who may switch profiles.
+  - Hardened systemd unit with no network access, D-Bus policy, polkit actions, `install.sh` and a clean `uninstall.sh`.
+  - Idle cost measured on a test bus: 1.8 MB memory, one thread, no wakeups.
+  - Decision record 0008.
+
+### Changed
+
+- The settings lock is now a kernel file lock, released automatically when a process exits, instead of a PID file. Rust 1.89 or newer is required.
+
 - Phase 2 (started): changing settings safely, from the command line.
   - Ten setting plugins: CPU speed preference, turbo, CPU speed limit, firmware power mode, swap eagerness, disk write batching, watchdog, sound chip sleep, PCIe link power, battery charge limit.
   - Change engine: probe and limit checks, journal flushed to disk before every write, read-back verification, one change at a time, original values kept for restore, safe mode.

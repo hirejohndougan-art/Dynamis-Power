@@ -11,6 +11,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0005](0005-sharing-service.md) | Cloudflare Worker and D1 for shared results |
 | [0006](0006-no-llm-in-control-loop.md) | No language model in the control loop |
 | [0007](0007-plain-file-change-journal.md) | Plain files for the change journal |
+| [0008](0008-standard-profiles-through-the-engine.md) | Standard profiles go through the change engine |
 
 ## Adding a record
 
