@@ -956,3 +956,123 @@ fn tuning_finds_settings_that_only_help_together() {
     stop.store(true, Ordering::Relaxed);
     plant.join().unwrap();
 }
+
+fn unix_now() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+}
+
+#[test]
+fn last_until_caps_the_mode_and_ends_by_itself() {
+    let Some(env) = Env::new("target") else {
+        return;
+    };
+    let root = env.dir.join("root");
+    let bat = root.join("sys/class/power_supply/BAT0");
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        c.set_profile("performance").await.unwrap();
+        assert_eq!(env.epp(), "performance");
+
+        let err = c.set_target(unix_now() + 60.0).await.unwrap_err();
+        assert!(err.contains("ten minutes"), "{err}");
+
+        // 30 Wh must last 5 hours: about 5.6 W on average. Using 9 W is too
+        // much, so full speed is the first thing to go.
+        fs::write(bat.join("power_now"), "9000000").unwrap();
+        c.set_target(unix_now() + 5.0 * 3600.0).await.unwrap();
+        eventually("full speed capped", async || {
+            env.epp() == "balance_performance"
+        })
+        .await;
+        let s = c.status().await.unwrap();
+        assert_eq!(s["last_until"]["level"], "no_boost", "{s}");
+        assert_eq!(s["last_until"]["on_track"], false);
+        let p = c.predict().await.unwrap();
+        assert!(p["target"]["budget_w"].as_f64().unwrap() < 6.0, "{p}");
+
+        // Ending it lifts the cap at once.
+        c.set_target(0.0).await.unwrap();
+        assert_eq!(env.epp(), "performance");
+
+        // Plugging in ends it by itself.
+        c.set_target(unix_now() + 5.0 * 3600.0).await.unwrap();
+        eventually("capped again", async || env.epp() == "balance_performance").await;
+        fs::write(root.join("sys/class/power_supply/AC0/online"), "1").unwrap();
+        eventually("target ended", async || {
+            c.predict().await.unwrap()["target_ended"] == "the charger was plugged in"
+        })
+        .await;
+        assert_eq!(env.epp(), "performance");
+        assert!(c.status().await.unwrap()["last_until"].is_null());
+    });
+}
+
+#[test]
+fn charging_follows_when_you_usually_unplug() {
+    let Some(env) = Env::new("charge") else {
+        return;
+    };
+    let bat = env.dir.join("root/sys/class/power_supply/BAT0");
+    // Four weeks of unplugging every day about five hours from now.
+    let state = env.dir.join("state");
+    fs::create_dir_all(&state).unwrap();
+    let soon = unix_now() + 5.0 * 3600.0;
+    let unplugs: Vec<u64> = (1..=28)
+        .map(|d| (soon - d as f64 * 86400.0) as u64)
+        .collect();
+    fs::write(
+        state.join("habits.json"),
+        serde_json::json!({"v": 1, "hours": [], "unplugs": unplugs}).to_string(),
+    )
+    .unwrap();
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        // No charge limit control on this battery yet: refused.
+        let err = c.set_adaptive_charging(true).await.unwrap_err();
+        assert!(err.contains("no charge limit"), "{err}");
+
+        fs::write(bat.join("charge_control_end_threshold"), "100").unwrap();
+        let p = c.predict().await.unwrap();
+        let usual = p["usual_unplug"].as_f64().unwrap();
+        assert!((usual - soon).abs() < 120.0, "{p}");
+
+        c.set_adaptive_charging(true).await.unwrap();
+        eventually("held at 80%", async || {
+            fs::read_to_string(bat.join("charge_control_end_threshold"))
+                .unwrap()
+                .trim()
+                == "80"
+        })
+        .await;
+        let p = c.predict().await.unwrap();
+        assert_eq!(p["charge"]["limit_pct"], 80, "{p}");
+        assert!(c
+            .journal(5)
+            .await
+            .unwrap()
+            .to_string()
+            .contains("follows your habits"));
+
+        // Off: the original limit comes back.
+        c.set_adaptive_charging(false).await.unwrap();
+        assert_eq!(
+            fs::read_to_string(bat.join("charge_control_end_threshold"))
+                .unwrap()
+                .trim(),
+            "100"
+        );
+    });
+}

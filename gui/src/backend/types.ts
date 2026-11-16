@@ -33,6 +33,33 @@ export interface Status {
   safe_mode: string | null;
   pending: { id: string; label: string; to: string; trial: boolean } | null;
   display: { w_per_pct: number; base_w: number; r2: number; samples: number } | null;
+  /** "Last until", when set. Times are Unix seconds. */
+  last_until?: { until: number; level: Level; reason: string | null; on_track: boolean } | null;
+}
+
+/** How hard "Last until" is saving. */
+export type Level = "normal" | "no_boost" | "save" | "save_more";
+
+export interface Predict {
+  /** When the battery runs out at your usual use (Unix seconds). */
+  forecast_end: number | null;
+  typical_w: number | null;
+  /** When you usually unplug next. */
+  usual_unplug: number | null;
+  unplugs_seen: number;
+  target: {
+    until: number;
+    level: Level;
+    budget_w?: number | null;
+    recent_w?: number | null;
+    expected_end?: number | null;
+    on_track?: boolean;
+    reason?: string;
+  } | null;
+  target_ended: string | null;
+  adaptive_charging: boolean;
+  charge: { limit_pct: number; until: number | null; reason: string } | null;
+  charge_supported: boolean;
 }
 
 export interface JournalEntry {
@@ -152,6 +179,10 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  predict(): Promise<Predict>;
+  /** Unix seconds; 0 ends "Last until". */
+  setTarget(until: number): Promise<void>;
+  setAdaptiveCharging(on: boolean): Promise<void>;
   /** Save an exported file; returns where it went. */
   saveFile(name: string, contents: string): Promise<string>;
 }

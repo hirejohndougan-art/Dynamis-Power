@@ -222,4 +222,27 @@ impl Client {
             .await
             .map_err(explain)
     }
+
+    /// Battery forecast, usual unplug time, "Last until" and charging that
+    /// follows habits.
+    pub async fn predict(&self) -> Result<Value> {
+        self.json("Predict", &()).await
+    }
+
+    /// "Last until" this Unix time; 0 ends it.
+    pub async fn set_target(&self, until: f64) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetTarget", &(until,))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn set_adaptive_charging(&self, on: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetAdaptiveCharging", &(on,))
+            .await
+            .map_err(explain)
+    }
 }

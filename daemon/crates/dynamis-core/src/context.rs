@@ -93,6 +93,14 @@ impl Sampler {
             brightness_pct: backlight::read(root).map(|b| b.percent),
             max_temp_c: thermal::max_c(&thermal::read(root)),
             mic_in_use: mic_in_use(root),
+            energy_wh: {
+                let e: Vec<f64> = ps
+                    .batteries
+                    .iter()
+                    .filter_map(|b| b.energy_now_wh)
+                    .collect();
+                (!e.is_empty()).then(|| e.iter().sum())
+            },
             ..Context::default()
         }
     }

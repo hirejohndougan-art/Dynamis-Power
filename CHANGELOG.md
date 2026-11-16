@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Phase 7: prediction.
+  - Battery forecast at your usual use, from typical power on battery by hour of the week; the usual unplug time per weekday. Kept on this computer only (`habits.json`).
+  - "Last until": saves only as hard as needed (no full speed → Longer battery → also slowing background apps), one level at a time by feedback; caps app requests; ends on plug-in, at the time, or with Restore.
+  - Charging that follows your routine: holds at 80% while plugged in, charges fully about 2.5 hours before the usual unplug; off by default, only where the battery has a charge limit; off restores the original limit.
+  - Service: `Predict`, `SetTarget`, `SetAdaptiveCharging`; `last_until` in `Status`; client and app commands; Battery screen sections and a Home line.
+  - Decision record 0015.
+
 - Phase 5: tuning settings that affect each other.
   - Turbo boost and the speed limit are tuned together after every setting has been tested on its own: one step at a time, each step an ordinary experiment, with results tied to the other values and the power mode, and a lag limit for the whole set (`dynamis-core/src/tune.rs`).
   - Learned values apply per power mode on battery; originals return on mains. Forgetting one forgets the set.

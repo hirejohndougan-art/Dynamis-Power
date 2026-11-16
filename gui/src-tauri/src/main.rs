@@ -165,6 +165,21 @@ async fn forget_app_usage(conn: State<'_, Conn>) -> Result<(), String> {
     client(&conn).await?.forget_app_usage().await
 }
 
+#[tauri::command]
+async fn predict(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.predict().await
+}
+
+#[tauri::command]
+async fn set_target(conn: State<'_, Conn>, until: f64) -> Result<(), String> {
+    client(&conn).await?.set_target(until).await
+}
+
+#[tauri::command]
+async fn set_adaptive_charging(conn: State<'_, Conn>, on: bool) -> Result<(), String> {
+    client(&conn).await?.set_adaptive_charging(on).await
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Conn::default())
@@ -189,6 +204,9 @@ fn main() {
             apps,
             set_app_policy,
             forget_app_usage,
+            predict,
+            set_target,
+            set_adaptive_charging,
             save_file
         ])
         .run(tauri::generate_context!())

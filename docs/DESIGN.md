@@ -46,7 +46,7 @@ background = "throttle"
 
 The first three appear to the desktop through the standard power-profiles interface. Extended profiles map to the nearest standard one for apps that only know three.
 
-**"Last until" mode:** the user sets a target ("5 hours", "until 6 pm"). Remaining battery energy becomes a watt budget, and the app tightens the least noticeable settings first.
+**"Last until" mode:** the user sets a target ("5 hours", "until 6 pm"). Remaining battery energy becomes a watt budget, and the app tightens the least noticeable settings first: no full speed, then Longer battery, then slowing background apps, one step at a time by feedback on recent power use. *(Built, phase 7; see [decision 0015](decisions/0015-prediction-by-feedback-and-habits.md).)*
 
 **Overlays** combine with any profile: Battery Care (charge limit), adaptive charging, metered network, and "do not experiment".
 

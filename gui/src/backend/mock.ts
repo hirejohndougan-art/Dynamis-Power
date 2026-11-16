@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
+import type { AppPolicy, AppsInfo, Predict, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -20,6 +20,7 @@ export function mockBackend(): Backend {
     "kernel.nmi_watchdog": "off",
     "audio.power_save": "1",
     "pcie.aspm": "default",
+    "battery.charge_limit": "100",
   };
   const original: Record<string, string> = { "kernel.nmi_watchdog": "on" };
   const t0 = now();
@@ -54,6 +55,22 @@ export function mockBackend(): Backend {
       { app: "org.kde.dolphin", cpu_s: 800, wh: 1.9 },
       { app: "steam", cpu_s: 3000, wh: 0 },
     ],
+  };
+  let target: { until: number } | null = null;
+  let adaptive = false;
+  const predictInfo = (): Predict => {
+    const n = now();
+    return {
+      forecast_end: n + 5.6 * 3600,
+      typical_w: 5.4,
+      usual_unplug: n + 14 * 3600,
+      unplugs_seen: 23,
+      target: target && { until: target.until, level: "no_boost", budget_w: 5.1, recent_w: 5.6, expected_end: n + 5 * 3600, on_track: false, reason: "Saving more to reach your time" },
+      target_ended: null,
+      adaptive_charging: adaptive,
+      charge: adaptive ? { limit_pct: 80, until: n + 11.5 * 3600, reason: "Holding at 80% to spare the battery; it charges fully before you usually unplug" } : null,
+      charge_supported: true,
+    };
   };
   const appsInfo = (): AppsInfo => {
     const running = ["firefox", "org.kde.dolphin", "thunderbird"];
@@ -102,7 +119,7 @@ export function mockBackend(): Backend {
       row("kernel.nmi_watchdog", "Watchdog wakeups", "safe", "Safe", "on | off"),
       row("audio.power_save", "Sound chip sleep (seconds idle, 0 = never)", "usually_safe", "Usually safe", "0–60 s"),
       row("pcie.aspm", "PCIe link power saving", "usually_safe", "Usually safe", "default | performance | powersave"),
-      row("battery.charge_limit", "Battery charge limit", "safe", "Safe", "this battery has no charge limit control", false),
+      row("battery.charge_limit", "Battery charge limit", "safe", "Safe", "50–100%"),
     ];
   };
 
@@ -138,6 +155,7 @@ export function mockBackend(): Backend {
       safe_mode: safeMode,
       pending: null,
       display: { w_per_pct: 0.031, base_w: 3.9, r2: 0.86, samples: 412 },
+      last_until: target && { until: target.until, level: "no_boost", reason: "Saving more to reach your time", on_track: false },
     };
   };
 
@@ -174,6 +192,8 @@ export function mockBackend(): Backend {
       auto = false;
       learning = false;
       appPolicy = { ...appPolicy, slow_background: false, boost_front: false, always_slow: [] };
+      target = null;
+      adaptive = false;
       const done = Object.entries(original)
         .filter(([id, v]) => values[id] !== v)
         .map(([id, v]) => {
@@ -209,6 +229,13 @@ export function mockBackend(): Backend {
       appPolicy = { ...p, v: 1 };
     },
     forgetAppUsage: async () => { usage = { today: [], week: [] }; },
+    predict: async () => delay(predictInfo()),
+    setTarget: async (until) => {
+      refuse();
+      if (until !== 0 && until < now() + 600) throw new Error("pick a time at least ten minutes from now");
+      target = until === 0 ? null : { until };
+    },
+    setAdaptiveCharging: async (on) => { refuse(); adaptive = on; },
     saveFile: async (name, contents) => {
       const url = URL.createObjectURL(new Blob([contents], { type: "text/plain" }));
       const a = document.createElement("a");

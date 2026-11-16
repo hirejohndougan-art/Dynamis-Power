@@ -2,7 +2,7 @@ import { useState } from "react";
 import { backend, type Profile, type Status } from "../backend";
 import { Dialog, Sparkline, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
-import { duration, formatTime, profileName, t, tn } from "../i18n";
+import { clock, duration, formatTime, profileName, t, tn } from "../i18n";
 import { describe } from "../activity";
 
 function Estimate({ s }: { s: Status }) {
@@ -32,7 +32,9 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
 
   const last = (journal.data ?? []).map(describe).find((i) => i !== null) ?? null;
   const held = s.holds[0];
-  const nowLine = held
+  const nowLine = s.last_until
+    ? t("lu_home", { time: clock(s.last_until.until), reason: s.last_until.reason ?? "" })
+    : held
     ? t("mode_held", { app: held.app, mode: profileName(held.profile), reason: held.reason })
     : s.auto.on
       ? t("mode_now_auto", { reason: s.auto.reason })

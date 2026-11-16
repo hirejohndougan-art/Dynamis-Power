@@ -122,6 +122,12 @@ After installing, log out and back in once (this starts the session agent), then
 1. Leave learning on. Once every setting has been tested on its own, `dynamis learn` shows tests of `cpu.turbo` and `cpu.max_perf_pct` again, one step at a time. `dynamis learned` lists each result with what it was tested together with.
 2. **The gate: does it beat a hand-tuned TLP setup?** Install TLP on the same laptop (with Dynamis Power stopped), tune its battery settings by hand for the best power you can get without the laptop feeling slow, and run `sudo ./scripts/phase1-test.sh 60` with the same brightness and the same light activity. Then stop TLP, start Dynamis Power with what it learned, and run it again. Phase 5 passes if Dynamis Power uses no more power, with no rise in lag. Send both result files.
 
+### Prediction (phase 7) and its gate
+
+1. Use the laptop normally for a week or two. The Battery screen's forecast should settle and get closer to how long the battery really lasts; after a few weekdays of unplugging at about the same time, it should show your usual unplug time.
+2. If the battery has a charge limit, switch on *Follow my routine*: overnight the limit should read 80 (`cat /sys/class/power_supply/BAT*/charge_control_end_threshold`) and 100 a couple of hours before you usually unplug.
+3. **The gate: are time targets met?** From a full charge, pick *Make it last* for a time a little beyond what the forecast says, and use the laptop normally. Note when you started, the target, and when the battery reached 5%. Repeat on a few days with different targets. Phase 7 passes if targets that were reachable are met within about 10 minutes, and Dynamis Power said so when one was not reachable.
+
 ### Apps (phase 6) and its gate
 
 1. Open the app's **Apps** screen. After a while on battery, the apps you use should be listed with estimated watt-hours; plugged in, with processor time. The app you are using should be tagged *In front* (KDE Plasma; after logging out and in once so the session agent loads its KWin script).

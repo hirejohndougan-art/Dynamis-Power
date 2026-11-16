@@ -43,6 +43,8 @@ pub struct Context {
     /// reading, percent. The lag measure calibration holds as a hard limit.
     pub stall_pct: f64,
     pub brightness_pct: Option<f64>,
+    /// Energy left in the battery (all batteries), watt-hours.
+    pub energy_wh: Option<f64>,
     /// A microphone is recording: almost always a call.
     pub mic_in_use: bool,
     // From the session agent:

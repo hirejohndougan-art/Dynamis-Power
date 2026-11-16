@@ -17,6 +17,7 @@ mod bus;
 mod conflicts;
 mod core;
 mod learn;
+mod predict;
 
 use std::path::PathBuf;
 use std::process::ExitCode;

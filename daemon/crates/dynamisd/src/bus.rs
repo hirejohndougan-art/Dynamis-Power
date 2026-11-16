@@ -619,6 +619,67 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// Predictions for the Battery screen: when the battery will run out at
+    /// your usual use, when you usually unplug, "Last until" and charging
+    /// that follows habits (JSON; times are Unix seconds).
+    fn predict(&self) -> String {
+        let c = self.0.lock();
+        c.predict
+            .json(c.root(), crate::core::unix_now())
+            .to_string()
+    }
+
+    /// "Last until": save as much as needed for the battery to last until
+    /// `until` (Unix seconds). 0 ends it.
+    async fn set_target(
+        &self,
+        until: f64,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let r = {
+            let mut c = self.0.lock();
+            let dir = c.state_dir.clone();
+            let ended = until <= 0.0;
+            let r = c
+                .predict
+                .set_target((!ended).then_some(until), crate::core::unix_now(), &dir);
+            if r.is_ok() && ended {
+                // Ending lifts the cap at once.
+                if let Err(e) = c.apply_active("Last until ended") {
+                    eprintln!("dynamisd: {e}");
+                }
+                c.apps.forced_slow = false;
+            }
+            r
+        };
+        r.map_err(fdo::Error::InvalidArgs)?;
+        self.0.ticker.poke();
+        notify(conn, &self.0).await;
+        Ok(())
+    }
+
+    /// Charging that follows when you usually unplug (where the battery has
+    /// a charge limit). Off puts the original limit back.
+    async fn set_adaptive_charging(
+        &self,
+        on: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        {
+            let mut c = self.0.lock();
+            let (root, dir) = (c.root().clone(), c.state_dir.clone());
+            c.predict
+                .set_adaptive_charging(on, &root, &dir)
+                .map_err(fdo::Error::Failed)?;
+        }
+        self.0.ticker.poke();
+        Ok(())
+    }
+
     /// Every calibration result and the display model, as JSON.
     fn learned_json(&self) -> String {
         let c = self.0.lock();

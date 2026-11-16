@@ -108,6 +108,15 @@ Phase 5 (tuning together) adds:
 | Bounded search | One grid step at a time, inside the setting's own limits (speed limit never below 30%; the grid stops at 50%), at most 12 kept steps per power mode |
 | Per power mode | Results only count for the power mode they were measured under; another mode starts from the original values |
 
+Phase 7 (prediction) adds:
+
+| Rail | How |
+| --- | --- |
+| Only existing levers | "Last until" caps the power mode and, at its strongest, slows background apps. It never touches brightness, never freezes apps, never changes a setting outside the usual engine path |
+| Ends by itself | Plugging in, reaching the time, or *Restore original settings* ends it and lifts the cap at once |
+| Gentle steps | One level at a time, at least five minutes apart |
+| Charge limit only, 80–100% | Charging that follows habits only moves the existing charge-limit setting between 80% and 100%, through the engine (journaled), off by default, only where the battery offers the control. Off, or Restore, puts the original limit back. Without a clear habit it charges fully, as normal |
+
 Phase 6 (apps) adds:
 
 | Rail | How |

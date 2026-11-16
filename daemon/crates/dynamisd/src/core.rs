@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::apps::AppsState;
 use crate::learn::{Learning, Timing};
+use crate::predict::PredictState;
 
 /// Version of `profile.json`.
 const PROFILE_FILE_VERSION: u32 = 1;
@@ -87,6 +88,7 @@ pub struct Core {
     pub auto: AutoState,
     pub learn: Learning,
     pub apps: AppsState,
+    pub predict: PredictState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -115,6 +117,7 @@ impl Core {
             .and_then(|t| serde_json::from_str::<SavedAuto>(&t).ok());
         let learn = Learning::load(&state_dir, timing);
         let apps = AppsState::load(&state_dir);
+        let predict = PredictState::load(&state_dir);
         let auto = AutoState {
             enabled: saved_auto.as_ref().is_some_and(|a| a.enabled),
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
@@ -130,6 +133,7 @@ impl Core {
             auto,
             learn,
             apps,
+            predict,
         }
     }
 
@@ -147,12 +151,18 @@ impl Core {
 
     pub fn active(&self) -> Profile {
         let held = |p| self.holds.values().any(|h| h.profile == p);
-        if held(Profile::PowerSaver) {
+        let p = if held(Profile::PowerSaver) {
             Profile::PowerSaver
         } else if held(Profile::Performance) {
             Profile::Performance
         } else {
             self.chosen
+        };
+        // "Last until" is the person's own explicit goal: it caps everything,
+        // app requests included.
+        match self.predict.level().cap() {
+            Some(cap) if rank(p) > rank(cap) && self.available.contains(&cap) => cap,
+            _ => p,
         }
     }
 
@@ -380,12 +390,16 @@ impl Core {
 
     /// Whether anything needs regular readings (auto mode, learning or apps).
     pub fn needs_ticks(&self) -> bool {
-        self.auto.enabled || self.learn.enabled || self.apps.needs_ticks()
+        self.auto.enabled
+            || self.learn.enabled
+            || self.apps.needs_ticks()
+            || self.predict.needs_ticks()
     }
 
     /// Whether processes need reading this tick.
     fn needs_apps(&self) -> bool {
         self.apps.needs_ticks()
+            || self.apps.forced_slow
             || (self.auto.enabled && !self.auto.rules.prefs.app_rules.is_empty())
     }
 
@@ -403,6 +417,28 @@ impl Core {
         ctx.screen_locked = s.screen_locked;
         ctx.user_idle = s.user_idle;
         let front_pid = s.focused_pid;
+        // Prediction first: "Last until" can change what is allowed.
+        let unix = unix_now();
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        let mut target_changed = false;
+        if self
+            .predict
+            .tick(&root, &dir, unix, ctx.on_ac, ctx.power_w, ctx.energy_wh)
+        {
+            let before = self.active();
+            let why = self
+                .predict
+                .last
+                .as_ref()
+                .map_or("Last until ended".to_string(), |s| {
+                    format!("last until: {}", s.reason)
+                });
+            if let Err(e) = self.apply_active(&why) {
+                eprintln!("dynamisd: {e}");
+            }
+            target_changed = self.active() != before;
+        }
+        self.apps.forced_slow = self.predict.level() == dynamis_core::predict::Level::SaveMore;
         if self.needs_apps() {
             let unix = unix_now();
             self.apps.read(&self.root, unix, ctx.power_w, front_pid);
@@ -419,7 +455,7 @@ impl Core {
             .workload;
         self.auto.observed = Some(workload);
 
-        let changed = self.auto.enabled && self.auto_step(now, &ctx);
+        let changed = (self.auto.enabled && self.auto_step(now, &ctx)) || target_changed;
         if self.learn.enabled {
             self.learn_tick(now, &ctx, workload);
         }
@@ -494,6 +530,15 @@ impl Core {
         })
         .map_err(|e| e.to_string())?;
         write_atomic(&self.state_dir.join("profile.json"), &text)
+    }
+}
+
+/// Slowest first.
+fn rank(p: Profile) -> u8 {
+    match p {
+        Profile::PowerSaver => 0,
+        Profile::Balanced => 1,
+        Profile::Performance => 2,
     }
 }
 

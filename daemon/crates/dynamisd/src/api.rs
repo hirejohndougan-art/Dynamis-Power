@@ -86,6 +86,12 @@ impl Core {
                 "id": p.id, "label": label(&p.id), "to": p.to, "trial": p.trial_deadline.is_some(),
             })),
             "display": self.learn.display.fit(),
+            "last_until": self.predict.target.as_ref().map(|t| json!({
+                "until": t.until,
+                "level": t.level,
+                "reason": self.predict.last.as_ref().map(|s| s.reason.clone()),
+                "on_track": self.predict.last.as_ref().is_none_or(|s| s.on_track),
+            })),
         })
     }
 
@@ -138,6 +144,15 @@ impl Core {
         if self.auto.enabled {
             self.set_auto(false, now)?;
         }
+        if self.predict.target.is_some() {
+            let dir = self.state_dir.clone();
+            self.predict.set_target(None, 0.0, &dir)?;
+        }
+        if self.predict.adaptive_charging {
+            let (root, dir) = (self.root.clone(), self.state_dir.clone());
+            self.predict.set_adaptive_charging(false, &root, &dir)?;
+        }
+        self.apps.forced_slow = false;
         if self.apps.policy.changes_shares() {
             let dir = self.state_dir.clone();
             self.apps.stop_changing_shares(&dir)?;

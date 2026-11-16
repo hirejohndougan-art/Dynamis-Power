@@ -18,6 +18,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0012](0012-calibration-method.md) | How calibration tests and keeps a setting |
 | [0013](0013-app-shares-not-caps.md) | Apps get a bigger or smaller share, never a cap or a freeze |
 | [0014](0014-tuning-together-one-step-at-a-time.md) | Tune interacting settings together, one step at a time |
+| [0015](0015-prediction-by-feedback-and-habits.md) | "Last until" steers by feedback; habits are simple and kept in UTC |
 
 ## Adding a record
 

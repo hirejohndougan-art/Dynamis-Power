@@ -32,6 +32,13 @@ export function profileName(p: string): string {
   return t(`profile_${p.replace("-", "_")}` as Key);
 }
 
+/** A clock time, with the day when it is not today: "5:00 PM", "Tue 8:10 AM". */
+export function clock(unix: number): string {
+  const d = new Date(unix * 1000);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return d.toLocaleString(undefined, sameDay ? { timeStyle: "short" } : { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+
 export function formatTime(unix: number): string {
   return new Date(unix * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }

@@ -133,6 +133,9 @@ pub struct AppsState {
     pub front: Option<String>,
     /// Logged once, so a refused change (safe mode) does not fill the log.
     complained: bool,
+    /// "Last until" at its strongest level slows background apps on
+    /// battery, whatever the switch says. Not saved: it ends with the target.
+    pub forced_slow: bool,
 }
 
 impl AppsState {
@@ -153,7 +156,16 @@ impl AppsState {
     }
 
     pub fn needs_ticks(&self) -> bool {
-        self.policy.track || self.policy.changes_shares()
+        self.policy.track || self.effective().changes_shares()
+    }
+
+    /// The policy in force: the person's, plus background slowing while
+    /// "Last until" needs it.
+    fn effective(&self) -> AppPolicy {
+        AppPolicy {
+            slow_background: self.policy.slow_background || self.forced_slow,
+            ..self.policy.clone()
+        }
     }
 
     /// Read processes and count energy. Afterwards `meter.running()` and
@@ -175,13 +187,9 @@ impl AppsState {
     /// Bring every app group's share to what the policy wants. Opens the
     /// engine only when something has to change.
     pub fn apply(&mut self, root: &SysRoot, state_dir: &Path, on_ac: bool) {
-        let want = if self.policy.changes_shares() {
-            wanted(
-                &self.policy,
-                &self.meter.cgroups,
-                on_ac,
-                self.front.as_deref(),
-            )
+        let policy = self.effective();
+        let want = if policy.changes_shares() {
+            wanted(&policy, &self.meter.cgroups, on_ac, self.front.as_deref())
         } else {
             BTreeMap::new()
         };

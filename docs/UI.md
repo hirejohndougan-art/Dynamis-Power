@@ -4,7 +4,7 @@ The app must be usable by someone who has never opened a terminal, while still g
 
 The visual mock-ups are kept with the project's design files. This document is the written specification; when the two disagree, update both.
 
-> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes (without "Last until"), Apps, Battery, Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
+> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes, Apps, Battery (with the forecast, *Make it last* and *Follow my routine*), Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
 
 ## Principles
 
@@ -46,7 +46,7 @@ Cards for each profile with a one-line description. "Last until" opens a time pi
 
 ## Battery
 
-Health percentage against design capacity, wear trend, charge limit toggle (only where supported), adaptive charging, overnight drain report, and charge history.
+Health percentage against design capacity, wear trend, charge limit toggle (only where supported), adaptive charging, overnight drain report, and charge history. **Built:** health, capacity, cycles, charge limit, what the screen costs, the forecast at your usual use and usual unplug time, *Make it last* (2/4/6/8 hours or a clock time; shows the budget and recent use; *Stop*), and *Follow my routine* (charging that follows habits). Still planned: wear trend, overnight drain report, charge history. "Last until" lives on Battery rather than Modes, next to the forecast it depends on; Home shows it while it runs.
 
 ## Apps
 

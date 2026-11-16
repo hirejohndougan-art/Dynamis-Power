@@ -120,4 +120,18 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Give the app in front priority" })));
     await waitFor(() => expect(screen.getByText(/Priority/)).toBeTruthy());
   });
+
+  it("makes the battery last until a time, and follows the charging routine", async () => {
+    window.location.hash = "#battery";
+    render(<App />);
+    expect(await screen.findByText(/The battery should last until about/)).toBeTruthy();
+    expect(screen.getByText(/You usually unplug around/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "4 hours" })));
+    await waitFor(() => expect(screen.getByText(/^Lasting until/)).toBeTruthy());
+    expect(screen.getByText(/Full speed is off/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Follow my routine" })));
+    await waitFor(() => expect(screen.getByText(/Holding at 80%/)).toBeTruthy());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Stop" })));
+    await waitFor(() => expect(screen.queryByText(/^Lasting until/)).toBeNull());
+  });
 });

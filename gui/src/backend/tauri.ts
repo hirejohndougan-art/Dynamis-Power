@@ -23,5 +23,8 @@ export const tauriBackend: Backend = {
   apps: () => invoke("apps"),
   setAppPolicy: (policy) => invoke("set_app_policy", { policy }),
   forgetAppUsage: () => invoke("forget_app_usage"),
+  predict: () => invoke("predict"),
+  setTarget: (until) => invoke("set_target", { until }),
+  setAdaptiveCharging: (on) => invoke("set_adaptive_charging", { on }),
   saveFile: (name, contents) => invoke("save_file", { name, contents }),
 };
