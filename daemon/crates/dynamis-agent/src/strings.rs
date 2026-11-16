@@ -25,6 +25,13 @@ const EN: &[(&str, &str)] = &[
     ("tray_plugged", "plugged in"),
     ("tray_safe_mode", "Safe mode is on: nothing is changed"),
     ("tray_no_service", "Dynamis Power is not running"),
+    ("tray_feels_slow", "It feels slow"),
+    ("tray_feels_slow_end", "Back to normal settings"),
+    ("tray_auto_reason", "Chosen automatically: {reason}"),
+    (
+        "tray_relief",
+        "Faster settings for the rest of the day (it felt slow)",
+    ),
 ];
 
 /// The text for a key (the key itself if missing, so a gap is visible).

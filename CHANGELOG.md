@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Saying why auto mode switched (everyday problem §3): the panel icon's tooltip adds "Chosen automatically: <reason>", the panel menu has *It feels slow* (and *Back to normal settings*), and Activity folds three or more automatic changes in one hour into one line that opens to show each.
+
 - *It feels slow* on the Dashboard (everyday problem §3): for the rest of the day, Balanced instead of Longer battery, learned turbo and speed limit back to the mode's own values, no slowing of background apps and no speed tests; says what it undid; *End now*, or choosing a mode by hand, ends it. *Keep it this way* makes learning keep only lag-free changes and auto mode use Balanced on battery. `FeelsSlow`, `EndRelief`; `relief` and `learning_strict` in `Status`.
 
 - A learned change undone by hand twice is blocked on this laptop ("you undid what learning chose for this twice"), so learning does not try it again (everyday problem §3). Engine `note_undone`, journaled as `undone`; Undo says so the second time.

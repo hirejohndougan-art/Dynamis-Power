@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { backend, type JournalEntry } from "../backend";
-import { describe, type Category } from "../activity";
+import { describe, groupAuto, type Category, type Item } from "../activity";
 import { Choice, Dialog } from "../components";
 import { build, summary, type ExportOptions } from "../exporter";
 import { useAction, useLoad } from "../hooks";
@@ -26,7 +26,7 @@ export function Activity(props: { version: string; onChange: () => void }) {
   const [exporting, setExporting] = useState(false);
 
   const items = useMemo(
-    () => (journal.data ?? []).map(describe).filter((i) => i && (filter === "all" || i.category === filter)),
+    () => groupAuto((journal.data ?? []).map(describe).filter((i): i is Item => !!i && (filter === "all" || i.category === filter))),
     [journal.data, filter],
   );
 
@@ -67,6 +67,19 @@ export function Activity(props: { version: string; onChange: () => void }) {
                         {formatTime(i.entry.time)}
                         {i.why && ` · ${i.why}`}
                       </span>
+                      {i.group && (
+                        <details>
+                          <summary className="small">{t("ev_auto_group_show")}</summary>
+                          <ul className="small muted">
+                            {i.group.map((g, k) => (
+                              <li key={k}>
+                                {formatTime(g.entry.time)}: {g.title}
+                                {g.why && ` · ${g.why}`}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                     </div>
                     {i.undoable && (
                       <button type="button" className="btn btn-small" aria-label={`${t("undo")}: ${i.title}`} onClick={() => run(() => backend.undo(i.entry.id).then(() => t("undone", { label: i.entry.label })))}>

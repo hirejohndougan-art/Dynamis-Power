@@ -353,6 +353,8 @@ export const en = {
   ev_dev_awake: "{dev} is back to its own power setting",
   ev_bat_run_down: "The battery runs the laptop while plugged in",
   ev_bat_normal: "The battery is back to normal charging",
+  ev_auto_group: "Automatic choice changed settings {n} times in this hour",
+  ev_auto_group_show: "Show each change",
   ev_import: "Settings imported from TLP",
   ev_brightness: "Screen brightness set to {to} (was {from})",
   ev_outside: "{label} was changed by something else: {from} → {to}",

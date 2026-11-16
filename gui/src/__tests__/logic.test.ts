@@ -163,3 +163,24 @@ describe("what uses the battery", () => {
     expect(brightnessMinutes(30, 50, display, { ...power, on_ac: true })).toBeNull();
   });
 });
+
+describe("activity grouping", () => {
+  it("folds three or more automatic changes in one hour into one line", async () => {
+    const { groupAuto } = await import("../activity");
+    const item = (time: number, reason: string) => describeEntry(e({ time, reason }))!;
+    const items = [
+      item(7200 + 10, "auto: On battery"),
+      item(7200 + 20, "auto: Video"),
+      item(7200 + 30, "auto: On battery"),
+      item(7200 + 40, "set in the app"),
+      item(3600 + 10, "auto: Busy"),
+      item(3600 + 20, "auto: On battery"),
+    ];
+    const g = groupAuto(items);
+    expect(g).toHaveLength(4);
+    expect(g[0].group).toHaveLength(3);
+    expect(g[0].title).toMatch(/3 times/);
+    expect(g[1].category).toBe("mine");
+    expect(g[2].group).toBeUndefined();
+  });
+});

@@ -12,6 +12,37 @@ export interface Item {
   category: Category;
   /** Undo puts the setting back to its original value. */
   undoable: boolean;
+  /** Auto mode's switches within one hour, shown as one line (§3). */
+  group?: Item[];
+}
+
+/** Auto mode's switches (entries whose reason starts "auto:") come in runs;
+ * three or more in the same hour become one line that opens to show them,
+ * so they do not flood Activity (everyday problem §3). Order is kept. */
+export function groupAuto(items: Item[]): Item[] {
+  const out: Item[] = [];
+  let run: Item[] = [];
+  const isAuto = (i: Item) => (i.entry.reason ?? "").startsWith("auto:");
+  const hour = (i: Item) => Math.floor(i.entry.time / 3600);
+  const flush = () => {
+    if (run.length >= 3) {
+      out.push({ ...run[0], title: t("ev_auto_group", { n: run.length }), why: run[0].why, undoable: false, group: run });
+    } else {
+      out.push(...run);
+    }
+    run = [];
+  };
+  for (const i of items) {
+    if (isAuto(i) && (run.length === 0 || hour(run[0]) === hour(i))) {
+      run.push(i);
+      continue;
+    }
+    flush();
+    if (isAuto(i)) run.push(i);
+    else out.push(i);
+  }
+  flush();
+  return out;
 }
 
 const strip = (reason = "", prefix: string) => reason.replace(prefix, "").replace(/; ok$/, "").trim();

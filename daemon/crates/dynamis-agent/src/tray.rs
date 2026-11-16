@@ -58,6 +58,7 @@ mod id {
     pub const LAST_6H: i32 = 33;
     pub const LAST_STOP: i32 = 34;
     pub const FULL_CHARGE: i32 = 35;
+    pub const FEELS_SLOW: i32 = 36;
     pub const OPEN: i32 = 40;
     pub const HIDE: i32 = 41;
 }
@@ -193,6 +194,21 @@ pub fn menu(status: Option<&Value>) -> Vec<Entry> {
             )
         });
     }
+    // "It feels slow" (everyday problem §3), or ending it.
+    out.push(Entry {
+        enabled: !locked,
+        ..e(
+            id::FEELS_SLOW,
+            0,
+            s(if st["relief"].is_null() {
+                "tray_feels_slow"
+            } else {
+                "tray_feels_slow_end"
+            })
+            .into(),
+            Kind::Plain,
+        )
+    });
     out.push(e(id::SEP3, 0, String::new(), Kind::Separator));
     out.push(e(id::OPEN, 0, s("tray_open").into(), Kind::Plain));
     out.push(e(id::HIDE, 0, s("tray_hide").into(), Kind::Plain));
@@ -228,6 +244,25 @@ pub fn summary(st: &Value) -> String {
         parts.push(s("tray_lasting").into());
     }
     parts.join(" · ")
+}
+
+/// The tooltip: the summary, then why auto mode chose the mode (everyday
+/// problem §3: say why, where people look), or that "It feels slow" is on.
+pub fn tooltip_body(st: &Value) -> String {
+    let mut out = summary(st);
+    if !st["safe_mode"].is_null() {
+        return out;
+    }
+    if !st["relief"].is_null() {
+        out.push('\n');
+        out.push_str(s("tray_relief"));
+    } else if st["auto"]["on"] == true {
+        if let Some(r) = st["auto"]["reason"].as_str().filter(|r| !r.is_empty()) {
+            out.push('\n');
+            out.push_str(&s("tray_auto_reason").replace("{reason}", r));
+        }
+    }
+    out
 }
 
 fn props(e: &Entry) -> HashMap<String, OwnedVariant> {
@@ -408,6 +443,7 @@ impl Shared {
             .status()
             .and_then(|s| s["full_charge"]["active"].as_bool())
             .unwrap_or(false);
+        let relief_on = self.status().is_some_and(|s| !s["relief"].is_null());
         let result = match item {
             id::POWER_SAVER => set_prop(PPD_PATH, PPD, "ActiveProfile", "power-saver".into()).await,
             id::BALANCED => set_prop(PPD_PATH, PPD, "ActiveProfile", "balanced".into()).await,
@@ -425,6 +461,28 @@ impl Shared {
                     Some(SERVICE_IFACE),
                     "ChargeFullyOnce",
                     &(!charging_fully,),
+                )
+                .await
+                .map(|_| ()),
+            id::FEELS_SLOW if relief_on => self
+                .service
+                .call_method(
+                    Some(SERVICE),
+                    SERVICE_PATH,
+                    Some(SERVICE_IFACE),
+                    "EndRelief",
+                    &(),
+                )
+                .await
+                .map(|_| ()),
+            id::FEELS_SLOW => self
+                .service
+                .call_method(
+                    Some(SERVICE),
+                    SERVICE_PATH,
+                    Some(SERVICE_IFACE),
+                    "FeelsSlow",
+                    &(false,),
                 )
                 .await
                 .map(|_| ()),
@@ -584,7 +642,7 @@ impl Item {
             .0
             .status()
             .as_ref()
-            .map_or_else(|| s("tray_no_service").to_string(), summary);
+            .map_or_else(|| s("tray_no_service").to_string(), tooltip_body);
         (String::new(), Vec::new(), s("app_name").into(), body)
     }
     #[zbus(property)]
@@ -794,6 +852,24 @@ impl Tray {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_tooltip_says_why_auto_mode_chose() {
+        let st = serde_json::json!({
+            "profile": "power-saver", "safe_mode": null, "last_until": null, "relief": null,
+            "auto": {"on": true, "reason": "Nobody is using the laptop"},
+            "power": {"battery_pct": 70.0, "hours_left": 3.5, "on_ac": false, "has_battery": true},
+        });
+        let t = tooltip_body(&st);
+        assert!(t.starts_with("Longer battery · 70%"), "{t}");
+        assert!(
+            t.ends_with("Chosen automatically: Nobody is using the laptop"),
+            "{t}"
+        );
+        let mut st2 = st.clone();
+        st2["relief"] = serde_json::json!(1.0);
+        assert!(tooltip_body(&st2).contains("felt slow"));
+    }
+
     use super::*;
     use serde_json::json;
 
