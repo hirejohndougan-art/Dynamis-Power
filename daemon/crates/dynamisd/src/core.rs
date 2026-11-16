@@ -21,6 +21,7 @@ use dynamis_core::SysRoot;
 use serde::{Deserialize, Serialize};
 
 use crate::apps::AppsState;
+use crate::kept::KeptState;
 use crate::learn::{Learning, Timing};
 use crate::predict::PredictState;
 
@@ -91,6 +92,8 @@ pub struct Core {
     pub predict: PredictState,
     /// The person's own choices for what each profile sets (Advanced).
     pub profile_overrides: profiles::Overrides,
+    /// Settings set by hand that are applied again after restarts and sleep.
+    pub kept: KeptState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -120,6 +123,7 @@ impl Core {
         let learn = Learning::load(&state_dir, timing);
         let apps = AppsState::load(&state_dir);
         let predict = PredictState::load(&state_dir);
+        let kept = KeptState::load(&state_dir, unix_now());
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
@@ -141,6 +145,7 @@ impl Core {
             apps,
             predict,
             profile_overrides,
+            kept,
         }
     }
 
@@ -388,6 +393,21 @@ impl Core {
         self.apps.set_policy(p, &root, &dir, on_ac)
     }
 
+    /// The laptop woke from sleep: firmware may have reset settings, a test
+    /// in progress is no longer valid, and devices may be new. Apply the
+    /// mode, kept settings, learned settings and app shares again.
+    pub fn after_resume(&mut self) {
+        self.stop_experiment_for("the laptop slept");
+        if let Err(e) = self.apply_active("woke from sleep") {
+            eprintln!("dynamisd: {e}");
+        }
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.kept
+            .apply_all(&root, &dir, false, "after waking from sleep");
+        self.learn.reapply_soon();
+        self.apps.reassert();
+    }
+
     pub fn report_session(&mut self, owner: &str, report: SessionReport) {
         self.auto.session = report;
         self.auto.session_owner = Some(owner.to_string());
@@ -433,6 +453,7 @@ impl Core {
         // Prediction first: "Last until" can change what is allowed.
         let unix = unix_now();
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.kept.tick(&root, &dir, unix);
         let mut target_changed = false;
         if self
             .predict

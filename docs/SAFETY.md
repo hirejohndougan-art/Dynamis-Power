@@ -108,6 +108,14 @@ Phase 5 (tuning together) adds:
 | Bounded search | One grid step at a time, inside the setting's own limits (speed limit never below 30%; the grid stops at 50%), at most 12 kept steps per power mode |
 | Per power mode | Results only count for the power mode they were measured under; another mode starts from the original values |
 
+Kept settings add:
+
+| Rail | How |
+| --- | --- |
+| Not system configuration | Settings set by hand (the battery's limits always, others when "Keep after restart" is ticked) are listed in the service's own state and applied again at startup and after waking, through the engine. Nothing is written to persistent system files |
+| Probation | A kept setting is trusted after an hour in force. After an unclean shutdown, settings still on probation are not applied again, so a setting that freezes the laptop cannot return by itself at every boot |
+| Safe mode and dry run | Kept settings are not applied in either; Restore stops keeping anything |
+
 Settings toward replacing TLP add:
 
 | Rail | How |

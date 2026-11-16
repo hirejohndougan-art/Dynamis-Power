@@ -519,6 +519,22 @@ impl DynamisPower {
             .map_err(fdo::Error::Failed)
     }
 
+    /// Keep a setting's current value after restarts and sleep (true), or
+    /// stop keeping it (false). The battery's limits are always kept.
+    async fn set_kept(
+        &self,
+        setting: String,
+        keep: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .set_kept(&setting, keep)
+            .map_err(fdo::Error::Failed)
+    }
+
     /// Switch safe mode on or off. Returns why it is still on, or "".
     async fn set_safe_mode(
         &self,

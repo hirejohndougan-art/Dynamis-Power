@@ -87,6 +87,7 @@ impl Core {
             },
             "safe_mode": engine.as_ref().and_then(|e| e.safe_mode()),
             "dry_run": engine.as_ref().is_some_and(|e| e.dry_run()),
+            "kept": self.kept.json(),
             "missing_modes": profiles::missing(&self.root).into_iter().map(|(p, why)| json!({"profile": p.as_str(), "why": why})).collect::<Vec<_>>(),
             "pending": engine.as_ref().and_then(|e| e.pending()).map(|p| json!({
                 "id": p.id, "label": label(&p.id), "to": p.to, "trial": p.trial_deadline.is_some(),
@@ -130,6 +131,8 @@ impl Core {
     /// Undo one setting: forget it if it was learned, otherwise put its
     /// original value back.
     pub fn undo(&mut self, id: &str) -> Result<String, String> {
+        let dir = self.state_dir.clone();
+        self.kept.drop_setting(id, &dir)?;
         if self.learn.learned().iter().any(|r| r.setting == id) {
             self.forget(id)?;
             return Ok(format!("{} is back to its original value", label(id)));
@@ -159,6 +162,8 @@ impl Core {
             self.predict.set_adaptive_charging(false, &root, &dir)?;
         }
         self.apps.forced_slow = false;
+        let dir = self.state_dir.clone();
+        self.kept.clear(&dir)?;
         if self.apps.policy.changes_shares() {
             let dir = self.state_dir.clone();
             self.apps.stop_changing_shares(&dir)?;
@@ -173,7 +178,7 @@ impl Core {
 
     /// Change one setting by hand (Advanced). Risky settings need
     /// `allow_risky`, which the app only sends after an explicit yes.
-    pub fn set_setting(&self, id: &str, value: &str, allow_risky: bool) -> Result<(), String> {
+    pub fn set_setting(&mut self, id: &str, value: &str, allow_risky: bool) -> Result<(), String> {
         let mut e = open_engine(&self.root, &self.state_dir)?;
         e.apply(&dynamis_core::engine::Request {
             id,
@@ -182,8 +187,28 @@ impl Core {
             trial_secs: None,
             reason: "set in the app",
         })
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        drop(e);
+        // The battery's limits stay after a restart; others when asked to.
+        if crate::kept::ALWAYS_KEPT.contains(&id) || self.kept.settings.contains_key(id) {
+            let dir = self.state_dir.clone();
+            self.kept.keep(id, value, crate::core::unix_now(), &dir)?;
+        }
+        Ok(())
+    }
+
+    /// Keep a setting's current value after restarts and sleep, or stop.
+    pub fn set_kept(&mut self, id: &str, keep: bool) -> Result<(), String> {
+        let dir = self.state_dir.clone();
+        if !keep {
+            return self.kept.drop_setting(id, &dir).map(|_| ());
+        }
+        let s = settings::by_id(id).ok_or_else(|| format!("unknown setting '{id}'"))?;
+        let value = s.read(&self.root).map_err(|e| e.to_string())?;
+        if value == "mixed" {
+            return Err("this setting differs between devices; set one value first".into());
+        }
+        self.kept.keep(id, &value, crate::core::unix_now(), &dir)
     }
 
     pub fn set_safe_mode(&self, on: bool) -> Result<Option<String>, String> {

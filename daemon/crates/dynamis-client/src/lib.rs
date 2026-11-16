@@ -319,6 +319,15 @@ impl Client {
             .await
             .map_err(explain)
     }
+
+    /// Keep a setting's current value after restarts and sleep, or stop.
+    pub async fn set_kept(&self, setting: &str, keep: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetKept", &(setting, keep))
+            .await
+            .map_err(explain)
+    }
 }
 
 const AGENT: &str = "net.dynamis.Agent";

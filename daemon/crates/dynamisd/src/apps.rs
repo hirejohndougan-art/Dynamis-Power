@@ -242,6 +242,12 @@ impl AppsState {
         }
     }
 
+    /// Forget what this run believes it has set, so the next reading sets
+    /// every share again (after sleep, or when groups may be new).
+    pub fn reassert(&mut self) {
+        self.applied.clear();
+    }
+
     /// Save the per-day totals every few minutes (and when `force`).
     pub fn maybe_save(&mut self, state_dir: &Path, now_unix: f64, force: bool) {
         if !self.policy.track && !force {

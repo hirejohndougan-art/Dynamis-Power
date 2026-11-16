@@ -63,6 +63,11 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
         </div>
       )}
       {s.pending?.trial && <div className="notice notice-info">{t("trial_running", { label: s.pending.label })}</div>}
+      {(s.kept?.held_back ?? []).length > 0 && (
+        <div className="notice">
+          {t("kept_held_back", { labels: (s.kept?.held_back ?? []).map((id) => s.kept?.settings.find((k) => k.id === id)?.label || id).join(", ") })}
+        </div>
+      )}
       {s.dry_run && (
         <div className="notice notice-info">
           {t("dry_run_on")} <a href="#advanced:developer">{t("tab_developer")}</a>

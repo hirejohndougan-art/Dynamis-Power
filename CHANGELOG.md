@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Kept settings: the charge limit and start (always) and any Advanced setting with "Keep after restart" are applied again at startup and after waking from sleep, with an hour's probation after which an unclean shutdown does not hold them back. Waking also re-applies the mode, learned settings and app shares, and stops a test in progress. The service notices firmware that ignores the charge limit. `SetKept`, `kept` in `Status`.
+
 - Modes on laptops without a speed preference or firmware power mode (such as the VivoBook's Celeron N4020): Longer battery and Faster now use turbo, the speed limit (or top frequency) and the governor; learning tunes per mode there; the Modes screen says why a mode is missing. Decision record 0016.
 - New settings toward replacing TLP: `cpu.min_perf_pct`, `cpu.max_freq`, `cpu.governor`, `cpu.hwp_dynamic_boost`, `audio.controller_power`, `storage.io_scheduler`, `gpu.amd_power_level`, `battery.charge_start`, `system.mem_sleep` (risky). The writer allows only the scheduler file under `/sys/block`, only the AMD power level under `/sys/class/drm`, and only `/sys/power/mem_sleep` under `/sys/power`.
 

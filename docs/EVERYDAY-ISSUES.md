@@ -68,6 +68,8 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 
 ## 7. Battery and charging quirks
 
+**Status: built** (kept settings with probation, re-applied at startup and after waking; firmware that ignores the limit is noticed).
+
 **What happens.** Every Dynamis Power change is runtime-only, so a charge limit set by hand is gone after a reboot; some laptops also reset it after sleep; some firmware ignores it; people forget the battery is held at 80% before a trip.
 
 **Plan.**

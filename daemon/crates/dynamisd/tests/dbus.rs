@@ -1308,3 +1308,111 @@ fn advanced_profiles_sensors_system_and_developer() {
     let saved = fs::read_to_string(env.dir.join("state/profiles.json")).unwrap();
     assert!(saved.contains("balance_power"));
 }
+
+#[test]
+fn settings_set_by_hand_survive_sleep_and_restarts() {
+    let Some(env) = Env::new("kept") else { return };
+    let root = env.dir.join("root");
+    let bat = root.join("sys/class/power_supply/BAT0");
+    fs::write(bat.join("charge_control_end_threshold"), "100").unwrap();
+    let limit = || {
+        fs::read_to_string(bat.join("charge_control_end_threshold"))
+            .unwrap()
+            .trim()
+            .to_string()
+    };
+    let swappiness = || {
+        fs::read_to_string(root.join("proc/sys/vm/swappiness"))
+            .unwrap()
+            .trim()
+            .to_string()
+    };
+    let mut d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        // The charge limit is always kept; swappiness when asked.
+        c.set_setting("battery.charge_limit", "80", false)
+            .await
+            .unwrap();
+        c.set_setting("vm.swappiness", "20", false).await.unwrap();
+        c.set_kept("vm.swappiness", true).await.unwrap();
+        let kept = c.status().await.unwrap()["kept"]["settings"].clone();
+        assert_eq!(kept.as_array().unwrap().len(), 2, "{kept}");
+
+        // Firmware resets the limit during sleep; waking applies it again.
+        fs::write(bat.join("charge_control_end_threshold"), "100").unwrap();
+        let login = zbus::connection::Builder::address(env.address.as_str())
+            .build()
+            .await
+            .unwrap();
+        zbus::object_server::SignalEmitter::new(&login, "/org/freedesktop/login1")
+            .unwrap()
+            .emit(
+                "org.freedesktop.login1.Manager",
+                "PrepareForSleep",
+                &(false,),
+            )
+            .await
+            .unwrap();
+        eventually("limit applied after waking", async || {
+            let _ = c.status().await;
+            limit() == "80"
+        })
+        .await;
+    });
+
+    // A crash (killed, so not a clean stop) while the settings are new: on
+    // probation, they are not applied again at the next start.
+    drop(d);
+    fs::write(bat.join("charge_control_end_threshold"), "100").unwrap();
+    fs::write(root.join("proc/sys/vm/swappiness"), "60").unwrap();
+    // A new boot, as far as the service can tell.
+    fs::create_dir_all(root.join("proc/sys/kernel/random")).unwrap();
+    fs::write(root.join("proc/sys/kernel/random/boot_id"), "second-boot").unwrap();
+    d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let k = c.status().await.unwrap()["kept"].clone();
+        assert_eq!(k["held_back"].as_array().unwrap().len(), 2, "{k}");
+    });
+    assert_eq!((limit().as_str(), swappiness().as_str()), ("100", "60"));
+
+    // A clean stop (the marker removed, as systemd does): applied at start.
+    drop(d);
+    fs::remove_file(env.dir.join("state/running")).unwrap();
+    fs::write(root.join("proc/sys/kernel/random/boot_id"), "third-boot").unwrap();
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+    });
+    assert_eq!((limit().as_str(), swappiness().as_str()), ("80", "20"));
+
+    // Plugged in and charging past the limit: the firmware ignores it.
+    fs::write(root.join("sys/class/power_supply/AC0/online"), "1").unwrap();
+    fs::write(bat.join("status"), "Charging").unwrap();
+    fs::write(bat.join("capacity"), "90").unwrap();
+    zbus::block_on(async {
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        eventually("limit seen as ignored", async || {
+            c.status().await.unwrap()["kept"]["charge_limit_ignored"] == true
+        })
+        .await;
+        // Restore stops keeping anything.
+        c.restore().await.unwrap();
+        assert!(c.status().await.unwrap()["kept"]["settings"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    });
+}

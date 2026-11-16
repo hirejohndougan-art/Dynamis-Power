@@ -16,6 +16,7 @@ mod apps;
 mod bus;
 mod conflicts;
 mod core;
+mod kept;
 mod learn;
 mod predict;
 
@@ -81,7 +82,9 @@ async fn run(args: Args) -> Result<(), String> {
         .unwrap_or_else(|| PathBuf::from(DEFAULT_STATE_DIR));
 
     std::fs::create_dir_all(&state).map_err(|e| format!("{}: {e}", state.display()))?;
-    match dynamis_core::boots::record_start(&root, &state) {
+    let boot = dynamis_core::boots::record_start(&root, &state);
+    let after_unclean = boot.as_ref().is_ok_and(|b| b.unclean_in_a_row > 0);
+    match boot {
         Ok(b) if b.safe_mode_now_on => eprintln!(
             "dynamisd: {} unclean shutdowns in a row; SAFE MODE is now on and stays on until \
              `sudo dynamis safe-mode off`",
@@ -149,16 +152,25 @@ async fn run(args: Args) -> Result<(), String> {
         })?;
 
     {
-        let core = svc.core.lock().unwrap_or_else(|p| p.into_inner());
+        let mut core = svc.core.lock().unwrap_or_else(|p| p.into_inner());
         let names: Vec<&str> = core.available().iter().map(|p| p.as_str()).collect();
         eprintln!("dynamisd: profiles here: {}", names.join(", "));
         match core.apply_active("startup") {
             Ok(()) => eprintln!("dynamisd: active profile {}", core.active().as_str()),
             Err(e) => eprintln!("dynamisd: {e}"),
         }
+        // Settings the person chose by hand (charge limit and so on).
+        let (root, dir) = (core.root().clone(), core.state_dir.clone());
+        let n = core
+            .kept
+            .apply_all(&root, &dir, after_unclean, "at startup");
+        if n > 0 {
+            eprintln!("dynamisd: applied {n} kept setting(s)");
+        }
     }
     eprintln!("dynamisd: ready");
     spawn_auto_thread(conn.clone(), svc.clone(), args.tick_secs);
+    spawn_resume_watch(conn.clone(), svc.clone());
 
     // Holds end when the app that made them leaves the bus. This loop is also
     // what keeps the service running; it sleeps between messages.
@@ -187,6 +199,49 @@ async fn run(args: Args) -> Result<(), String> {
         }
     }
     Err("lost the D-Bus connection".into())
+}
+
+/// Waking from sleep: logind says `PrepareForSleep(false)`. Firmware may
+/// have reset settings and devices may have changed, so apply everything
+/// again. Listens on the service's own bus (the system bus; a test's private
+/// bus under `--session`).
+fn spawn_resume_watch(conn: zbus::Connection, svc: Service) {
+    std::thread::spawn(move || {
+        zbus::block_on(async move {
+            let rule = match zbus::MatchRule::builder()
+                .msg_type(zbus::message::Type::Signal)
+                .interface("org.freedesktop.login1.Manager")
+                .member("PrepareForSleep")
+                .build()
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("dynamisd: cannot watch for sleep: {e}");
+                    return;
+                }
+            };
+            let Ok(mut stream) = zbus::MessageStream::for_match_rule(rule, &conn, None).await
+            else {
+                eprintln!("dynamisd: cannot watch for sleep");
+                return;
+            };
+            while let Some(Ok(msg)) = stream.next().await {
+                let Ok(going) = msg.body().deserialize::<bool>() else {
+                    continue;
+                };
+                if going {
+                    continue;
+                }
+                eprintln!("dynamisd: woke from sleep; applying settings again");
+                svc.core
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .after_resume();
+                svc.ticker.poke();
+                bus::notify(&conn, &svc).await;
+            }
+        });
+    });
 }
 
 /// Auto mode's readings run on their own thread. While auto mode is off the

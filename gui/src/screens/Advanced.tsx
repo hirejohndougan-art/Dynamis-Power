@@ -33,7 +33,14 @@ export function Advanced(props: { status: Status; refresh: () => void; initialTa
         ))}
       </div>
       <section id={`apanel-${tab}`} role="tabpanel" aria-labelledby={`atab-${tab}`} className="card">
-        {tab === "settings" && <SettingsTab rows={settings.data ?? []} learned={(learned.data?.learned ?? []).map((r) => r.setting)} run={run} />}
+        {tab === "settings" && (
+          <SettingsTab
+            rows={settings.data ?? []}
+            learned={(learned.data?.learned ?? []).map((r) => r.setting)}
+            kept={(props.status.kept?.settings ?? []).map((k) => k.id)}
+            run={run}
+          />
+        )}
         {tab === "learning" && <LearningTab status={props.status} data={learned.data} run={run} />}
         {tab === "safety" && <SafetyTab status={props.status} rows={settings.data ?? []} run={run} />}
         {tab === "profiles" && <ProfilesTab locked={!!props.status.safe_mode} run={run} />}
@@ -48,7 +55,8 @@ export function Advanced(props: { status: Status; refresh: () => void; initialTa
 
 type Run = (a: () => Promise<string | void>) => void;
 
-function SettingsTab(props: { rows: SettingRow[]; learned: string[]; run: Run }) {
+function SettingsTab(props: { rows: SettingRow[]; learned: string[]; kept: string[]; run: Run }) {
+  const [keep, setKeep] = useState(false);
   const [details, setDetails] = useState(false);
   const [editing, setEditing] = useState<SettingRow | null>(null);
   const [value, setValue] = useState("");
@@ -58,6 +66,7 @@ function SettingsTab(props: { rows: SettingRow[]; learned: string[]; run: Run })
     if (!r.available) return t("status_not_offered");
     if (r.blocked) return t("status_blocked", { why: r.blocked });
     if (props.learned.includes(r.id)) return t("status_learned");
+    if (props.kept.includes(r.id)) return t("status_kept");
     if (r.original && r.original !== r.current) return t("status_changed");
     return "";
   };
@@ -66,7 +75,10 @@ function SettingsTab(props: { rows: SettingRow[]; learned: string[]; run: Run })
     if (!r) return;
     setEditing(null);
     setConfirmRisky(false);
-    props.run(() => backend.setSetting(r.id, value, allowRisky));
+    props.run(async () => {
+      await backend.setSetting(r.id, value, allowRisky);
+      if (keep && !props.kept.includes(r.id)) await backend.setKept(r.id, true);
+    });
   };
 
   return (
@@ -108,8 +120,13 @@ function SettingsTab(props: { rows: SettingRow[]; learned: string[]; run: Run })
                 <td>
                   <div className="row" style={{ flexWrap: "nowrap" }}>
                     {r.available && r.risk !== "advisory" && (
-                      <button type="button" className="btn btn-small" aria-label={`${t("change")}: ${r.label}`} onClick={() => { setEditing(r); setValue(r.current ?? ""); }}>
+                      <button type="button" className="btn btn-small" aria-label={`${t("change")}: ${r.label}`} onClick={() => { setEditing(r); setValue(r.current ?? ""); setKeep(props.kept.includes(r.id)); }}>
                         {t("change")}
+                      </button>
+                    )}
+                    {props.kept.includes(r.id) && (
+                      <button type="button" className="btn btn-small" aria-label={`${t("keep_stop")}: ${r.label}`} onClick={() => props.run(() => backend.setKept(r.id, false))}>
+                        {t("keep_stop")}
                       </button>
                     )}
                     {r.original && r.original !== r.current && (
@@ -147,6 +164,10 @@ function SettingsTab(props: { rows: SettingRow[]; learned: string[]; run: Run })
           <input type="text" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
         </label>
         {editing && <p className="muted small">{t("change_allowed", { allowed: editing.allowed })}</p>}
+        <label className="check">
+          <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> {t("keep_after_restart")}
+        </label>
+        <p className="muted small">{t("keep_after_restart_desc")}</p>
       </Dialog>
 
       <Dialog

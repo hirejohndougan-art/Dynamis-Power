@@ -220,6 +220,11 @@ async fn set_dry_run(conn: State<'_, Conn>, on: bool) -> Result<(), String> {
     client(&conn).await?.set_dry_run(on).await
 }
 
+#[tauri::command]
+async fn set_kept(conn: State<'_, Conn>, setting: String, keep: bool) -> Result<(), String> {
+    client(&conn).await?.set_kept(&setting, keep).await
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Conn::default())
@@ -255,6 +260,7 @@ fn main() {
             system,
             advise,
             set_dry_run,
+            set_kept,
             save_file
         ])
         .run(tauri::generate_context!())

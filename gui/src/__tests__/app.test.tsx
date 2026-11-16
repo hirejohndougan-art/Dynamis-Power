@@ -179,4 +179,18 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(forget));
     await waitFor(() => expect(screen.getAllByRole("button", { name: /^Forget:/ }).length).toBeLessThan(3));
   });
+
+  it("keeps a setting after restarts when asked", async () => {
+    window.location.hash = "#advanced:settings";
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Swap eagerness")).toBeTruthy());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Change: Swap eagerness" })));
+    const dialog = screen.getByRole("dialog", { name: "Change Swap eagerness", hidden: true });
+    fireEvent.change(within(dialog).getByRole("textbox", { hidden: true }), { target: { value: "30" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("checkbox", { name: "Keep after restart", hidden: true })));
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Apply", hidden: true })));
+    await waitFor(() => expect(screen.getByText("Kept after restarts")).toBeTruthy());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Stop keeping: Swap eagerness" })));
+    await waitFor(() => expect(screen.queryByText("Kept after restarts")).toBeNull());
+  });
 });

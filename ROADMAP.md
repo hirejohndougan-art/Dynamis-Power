@@ -57,8 +57,8 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [ ] Detect GNOME without AppIndicator and explain how to show the panel icon (§5)
 - [ ] Record kernel and firmware versions with each result; re-check learned settings first after an update; drop settings whose control vanished (§6)
 - [ ] Quirk list entries with kernel and firmware version ranges (§6)
-- [ ] Keep settings chosen by hand (charge limit and start, Advanced "Keep after restart"): re-apply at startup and after sleep, never in safe mode or right after an unclean shutdown (§7)
-- [ ] Notice when firmware ignores the charge limit, and say so (§7)
+- [x] Keep settings chosen by hand (charge limit and start, Advanced "Keep after restart"): re-apply at startup and after sleep, never in safe mode or right after an unclean shutdown (§7)
+- [x] Notice when firmware ignores the charge limit, and say so (§7)
 - [ ] After an unclean shutdown, say what was happening (sleep, wake, driver error, a recent change); if freezes continue in safe mode, say Dynamis Power is unlikely to be the cause (§8)
 - [ ] Fedora RPM and Arch PKGBUILD, built by CI (§9)
 - [ ] Clear message when systemd or polkit is missing (§9)
@@ -121,7 +121,8 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] Sleep type (`system.mem_sleep`, risky: needs an explicit yes; offered only where both exist)
 - [ ] Guided sleep test, run only when the person asks (it needs the laptop for about an hour): sleep about 30 minutes with each sleep type the laptop offers (`s2idle`, `deep`), measure the battery used per hour, check that Wi-Fi, sound, the touchpad and other devices came back and that the kernel log shows no resume errors, then recommend the type that used less and woke cleanly (applied only after a yes). Wakes by RTC alarm; plugged-in state, lid and a running call stop it; a failed wake is recorded so that type is not recommended. Results kept per laptop, and later shared with the model's results
 - [ ] After an unclean shutdown, say whether the laptop was going to sleep or waking when it stopped (from the previous boot's kernel log), to tell sleep problems from other freezes
-- [ ] Re-apply settings after resume from sleep, and to devices plugged in later (USB, Thunderbolt), as TLP does
+- [x] Re-apply settings after resume from sleep (mode, kept, learned settings, app shares)
+- [ ] Apply settings to devices plugged in later (USB, Thunderbolt), as TLP does
 - [ ] A mode to use at boot before auto mode decides, and an option to ignore a power supply that reports wrongly (TLP's `TLP_DEFAULT_MODE` and `TLP_PS_IGNORE`)
 - [ ] A full diagnostic report like `tlp-stat`, building on `dynamis status`, `inventory` and `hardware-report`
 - [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export)

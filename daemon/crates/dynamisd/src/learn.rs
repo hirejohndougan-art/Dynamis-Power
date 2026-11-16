@@ -202,6 +202,11 @@ impl Learning {
         out
     }
 
+    /// Apply learned settings again at the next reading (after sleep).
+    pub fn reapply_soon(&mut self) {
+        self.overlay_on = None;
+    }
+
     pub fn testing(&self) -> bool {
         self.running.is_some()
     }
@@ -680,6 +685,11 @@ impl Core {
                 self.finish(now, *rec);
             }
         }
+    }
+
+    /// Stop a test in progress (from outside learning: sleep, for one).
+    pub(crate) fn stop_experiment_for(&mut self, why: &str) {
+        self.stop_experiment(why);
     }
 
     fn stop_experiment(&mut self, why: &str) {

@@ -60,6 +60,7 @@ export function mockBackend(): Backend {
   let target: { until: number } | null = null;
   let adaptive = false;
   let tray = true;
+  const keptSettings = new Map<string, string>();
   let dryRun = false;
   let overrides: ProfileOverrides = { v: 1, profiles: {} };
   const eppChoices = ["performance", "balance_performance", "balance_power", "power"];
@@ -197,6 +198,7 @@ export function mockBackend(): Backend {
       },
       safe_mode: safeMode,
       dry_run: dryRun,
+      kept: { settings: [...keptSettings].map(([id, value]) => ({ id, label: label(id), value, trusted: true })), held_back: [], charge_limit_ignored: false },
       pending: null,
       display: { w_per_pct: 0.031, base_w: 3.9, r2: 0.86, samples: 412 },
       last_until: target && { until: target.until, level: "no_boost", reason: "Saving more to reach your time", on_track: false },
@@ -238,6 +240,7 @@ export function mockBackend(): Backend {
       auto = false;
       learning = false;
       appPolicy = { ...appPolicy, slow_background: false, boost_front: false, always_slow: [] };
+      keptSettings.clear();
       target = null;
       adaptive = false;
       const done = Object.entries(original)
@@ -249,7 +252,15 @@ export function mockBackend(): Backend {
         });
       return done;
     },
-    setSetting: async (id, value) => { refuse(); setValue(id, value, "set in the app"); },
+    setSetting: async (id, value) => {
+      refuse();
+      setValue(id, value, "set in the app");
+      if (id.startsWith("battery.charge") || keptSettings.has(id)) keptSettings.set(id, value);
+    },
+    setKept: async (id, keep) => {
+      if (keep) keptSettings.set(id, values[id]);
+      else keptSettings.delete(id);
+    },
     setSafeMode: async (on) => {
       safeMode = on ? "switched on in the app" : null;
       log({ event: on ? "safe-mode-on" : "safe-mode-off", id: "", label: "", reason: on ? "switched on in the app" : "" });

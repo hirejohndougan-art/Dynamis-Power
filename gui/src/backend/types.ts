@@ -33,6 +33,14 @@ export interface Status {
     charge_limit: number | null;
   };
   safe_mode: string | null;
+  /** Settings set by hand that are applied again after restarts and sleep. */
+  kept?: {
+    settings: { id: string; label: string; value: string; trusted: boolean }[];
+    /** Not applied again after an unclean shutdown (set too recently). */
+    held_back: string[];
+    /** The battery charged past its limit: the firmware ignores it. */
+    charge_limit_ignored: boolean;
+  };
   /** Modes this laptop cannot offer, and why (plain language). */
   missing_modes?: { profile: Profile; why: string }[];
   /** Developer: changes are journaled as "would" and not made. */
@@ -224,6 +232,8 @@ export interface Backend {
   restore(): Promise<{ id: string; label: string; value: string; ok: boolean }[]>;
   setSetting(setting: string, value: string, allowRisky: boolean): Promise<void>;
   setSafeMode(on: boolean): Promise<string>;
+  /** Keep a setting's current value after restarts and sleep, or stop. */
+  setKept(setting: string, keep: boolean): Promise<void>;
   forget(setting: string): Promise<boolean>;
   conflicts(): Promise<Conflict[]>;
   switchOffConflict(unit: string): Promise<void>;

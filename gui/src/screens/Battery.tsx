@@ -62,6 +62,8 @@ export function Battery(props: { status: Status; refresh: () => void }) {
         ) : limitRow?.available ? (
           <>
             <p className="muted">{t("battery_limit_desc")}</p>
+            {props.status.kept?.settings.some((k) => k.id === "battery.charge_limit") && <p className="muted small">{t("battery_limit_kept")}</p>}
+            {props.status.kept?.charge_limit_ignored && <p className="notice">{t("battery_limit_ignored")}</p>}
             <div className="row">
               <label className="field" style={{ flex: 1 }}>
                 <span className="field-label">{limit}%</span>
