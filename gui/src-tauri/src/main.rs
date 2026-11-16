@@ -191,6 +191,16 @@ async fn set_device_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), S
 }
 
 #[tauri::command]
+async fn feels_slow(conn: State<'_, Conn>, lasting: bool) -> Result<Value, String> {
+    client(&conn).await?.feels_slow(lasting).await
+}
+
+#[tauri::command]
+async fn end_relief(conn: State<'_, Conn>) -> Result<(), String> {
+    client(&conn).await?.end_relief().await
+}
+
+#[tauri::command]
 async fn recalibration(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.recalibration().await
 }
@@ -345,6 +355,8 @@ fn main() {
             set_brightness_prefs,
             tlp_import,
             apply_tlp_import,
+            feels_slow,
+            end_relief,
             recalibration,
             start_recalibration,
             stop_recalibration,

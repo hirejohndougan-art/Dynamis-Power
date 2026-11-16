@@ -231,7 +231,8 @@ impl Core {
             Phase::Done | Phase::Stopped => return,
         }
 
-        let with_tune = self.learn.session.as_ref().is_some_and(|s| s.with_workload);
+        let with_tune =
+            self.learn.session.as_ref().is_some_and(|s| s.with_workload) && !self.learn.relief;
         if self.learn.running.is_some() {
             self.continue_experiment(now, ctx, workload);
         } else {

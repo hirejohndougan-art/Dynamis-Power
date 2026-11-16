@@ -137,6 +137,26 @@ impl Client {
             .map_err(explain)
     }
 
+    /// "It feels slow" (`lasting`: keep it this way). Returns what was in
+    /// effect.
+    pub async fn feels_slow(&self, lasting: bool) -> Result<Value> {
+        let text: String = self
+            .own()
+            .await?
+            .call("FeelsSlow", &(lasting,))
+            .await
+            .map_err(explain)?;
+        serde_json::from_str(&text).map_err(|e| e.to_string())
+    }
+
+    pub async fn end_relief(&self) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("EndRelief", &())
+            .await
+            .map_err(explain)
+    }
+
     /// Battery recalibration: supported, phase, last result.
     pub async fn recalibration(&self) -> Result<Value> {
         self.json("Recalibration", &()).await

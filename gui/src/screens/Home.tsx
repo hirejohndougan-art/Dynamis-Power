@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { backend, type Profile, type Status } from "../backend";
+import { backend, type FeelsSlowResult, type Profile, type Status } from "../backend";
 import { Dialog, PowerChart, ProgressBar, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { clock, duration, formatTime, profileName, t, tn } from "../i18n";
@@ -227,6 +227,7 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
           ))}
         </div>
         <p className="muted small">{t("mode_auto_desc")}</p>
+        <FeelsSlow status={s} run={run} />
       </section>
 
       <div className="grid">
@@ -321,4 +322,76 @@ export function RestoreDialog(props: { open: boolean; onClose: () => void; onDon
       <p>{t("restore_body")}</p>
     </Dialog>
   );
+}
+
+/** "It feels slow" (everyday problem §3): undo what costs speed for the
+ * rest of the day, say what that was, and offer to keep it that way. */
+function FeelsSlow(props: { status: Status; run: (a: () => Promise<string | void>) => void }) {
+  const [asking, setAsking] = useState(false);
+  const [lasting, setLasting] = useState(false);
+  const [result, setResult] = useState<FeelsSlowResult | null>(null);
+  const s = props.status;
+  if (s.relief) {
+    return (
+      <div className="notice notice-info" role="status">
+        <span>
+          {t("slow_on", { time: clock(s.relief) })}
+          {result && ` ${slowSummary(result)}`}
+        </span>
+        <button type="button" className="btn btn-small" onClick={() => props.run(() => backend.endRelief())}>
+          {t("slow_end")}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <>
+      <div>
+        <button type="button" className="btn-link" disabled={!!s.safe_mode} onClick={() => setAsking(true)}>
+          {t("slow_button")}
+        </button>
+      </div>
+      {asking && (
+      <Dialog
+        open={asking}
+        onClose={() => setAsking(false)}
+        title={t("slow_title")}
+        actions={
+          <>
+            <button type="button" className="btn" onClick={() => setAsking(false)}>{t("cancel")}</button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setAsking(false);
+                props.run(async () => {
+                  const r = await backend.feelsSlow(lasting);
+                  setResult(r);
+                  return slowSummary(r);
+                });
+              }}
+            >
+              {t("slow_confirm")}
+            </button>
+          </>
+        }
+      >
+        <p>{t("slow_desc")}</p>
+        <label className="check">
+          <input type="checkbox" checked={lasting} onChange={(e) => setLasting(e.target.checked)} />
+          {t("slow_lasting")}
+        </label>
+        <p className="muted small">{t("slow_lasting_desc")}</p>
+      </Dialog>
+      )}
+    </>
+  );
+}
+
+function slowSummary(r: FeelsSlowResult): string {
+  const parts: string[] = [];
+  if (r.mode_was !== r.mode_now) parts.push(t("slow_did_mode", { from: profileName(r.mode_was), to: profileName(r.mode_now) }));
+  if (r.learned.length > 0) parts.push(t("slow_did_learned"));
+  if (r.apps_slowed) parts.push(t("slow_did_apps"));
+  return parts.length ? t("slow_did", { list: parts.join("; ") }) : t("slow_did_nothing");
 }

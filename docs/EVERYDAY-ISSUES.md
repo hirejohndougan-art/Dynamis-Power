@@ -37,6 +37,8 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 - **Say why auto mode switched, where people look.** The panel icon's tooltip already shows the mode; it gains the last reason ("Longer battery: nobody is using the laptop"). Activity groups auto-mode switches into one line per hour so they do not flood it.
 - **Notice repeated undo.** If the same learned change is undone by hand twice, it is blocked on this laptop (the person has spoken), with a note in Learning.
 
+**Status: built**, except the panel menu entry, the auto-mode reason in the panel tooltip and grouping auto switches in Activity. *It feels slow* is on the Dashboard under the mode: until midnight (local time), Longer battery becomes Balanced, the learned turbo and speed limit go back to the mode's own values, background apps are not slowed and learning does not test speed settings; it says what it undid, and *End now* or choosing a mode by hand ends it. *Keep it this way* makes learning keep only changes with no measurable lag (stall limit 0) and auto mode use Balanced on battery. Code: `dynamisd/src/relief.rs`, `Core::feels_slow`. A learned change undone twice is blocked (`Engine::note_undone`).
+
 ## 4. Other software changing the same settings
 
 **Status: built**, except offering to switch the named tool off (a follow-up, per tool). Code: `dynamisd/src/outside.rs`, `Engine::note_outside`. Checked on each reading, so while auto mode, learning, app priority or "Last until" is on (the service does not wake up just to check). A difference that first shows right after one of Dynamis Power's own changes is taken as its side effect (choosing a governor resets the speed preference on some processors), not another tool's.

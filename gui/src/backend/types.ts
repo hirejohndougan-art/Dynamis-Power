@@ -43,6 +43,9 @@ export interface Status {
   unclean?: Unclean;
   /** "Charge fully once". */
   full_charge?: { supported: boolean; active: boolean; restore_to: string | null; ended: string | null };
+  /** "It feels slow" is in force until this time. */
+  relief?: number | null;
+  learning_strict?: boolean;
   /** Settings set by hand that are applied again after restarts and sleep. */
   kept?: {
     settings: { id: string; label: string; value: string; trusted: boolean }[];
@@ -256,6 +259,9 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** "It feels slow": undo what costs speed for the rest of the day. */
+  feelsSlow(lasting: boolean): Promise<FeelsSlowResult>;
+  endRelief(): Promise<void>;
   /** Battery recalibration: run down to 15% while plugged in, then charge fully. */
   recalibration(): Promise<RecalInfo>;
   startRecalibration(): Promise<void>;
@@ -331,6 +337,16 @@ export type Unclean = {
   in_safe_mode: number;
   /** Settings changed shortly before the freezes that led to safe mode. */
   suspects: Labelled[];
+};
+
+export type FeelsSlowResult = {
+  mode_was: Profile;
+  mode_now: Profile;
+  /** Learned speed-related settings put back to the mode's own values. */
+  learned: string[];
+  apps_slowed: boolean;
+  until: number;
+  lasting: boolean;
 };
 
 export type RecalInfo = {

@@ -136,6 +136,9 @@ pub struct AppsState {
     /// "Last until" at its strongest level slows background apps on
     /// battery, whatever the switch says. Not saved: it ends with the target.
     pub forced_slow: bool,
+    /// "It feels slow": background apps are not slowed today (unless "Last
+    /// until" needs it).
+    pub relief: bool,
 }
 
 impl AppsState {
@@ -163,7 +166,7 @@ impl AppsState {
     /// "Last until" needs it.
     fn effective(&self) -> AppPolicy {
         AppPolicy {
-            slow_background: self.policy.slow_background || self.forced_slow,
+            slow_background: (self.policy.slow_background && !self.relief) || self.forced_slow,
             ..self.policy.clone()
         }
     }

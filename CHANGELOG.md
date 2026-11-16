@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- *It feels slow* on the Dashboard (everyday problem §3): for the rest of the day, Balanced instead of Longer battery, learned turbo and speed limit back to the mode's own values, no slowing of background apps and no speed tests; says what it undid; *End now*, or choosing a mode by hand, ends it. *Keep it this way* makes learning keep only lag-free changes and auto mode use Balanced on battery. `FeelsSlow`, `EndRelief`; `relief` and `learning_strict` in `Status`.
+
 - A learned change undone by hand twice is blocked on this laptop ("you undid what learning chose for this twice"), so learning does not try it again (everyday problem §3). Engine `note_undone`, journaled as `undone`; Undo says so the second time.
 
 - GNOME: the "Dynamis Power: window in front" Shell extension (GNOME 45 and later) ships in the service package and tells the session helper which window is in front, so app priority and per-app modes work on GNOME once it is switched on in the Extensions app (decision 0024). Modes says how to turn panel icons on when the desktop shows none (no StatusNotifierWatcher, as on plain GNOME).

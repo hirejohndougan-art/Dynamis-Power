@@ -13,6 +13,7 @@ pub mod apps;
 pub mod auto;
 pub mod boots;
 pub mod calibrate;
+pub mod clock;
 pub mod context;
 pub mod devices;
 pub mod diag;

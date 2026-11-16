@@ -405,4 +405,17 @@ describe("the app with the stand-in backend", () => {
       await backend.setAutoPrefs(before);
     }
   });
+  it("makes it feel faster for the rest of the day when it feels slow", async () => {
+    await backend.setProfile("power-saver");
+    render(<App />);
+    await screen.findByRole("radiogroup");
+    await act(async () => fireEvent.click(await screen.findByRole("button", { name: "It feels slow" })));
+    const dialog = screen.getByRole("dialog", { name: "Make it feel faster today?", hidden: true });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Make it faster", hidden: true })));
+    expect(await screen.findByText(/Faster settings until/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Balanced/ }).getAttribute("aria-checked")).toBe("true"));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "End now" })));
+    await waitFor(() => expect(screen.queryByText(/Faster settings until/)).toBeNull());
+    await backend.setProfile("balanced");
+  });
 });

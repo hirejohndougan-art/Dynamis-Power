@@ -698,6 +698,44 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// "It feels slow": undo what costs speed for the rest of the day;
+    /// `lasting` also makes learning keep only lag-free changes and auto
+    /// mode use Balanced on battery. Returns what was in effect (JSON).
+    async fn feels_slow(
+        &self,
+        lasting: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<String> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let r = self
+            .0
+            .lock()
+            .feels_slow(lasting)
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        notify(conn, &self.0).await;
+        Ok(r.to_string())
+    }
+
+    /// End "It feels slow" before midnight.
+    async fn end_relief(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        {
+            let mut c = self.0.lock();
+            c.end_relief();
+            c.apply_active("it feels slow: ended")
+                .map_err(fdo::Error::Failed)?;
+        }
+        self.0.ticker.poke();
+        notify(conn, &self.0).await;
+        Ok(())
+    }
+
     /// Battery recalibration: whether it can run here, its phase, and the
     /// last result (JSON).
     fn recalibration(&self) -> String {

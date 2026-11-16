@@ -232,6 +232,9 @@ export function mockBackend(): Backend {
       sleepStep();
     }, SLEEP_MS);
   };
+  // "It feels slow".
+  let relief: number | null = null;
+  let learningStrict = false;
   // Battery recalibration, played out quickly.
   const RECAL_MS = 4000;
   let recal: RecalInfo = { supported: true, phase: null, battery_pct: 79, floor_pct: 15, min_start_pct: 25, ended: null, full_before_wh: null, full_after_wh: null };
@@ -318,7 +321,7 @@ export function mockBackend(): Backend {
     watts = Math.max(3.5, Math.min(8, watts + (Math.random() - 0.5) * 0.4));
     return {
       version: "0.1.0 (preview)",
-      profile,
+      profile: relief && relief > now() && profile === "power-saver" ? "balanced" : profile,
       profiles: ["power-saver", "balanced", "performance"],
       holds: [],
       auto: {
@@ -347,6 +350,8 @@ export function mockBackend(): Backend {
         health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: Number(values["battery.charge_limit"]),
       },
       safe_mode: safeMode,
+      relief: relief && relief > now() ? relief : null,
+      learning_strict: learningStrict,
       unclean,
       full_charge: { supported: true, active: fullCharge !== null, restore_to: fullCharge, ended: fullChargeEnded },
       dry_run: dryRun,
@@ -368,6 +373,7 @@ export function mockBackend(): Backend {
     setProfile: async (p) => {
       refuse();
       const before = profile;
+      relief = null;
       profile = p;
       const pName = { "power-saver": "Longer battery", balanced: "Balanced", performance: "Faster" }[p];
       if (before !== p && brightLevels[p] != null) setBrightness(brightLevels[p]!, `your brightness for ${pName}`);
@@ -519,6 +525,16 @@ export function mockBackend(): Backend {
       }
       devicePolicy = p;
     },
+    feelsSlow: async (lasting) => {
+      refuse();
+      const was = profile;
+      const end = new Date(); end.setHours(24, 0, 0, 0);
+      relief = end.getTime() / 1000;
+      if (profile === "power-saver") setValue("cpu.epp", "balance_performance", "it feels slow: Balanced instead of Longer battery today");
+      if (lasting) learningStrict = true;
+      return { mode_was: was, mode_now: profile === "power-saver" ? "balanced" : profile, learned: kept().filter((r) => r.setting === "cpu.max_perf_pct").map((r) => r.setting), apps_slowed: appPolicy.slow_background, until: relief, lasting };
+    },
+    endRelief: async () => { relief = null; },
     recalibration: async () => delay({ ...recal, battery_pct: recal.phase === "running_down" ? 41 : recal.phase === "charging" ? 63 : 79 }),
     startRecalibration: async () => {
       refuse();

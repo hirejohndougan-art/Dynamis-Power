@@ -2191,3 +2191,39 @@ fn the_unit_still_forbids_network_access() {
         .collect();
     assert_eq!(families, ["AF_UNIX", "AF_NETLINK"]);
 }
+
+/// "It feels slow": Balanced instead of Longer battery for the rest of the
+/// day; "keep it this way" makes learning strict; a mode picked by hand
+/// ends it (everyday problem §3).
+#[test]
+fn it_feels_slow_undoes_what_costs_speed_today() {
+    let Some(env) = Env::new("feelsslow") else {
+        return;
+    };
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        c.set_profile("power-saver").await.unwrap();
+        assert_eq!(env.epp(), "power");
+        let r = c.feels_slow(true).await.unwrap();
+        assert_eq!(r["mode_was"], "power-saver", "{r}");
+        assert_eq!(r["mode_now"], "balanced", "{r}");
+        let s = c.status().await.unwrap();
+        assert_eq!(s["profile"], "balanced");
+        assert!(s["relief"].as_f64().unwrap() > 0.0, "{s}");
+        assert_eq!(s["learning_strict"], true);
+        assert_eq!(env.epp(), "balance_performance");
+        // Survives a restart of the service's state (saved).
+        assert!(env.dir.join("state/relief.json").exists());
+        // Picking a mode by hand ends it.
+        c.set_profile("power-saver").await.unwrap();
+        let s = c.status().await.unwrap();
+        assert_eq!(s["profile"], "power-saver");
+        assert!(s["relief"].is_null(), "{s}");
+        assert!(!env.dir.join("state/relief.json").exists());
+    });
+}

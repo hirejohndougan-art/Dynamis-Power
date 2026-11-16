@@ -106,6 +106,8 @@ pub struct Core {
     pub brightness: crate::brightness::BrightnessState,
     /// Battery recalibration on request.
     pub recal: crate::recal::Recal,
+    /// "It feels slow", for the rest of the day.
+    pub relief: crate::relief::Relief,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -141,6 +143,7 @@ impl Core {
         let sleeptest = crate::sleeptest::SleepTest::load(&state_dir, 60.0);
         let brightness = crate::brightness::BrightnessState::load(&state_dir);
         let recal = crate::recal::Recal::load(&root, &state_dir);
+        let relief = crate::relief::Relief::load(&state_dir, unix_now());
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
@@ -155,7 +158,7 @@ impl Core {
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
             ..AutoState::default()
         };
-        let core = Core {
+        let mut core = Core {
             root,
             state_dir,
             available,
@@ -174,7 +177,11 @@ impl Core {
             sleeptest,
             brightness,
             recal,
+            relief,
         };
+        let on = core.relief.active(unix_now());
+        core.learn.relief = on;
+        core.apps.relief = on;
         // Nothing is set for the mode in force at start, so restarting the
         // service leaves the screen alone.
         core.brightness.prime(core.active());
@@ -202,6 +209,15 @@ impl Core {
         } else {
             self.chosen
         };
+        // "It feels slow": Balanced instead of Longer battery today.
+        let p = if p == Profile::PowerSaver
+            && self.relief.active(unix_now())
+            && self.available.contains(&Profile::Balanced)
+        {
+            Profile::Balanced
+        } else {
+            p
+        };
         // "Last until" is the person's own explicit goal: it caps everything,
         // app requests included.
         match self.predict.level().cap() {
@@ -217,6 +233,10 @@ impl Core {
             return Err(format!("'{}' is not available on this machine", p.as_str()));
         }
         let before = (self.chosen, std::mem::take(&mut self.holds));
+        // A mode picked by hand is the person's word: it ends "It feels slow".
+        if self.relief.until.is_some() {
+            self.end_relief();
+        }
         self.chosen = p;
         if let Err(e) = self.apply_active(&format!("profile {} chosen", p.as_str())) {
             // Nothing applied: keep the old state so what we report stays true.
@@ -481,6 +501,59 @@ impl Core {
         self.devices.set_policy(p, &root, &dir, want)
     }
 
+    /// "It feels slow": undo what costs speed for the rest of the day, and,
+    /// with `lasting`, make learning keep only lag-free changes and auto
+    /// mode use Balanced on battery. Returns what was in effect (JSON).
+    pub fn feels_slow(&mut self, lasting: bool) -> Result<serde_json::Value, String> {
+        use serde_json::json;
+        let now = unix_now();
+        let was = self.active();
+        let learned_speed: Vec<String> = self
+            .learn
+            .learned()
+            .into_iter()
+            .filter(|r| dynamis_core::tune::in_group(&r.setting))
+            .map(|r| r.setting)
+            .collect();
+        let apps_slowed = self.apps.policy.slow_background;
+        let until = dynamis_core::clock::next_midnight(now);
+        let dir = self.state_dir.clone();
+        self.relief.start(&dir, until)?;
+        self.learn.relief = true;
+        self.apps.relief = true;
+        self.stop_experiment_for("it feels slow");
+        self.apply_active("it feels slow: Balanced instead of Longer battery today")?;
+        let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
+        self.apply_overlay(on_ac);
+        self.apps.reassert();
+        if lasting {
+            self.learn.strict = true;
+            self.set_learning(self.learn.enabled)?;
+            if self.auto.rules.prefs.on_battery == Profile::PowerSaver {
+                let mut p = self.auto.rules.prefs.clone();
+                p.on_battery = Profile::Balanced;
+                self.set_auto_prefs(p, now)?;
+            }
+        }
+        Ok(json!({
+            "mode_was": was.as_str(),
+            "mode_now": self.active().as_str(),
+            "learned": learned_speed,
+            "apps_slowed": apps_slowed,
+            "until": until,
+            "lasting": lasting,
+        }))
+    }
+
+    /// End "It feels slow" (by hand, a mode chosen by hand, or midnight).
+    pub fn end_relief(&mut self) {
+        let dir = self.state_dir.clone();
+        self.relief.end(&dir);
+        self.learn.relief = false;
+        self.apps.relief = false;
+        self.apps.reassert();
+    }
+
     /// Start battery recalibration (after an explicit yes in the app).
     pub fn start_recalibration(&mut self) -> Result<(), String> {
         let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
@@ -534,6 +607,7 @@ impl Core {
             || self.devices.needs_ticks()
             || self.fullcharge.is_active()
             || self.recal.is_active()
+            || self.relief.until.is_some()
             || self.sleeptest.running()
     }
 
@@ -566,6 +640,12 @@ impl Core {
         // the setting is left to it, and no longer kept either.
         for id in self.outside.check(&root, &dir, unix) {
             if let Err(e) = self.kept.drop_setting(&id, &dir) {
+                eprintln!("dynamisd: {e}");
+            }
+        }
+        if self.relief.until.is_some() && !self.relief.active(unix) {
+            self.end_relief();
+            if let Err(e) = self.apply_active("it feels slow: the day ended") {
                 eprintln!("dynamisd: {e}");
             }
         }

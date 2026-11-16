@@ -117,10 +117,21 @@ struct SavedRecords {
 struct SavedSwitch {
     v: u32,
     enabled: bool,
+    /// "Keep it this way" after "It feels slow": keep only changes with no
+    /// measurable lag at all.
+    #[serde(default)]
+    strict: bool,
 }
 
 pub struct Learning {
     pub enabled: bool,
+    /// Keep only changes with no measurable lag (see `SavedSwitch`).
+    pub strict: bool,
+    /// "It feels slow" is in force: speed-related learned values are not
+    /// applied and not tested.
+    pub(crate) relief: bool,
+    /// `relief` when the learned values were last applied.
+    overlay_relief: bool,
     pub records: Vec<Record>,
     pub display: DisplayModel,
     pub timing: Timing,
@@ -152,6 +163,11 @@ impl Learning {
             enabled: read("learning.json")
                 .and_then(|t| serde_json::from_str::<SavedSwitch>(&t).ok())
                 .is_some_and(|s| s.enabled),
+            strict: read("learning.json")
+                .and_then(|t| serde_json::from_str::<SavedSwitch>(&t).ok())
+                .is_some_and(|s| s.strict),
+            relief: false,
+            overlay_relief: false,
             records: read("calibration.json")
                 .and_then(|t| serde_json::from_str::<SavedRecords>(&t).ok())
                 .map(|s| {
@@ -336,6 +352,19 @@ impl Learning {
         Some(var.sqrt() <= (0.12 * mean).max(0.25))
     }
 
+    /// The limits a test is judged by: no measurable lag at all when
+    /// strict.
+    pub(crate) fn limits(&self) -> Limits {
+        if self.strict {
+            Limits {
+                max_stall_increase_pct: 0.0,
+                ..Limits::default()
+            }
+        } else {
+            Limits::default()
+        }
+    }
+
     pub fn testing(&self) -> bool {
         self.running.is_some()
     }
@@ -378,6 +407,7 @@ impl Core {
             &serde_json::to_string(&SavedSwitch {
                 v: FORMAT_VERSION,
                 enabled: on,
+                strict: self.learn.strict,
             })
             .map_err(|e| e.to_string())?,
         )
@@ -453,7 +483,8 @@ impl Core {
             self.learn.note_wait(key, now);
             self.learn.status = format!("Waiting: {why}");
         } else {
-            self.start_experiment(now, ctx, workload, true);
+            let with_tune = !self.learn.relief;
+            self.start_experiment(now, ctx, workload, with_tune);
         }
         self.learn.last_tick = Some(now);
     }
@@ -769,7 +800,7 @@ impl Core {
             workload,
         };
         self.learn.running = Some(Running {
-            exp: Experiment::start(plan, Limits::default(), context, now),
+            exp: Experiment::start(plan, self.learn.limits(), context, now),
             monitor: Monitor::start(&self.root, health::Limits::default()),
             workload,
             profile: self.active(),
@@ -870,7 +901,7 @@ impl Core {
                     rec.group = r.group;
                 }
                 // Tuned together: the lag limit holds for the whole set.
-                let limit = Limits::default().max_stall_increase_pct;
+                let limit = self.learn.limits().max_stall_increase_pct;
                 if rec.verdict == Verdict::Keep && !rec.group.is_empty() {
                     let ctx = tune::context_of(&rec.group);
                     let total = tune::total_stall(&self.learn.records, &ctx, rec.stall.mean);
@@ -943,22 +974,31 @@ impl Core {
     /// Learned settings apply on battery only. Values tuned together are
     /// chosen for the power mode in use, so they are re-applied when it
     /// changes.
-    fn apply_overlay(&mut self, on_ac: bool) {
+    pub(crate) fn apply_overlay(&mut self, on_ac: bool) {
         let want = !on_ac;
         if self.learn.running.is_some() {
             return;
         }
         let ctx = tune::context_of(&self.tune_state());
-        if self.learn.overlay_on == Some(want) && ctx == self.learn.tune_ctx {
+        let relief = self.learn.relief;
+        if self.learn.overlay_on == Some(want)
+            && ctx == self.learn.tune_ctx
+            && relief == self.learn.overlay_relief
+        {
             return;
         }
+        self.learn.overlay_relief = relief;
         // Values tuned together: the best for this power mode on battery,
         // otherwise (mains, or nothing learned for this mode) the original.
         if let Some(orig) = self.tune_base() {
-            let best = tune::learned(&self.learn.records, &ctx).filter(|_| want);
+            // "It feels slow": the mode's own values, not the learned ones.
+            let best = tune::learned(&self.learn.records, &ctx).filter(|_| want && !relief);
             for (id, o) in &orig {
                 let (v, why) = match best.as_ref().and_then(|b| b.get(id)) {
                     Some(v) => (v.clone(), "learned: tuned together for this power mode"),
+                    None if want && relief => {
+                        (o.clone(), "it feels slow: the mode's own value today")
+                    }
                     None if want => (o.clone(), "nothing tuned yet for this power mode"),
                     None => (
                         o.clone(),

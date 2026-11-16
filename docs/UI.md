@@ -42,6 +42,7 @@ The first screen (called Home in older notes).
 - **Big estimate:** "About 4 h 10 min left" as a range ("3 h 50 – 4 h 30"), or "Fully charged in 40 min".
 - **Status sentence:** "Saving battery while you browse." with the active mode as a chip.
 - **The slider:** Longer battery ↔ Faster, five steps.
+- **It feels slow** (built), under the mode: a confirmation with *Keep it this way*, then "Faster settings until midnight" with what was undone and *End now*. See [EVERYDAY-ISSUES.md](EVERYDAY-ISSUES.md) §3.
 - **Learning card:** "Learning your laptop — 6 of 18 settings checked. Saved about 25 min so far." with a link to Activity.
 - **Last change card:** the most recent automatic change, its result and Undo.
 - **Safety strip** (only when relevant): "A test was undone because Wi-Fi dropped. Nothing else changed."
