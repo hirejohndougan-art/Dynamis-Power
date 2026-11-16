@@ -148,6 +148,12 @@ fn wol(v: &str) -> Option<String> {
         _ => None,
     }
 }
+/// Graphics frequencies are offered in 50 MHz steps.
+fn gpu_mhz(v: &str) -> Option<String> {
+    v.parse::<u64>()
+        .ok()
+        .map(|m| ((m + 25) / 50 * 50).to_string())
+}
 fn khz_to_mhz(v: &str) -> Option<String> {
     v.parse::<u64>().ok().map(|k| (k / 1000).to_string())
 }
@@ -183,6 +189,8 @@ const PER_SOURCE: &[(&str, &str, Convert)] = &[
         secs_to_centisecs,
     ),
     ("WIFI_PWR", "wifi.power_save", same),
+    ("INTEL_GPU_MAX_FREQ", "gpu.max_freq", gpu_mhz),
+    ("INTEL_GPU_MIN_FREQ", "gpu.min_freq", gpu_mhz),
 ];
 
 /// TLP keys with one value.

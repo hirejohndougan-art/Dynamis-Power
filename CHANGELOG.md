@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Graphics (TLP list): `gpu.dgpu_runtime_pm` lets a second graphics chip (not the one driving the screen) sleep when idle, and learning tests it; `gpu.max_freq` and `gpu.min_freq` set the Intel graphics top and lowest speed in 50 MHz steps (TLP's `INTEL_GPU_MAX_FREQ` and `INTEL_GPU_MIN_FREQ`, which import to them). The writer now allows several files under one prefix.
+
 - *Report a problem* in Activity (everyday problem §10): one file with everything useful, privacy filter on, saved to Downloads, then the project's new-issue page opens with the description and a short summary filled in. The app opens only that one address.
 - The service checks for systemd and polkit at startup and the Dashboard says what is missing (`missing_parts` in `Status`), instead of changes failing quietly.
 

@@ -34,6 +34,9 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &WifiPowerSave,
         &NetWakeOnLan,
         &GpuAmdPowerLevel,
+        &GpuMaxFreq,
+        &GpuMinFreq,
+        &GpuDiscretePower,
         &BatteryChargeLimit,
         &BatteryChargeStart,
         &SystemMemSleep,
@@ -1217,6 +1220,230 @@ impl Setting for NetWakeOnLan {
             .into_iter()
             .map(|path| Write {
                 path,
+                contents: v.into(),
+            })
+            .collect())
+    }
+}
+
+// --- Graphics: Intel frequency limits and a second GPU's sleep -----------
+
+/// Intel graphics (i915) cards with frequency controls: (card directory,
+/// lowest and highest frequency the hardware allows, MHz).
+fn intel_gpus(root: &SysRoot) -> Vec<(String, i64, i64)> {
+    let mut out: Vec<(String, i64, i64)> = root
+        .list_dir("/sys/class/drm")
+        .into_iter()
+        .filter(|c| {
+            c.strip_prefix("card")
+                .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        })
+        .filter_map(|c| {
+            let base = format!("/sys/class/drm/{c}");
+            let lo = root.read_u64(&format!("{base}/gt_RPn_freq_mhz")).ok()? as i64;
+            let hi = root.read_u64(&format!("{base}/gt_RP0_freq_mhz")).ok()? as i64;
+            (hi > lo && root.exists(&format!("{base}/gt_max_freq_mhz"))).then_some((base, lo, hi))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// The values offered: every 50 MHz between the hardware's limits (and the
+/// limits themselves). The driver rounds to its own steps, so values are
+/// read back rounded to 50 MHz too.
+fn gpu_steps(lo: i64, hi: i64) -> Vec<String> {
+    let mut v: Vec<i64> = vec![lo];
+    let mut f = (lo / 50 + 1) * 50;
+    while f < hi {
+        v.push(f);
+        f += 50;
+    }
+    v.push(hi);
+    v.into_iter().map(|f| f.to_string()).collect()
+}
+
+fn round50(mhz: u64) -> u64 {
+    (mhz + 25) / 50 * 50
+}
+
+fn read_gpu_freq(root: &SysRoot, leaf: &str) -> ReadResult<String> {
+    let gpus = intel_gpus(root);
+    let (base, lo, hi) = gpus.first().ok_or(ReadError::Missing)?;
+    let v = root.read_u64(&format!("{base}/{leaf}"))?;
+    // The limits themselves are reported exactly as offered.
+    Ok(if v as i64 == *lo || v as i64 == *hi {
+        v.to_string()
+    } else {
+        round50(v).to_string()
+    })
+}
+
+fn gpu_probe(root: &SysRoot) -> Probe {
+    match intel_gpus(root).first() {
+        Some((_, lo, hi)) => Probe::Supported {
+            allowed: Allowed::Choices {
+                values: gpu_steps(*lo, *hi),
+            },
+        },
+        None => unsupported("no Intel graphics frequency controls here"),
+    }
+}
+
+/// The highest frequency the Intel graphics may run at (TLP's
+/// `INTEL_GPU_MAX_FREQ`). Lower saves power in games and video, at the
+/// cost of frame rate.
+pub struct GpuMaxFreq;
+
+impl Setting for GpuMaxFreq {
+    fn id(&self) -> &'static str {
+        "gpu.max_freq"
+    }
+    fn label(&self) -> &'static str {
+        "Graphics top speed (MHz)"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        gpu_probe(root)
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        read_gpu_freq(root, "gt_max_freq_mhz")
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let mhz: u64 = value
+            .parse()
+            .map_err(|_| format!("'{value}' is not a number"))?;
+        let mut out = Vec::new();
+        for (base, _, _) in intel_gpus(root) {
+            let min = root
+                .read_u64(&format!("{base}/gt_min_freq_mhz"))
+                .map_err(|e| e.to_string())?;
+            if mhz < min {
+                return Err(format!(
+                    "{mhz} MHz is below the graphics lowest speed now ({min} MHz); lower that first"
+                ));
+            }
+            out.push(Write {
+                path: format!("{base}/gt_max_freq_mhz"),
+                contents: mhz.to_string(),
+            });
+        }
+        Ok(out)
+    }
+}
+
+/// The lowest frequency the Intel graphics may drop to (TLP's
+/// `INTEL_GPU_MIN_FREQ`).
+pub struct GpuMinFreq;
+
+impl Setting for GpuMinFreq {
+    fn id(&self) -> &'static str {
+        "gpu.min_freq"
+    }
+    fn label(&self) -> &'static str {
+        "Graphics lowest speed (MHz)"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        gpu_probe(root)
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        read_gpu_freq(root, "gt_min_freq_mhz")
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let mhz: u64 = value
+            .parse()
+            .map_err(|_| format!("'{value}' is not a number"))?;
+        let mut out = Vec::new();
+        for (base, _, _) in intel_gpus(root) {
+            let max = root
+                .read_u64(&format!("{base}/gt_max_freq_mhz"))
+                .map_err(|e| e.to_string())?;
+            if mhz > max {
+                return Err(format!(
+                    "{mhz} MHz is above the graphics top speed now ({max} MHz); raise that first"
+                ));
+            }
+            out.push(Write {
+                path: format!("{base}/gt_min_freq_mhz"),
+                contents: mhz.to_string(),
+            });
+        }
+        Ok(out)
+    }
+}
+
+/// Let a second graphics chip (one that did not start the screen) power
+/// down when idle (TLP's runtime PM for the discrete GPU). Never the chip
+/// driving the screen. Left to supergfxctl while it runs (decision 0022).
+pub struct GpuDiscretePower;
+
+impl GpuDiscretePower {
+    fn second_gpus(root: &SysRoot) -> Vec<String> {
+        let mut out: Vec<String> = root
+            .list_dir("/sys/bus/pci/devices")
+            .into_iter()
+            .filter(|d| crate::devices::is_device_path(&format!("/sys/bus/pci/devices/{d}")))
+            .map(|d| format!("/sys/bus/pci/devices/{d}"))
+            .filter(|d| {
+                root.read_string(&format!("{d}/class"))
+                    .is_ok_and(|c| c.trim().starts_with("0x03"))
+                    && root
+                        .read_string(&format!("{d}/boot_vga"))
+                        .is_ok_and(|b| b.trim() == "0")
+                    && root.exists(&format!("{d}/power/control"))
+            })
+            .collect();
+        out.sort();
+        out
+    }
+}
+
+impl Setting for GpuDiscretePower {
+    fn id(&self) -> &'static str {
+        "gpu.dgpu_runtime_pm"
+    }
+    fn label(&self) -> &'static str {
+        "Second graphics chip sleeps when idle"
+    }
+    fn risk(&self) -> RiskTier {
+        // Some older chips and drivers fail to wake; the trial and the
+        // health monitor catch that, and the quirk list blocks known ones.
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if GpuDiscretePower::second_gpus(root).is_empty() {
+            return unsupported("no second graphics chip here");
+        }
+        Probe::Supported {
+            allowed: Allowed::OnOff,
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let gpus = GpuDiscretePower::second_gpus(root);
+        if gpus.is_empty() {
+            return Err(ReadError::Missing);
+        }
+        let mut seen: Option<bool> = None;
+        for g in &gpus {
+            let on = root.read_string(&format!("{g}/power/control"))?.trim() == "auto";
+            if seen.is_some_and(|s| s != on) {
+                return Ok("mixed".into());
+            }
+            seen = Some(on);
+        }
+        Ok(if seen == Some(true) { "on" } else { "off" }.into())
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let v = if value == "on" { "auto" } else { "on" };
+        Ok(GpuDiscretePower::second_gpus(root)
+            .into_iter()
+            .map(|g| Write {
+                path: format!("{g}/power/control"),
                 contents: v.into(),
             })
             .collect())

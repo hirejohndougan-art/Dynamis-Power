@@ -27,14 +27,17 @@ const ALLOWED_PREFIXES: &[&str] = &[
 const CGROUP_PREFIX: &str = "/sys/fs/cgroup/user.slice/";
 const CGROUP_FILE: &str = "/cpu.weight";
 
-/// Directories where only one kind of file may be written: (prefix, the
-/// only file name allowed at the end).
+/// Directories where only certain files may be written: (prefix, a file
+/// name allowed at the end). A prefix may appear more than once.
 const ONE_FILE_ONLY: &[(&str, &str)] = &[
     ("/sys/block/", "/queue/scheduler"),
     (
         "/sys/class/drm/",
         "/device/power_dpm_force_performance_level",
     ),
+    // Intel graphics frequency limits (i915).
+    ("/sys/class/drm/", "/gt_max_freq_mhz"),
+    ("/sys/class/drm/", "/gt_min_freq_mhz"),
     ("/sys/class/scsi_host/", "/link_power_management_policy"),
     // The wake-up alarm, for the sleep test only.
     ("/sys/class/rtc/", "/wakealarm"),
@@ -54,8 +57,12 @@ fn allowed(path: &str) -> bool {
     if path.starts_with(CGROUP_PREFIX) {
         return path.ends_with(CGROUP_FILE);
     }
-    if let Some((_, end)) = ONE_FILE_ONLY.iter().find(|(p, _)| path.starts_with(p)) {
-        return path.ends_with(end);
+    let mut rules = ONE_FILE_ONLY
+        .iter()
+        .filter(|(p, _)| path.starts_with(p))
+        .peekable();
+    if rules.peek().is_some() {
+        return rules.any(|(_, end)| path.ends_with(end));
     }
     if path == "/sys/power/mem_sleep" {
         return true;
@@ -125,6 +132,8 @@ mod tests {
             "/sys/bus/pci/devices/0000:00:14.0/power/control/../../remove",
             "/sys/class/backlight/intel_backlight/bl_power",
             "/sys/class/net/eth0/device/power/control",
+            "/sys/class/drm/card0/gt_boost_freq_mhz",
+            "/sys/class/drm/card0/gt_RP0_freq_mhz",
             "/sys/class/net/eth0/address",
             "nl80211:wlan0/ps",
             "nl80211:../x/power_save",

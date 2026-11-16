@@ -33,8 +33,9 @@ Some firmware expects either `platform.profile` or `cpu.epp`, not both. Each plu
 | `display.brightness` | Backlight level, within user limits | `/sys/class/backlight/*/brightness` | Safe |
 | `display.refresh_rate` | Panel refresh rate | Compositor / DRM | Usually safe |
 | `display.psr` | Panel self-refresh | Boot parameter | Advisory |
-| `gpu.max_freq` | Integrated GPU frequency ceiling | Driver sysfs | Usually safe |
-| `gpu.dgpu_runtime_pm` | Discrete GPU power-down | PCI `power/control` | Usually safe |
+| `gpu.max_freq` | Intel graphics top speed (TLP's `INTEL_GPU_MAX_FREQ`) | `/sys/class/drm/cardN/gt_max_freq_mhz` (i915), in 50 MHz steps between `gt_RPn_freq_mhz` and `gt_RP0_freq_mhz`; read back rounded to 50 MHz, since the driver rounds to its own steps (to confirm on real hardware). Never below the lowest speed now | Usually safe |
+| `gpu.min_freq` | Intel graphics lowest speed (TLP's `INTEL_GPU_MIN_FREQ`) | `/sys/class/drm/cardN/gt_min_freq_mhz`, the same steps; never above the top speed now | Usually safe |
+| `gpu.dgpu_runtime_pm` | A second graphics chip sleeps when idle (TLP's runtime PM for the discrete GPU) | PCI `power/control` of display controllers with `boot_vga` = 0 (never the chip driving the screen). Learning tests `on`; left to supergfxctl while it runs | Usually safe |
 | `gpu.amd_power_level` | AMD graphics power level (`auto`, `low`, `high`) | `/sys/class/drm/card*/device/power_dpm_force_performance_level` | Usually safe |
 | `kbd.backlight` | Keyboard backlight | `/sys/class/leds/*kbd_backlight*/brightness` | Safe |
 

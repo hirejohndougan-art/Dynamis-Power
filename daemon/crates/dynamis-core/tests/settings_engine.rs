@@ -1457,3 +1457,90 @@ fn wake_on_lan_for_wired_cards_only() {
         "enabled"
     );
 }
+
+mod graphics {
+    use super::*;
+    use dynamis_core::devices::fixture;
+
+    fn intel(sb: &Sandbox) {
+        let card = sb.dir.join("root/sys/class/drm/card0");
+        std::fs::create_dir_all(&card).unwrap();
+        for (f, v) in [
+            ("gt_RPn_freq_mhz", "200"),
+            ("gt_RP0_freq_mhz", "700"),
+            ("gt_max_freq_mhz", "700"),
+            ("gt_min_freq_mhz", "200"),
+        ] {
+            std::fs::write(card.join(f), format!("{v}\n")).unwrap();
+        }
+    }
+
+    #[test]
+    fn intel_limits_in_50_mhz_steps_and_in_order() {
+        let sb = Sandbox::new();
+        intel(&sb);
+        let s = settings::by_id("gpu.max_freq").unwrap();
+        match s.probe(&sb.root()) {
+            Probe::Supported {
+                allowed: settings::Allowed::Choices { values },
+            } => {
+                assert_eq!(values.first().map(String::as_str), Some("200"));
+                assert_eq!(values.last().map(String::as_str), Some("700"));
+                assert!(values.contains(&"450".to_string()));
+            }
+            p => panic!("{p:?}"),
+        }
+        let mut e = sb.engine();
+        e.apply(&req("gpu.max_freq", "450")).unwrap();
+        assert_eq!(
+            sb.file("/sys/class/drm/card0/gt_max_freq_mhz").trim(),
+            "450"
+        );
+        assert!(e.apply(&req("gpu.max_freq", "475")).is_err(), "not a step");
+        assert!(
+            e.apply(&req("gpu.min_freq", "500")).is_err(),
+            "above the top speed"
+        );
+        e.restore().unwrap();
+        assert_eq!(
+            sb.file("/sys/class/drm/card0/gt_max_freq_mhz").trim(),
+            "700"
+        );
+    }
+
+    #[test]
+    fn only_the_second_graphics_chip_sleeps() {
+        let sb = Sandbox::new();
+        let root = sb.dir.join("root");
+        fixture::pci(&root, "0000:00:02.0", "0x030000", "on", "i915");
+        fixture::pci(&root, "0000:01:00.0", "0x030200", "on", "nouveau");
+        std::fs::write(
+            root.join("sys/bus/pci/devices/0000:00:02.0/boot_vga"),
+            "1\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("sys/bus/pci/devices/0000:01:00.0/boot_vga"),
+            "0\n",
+        )
+        .unwrap();
+        let mut e = sb.engine();
+        e.apply(&req("gpu.dgpu_runtime_pm", "on")).unwrap();
+        assert_eq!(
+            sb.file("/sys/bus/pci/devices/0000:01:00.0/power/control")
+                .trim(),
+            "auto"
+        );
+        assert_eq!(
+            sb.file("/sys/bus/pci/devices/0000:00:02.0/power/control")
+                .trim(),
+            "on"
+        );
+        e.restore().unwrap();
+        assert_eq!(
+            sb.file("/sys/bus/pci/devices/0000:01:00.0/power/control")
+                .trim(),
+            "on"
+        );
+    }
+}

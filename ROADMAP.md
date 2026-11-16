@@ -101,7 +101,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
 - [x] Wake-on-LAN off
 - [x] Sound controller power saving as well as the codec (`audio.controller_power`)
-- [ ] Discrete and integrated GPU: runtime power-down of a second GPU *(in SETTINGS: `gpu.dgpu_runtime_pm`)*, Intel GPU frequency limits *(in SETTINGS: `gpu.max_freq`; needs real hardware to learn how the driver rounds)*, AMD GPU power level *(done: `gpu.amd_power_level`)*
+- [x] Discrete and integrated GPU: a second graphics chip sleeps when idle (`gpu.dgpu_runtime_pm`, learning tests it, never the chip driving the screen), Intel graphics top and lowest speed (`gpu.max_freq`, `gpu.min_freq`, 50 MHz steps; how the driver rounds still to confirm on hardware), AMD graphics power level (`gpu.amd_power_level`)
 
 **Storage**
 
