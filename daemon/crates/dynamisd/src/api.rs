@@ -86,6 +86,8 @@ impl Core {
                 "design_wh": bat.and_then(|b| b.energy_full_design_wh),
                 "full_wh": full_wh,
                 "charge_limit": bat.and_then(|b| b.charge_limit_pct),
+                // The hottest temperature sensor, for Home.
+                "temp_c": dynamis_core::sensors::thermal::max_c(&dynamis_core::sensors::thermal::read(&self.root)),
             },
             "safe_mode": engine.as_ref().and_then(|e| e.safe_mode()),
             "dry_run": engine.as_ref().is_some_and(|e| e.dry_run()),

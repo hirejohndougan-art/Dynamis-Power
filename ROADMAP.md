@@ -133,6 +133,43 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 **Done when:** on the test laptops, with TLP removed, `tlp-stat` run once with TLP reinstalled shows nothing TLP would set that Dynamis Power does not, and battery life is at least as long as with a hand-tuned TLP.
 
+## To do: Learn now (a baseline session)
+
+Start learning by hand and leave the laptop alone: every test runs back to back (no waiting for quiet moments, no rests between tests) to set a baseline in about two hours, and learning carries on in everyday use afterwards. Mocked up in the app (Learning screen, marked *Planned*; the demo plays it out). Decisions taken, as recommended:
+
+- [ ] **Idle plus a light, steady workload.** Settings whose cost is lag (turbo, speed limit, speed preference) are measured with a built-in, repeatable light load so lag can be judged; the others idle. The person can untick the workload; those settings are then left for everyday learning.
+- [ ] **Wait for the screen to turn off** before the first test, so every test is measured in the same state.
+- [ ] **Battery only** (from at least 40%, 60% recommended). Running from the battery while plugged in stays on the follow-up list.
+- [ ] **Stops and hands the laptop back** on any keyboard or mouse use (logind idle hint / session agent), plugging in, battery below 40%, warmth, a call or safe mode; finished tests are kept and the rest run later.
+- [ ] **Keeps the laptop awake** during the session (a logind `idle:sleep` block inhibitor, released at the end); the lid still sleeps it.
+- [ ] Service: `LearnSession()`, `StartLearnSession(workload)`, `StopLearnSession()`; the session reuses calibration (`calibrate.rs`) with cooldown 0 and blocks sized to the battery's update period.
+- [ ] **Per-activity learning afterwards:** keep results separately for idle, light use, video and heavy work, and apply each in its own context (needs a decision record).
+
+## To do: from the Power Daemon design (the earlier "Building a project with GUI" chat)
+
+That design and Dynamis Power share the goal; this is what it had that Dynamis Power did not, and what happens to each idea.
+
+**Already covered here:** systemd service with D-Bus and one package for service and app; three modes plus auto mode by workload; per-app power accounting and per-app modes; app power hints (power-profiles holds); low-battery override; learning that tests on this laptop and keeps only what measurably helps, with rollback (journal, trials, undo, safe mode); learning progress shown to the person; privacy-first local data; native packages (`.deb` now, RPM and AUR on the list); shared results (phase 8, through the separate signed helper).
+
+**To add:**
+
+- [ ] **Temperature on Home** next to power use (the hottest sensor; built: `power.temp_c` in `Status`), and a temperature line on the chart.
+- [ ] **Heat that is building up:** when the temperature trend says the laptop will be hot within a few minutes on battery, auto mode moves to a cooler mode early instead of waiting for the firmware to throttle; Activity says why. Only modes and speed limits, never thermal trip points or fans.
+- [ ] **"Runs hotter than it used to":** compare temperature at the same load over months; a steady rise suggests dust or old thermal paste, and the app says so in plain words (Battery or Home).
+- [ ] **Learn from the person's choices:** when the person picks the same mode by hand in the same situation (an app, a time, plugged in or not) a few times, offer to make it an automatic rule ("You chose Faster three times while using Blender. Do that automatically?"). Never applied without a yes.
+- [ ] **Time-of-day habits in auto mode:** use the habits already learned for charging (hour of the week) to prefer a mode at usual times, as a suggestion first.
+- [ ] **Re-check learned results over time** (every few months, and after a kernel or firmware update, see everyday problem 6): seasons, dust and updates change what is best.
+- [ ] **Graphics speed per activity:** test the graphics power level (`gpu.amd_power_level` low/auto now; Intel minimum and maximum graphics frequency, on the TLP list) in learning, within the driver's own limits, per activity.
+- [ ] **App power trend:** "Firefox uses 20% more power than last month" from the per-app energy totals, kept locally.
+- [ ] **What wakes the laptop:** list wake-up sources and wake reasons after sleep (`/sys/power/wakeup_sources`, the kernel log), to explain overnight drain.
+- [ ] **Sleep that turns into hibernation when the battery runs low** (systemd's suspend-then-hibernate): needs swap and a desktop setting, so a decision record first.
+- [ ] **Signals for the app:** `ThermalAlert`, `AppDetected`, `LearningProgress` on D-Bus, so the app and panel icon update without asking.
+- [ ] **Shared hardware profiles** (phase 8): a new laptop starts from what similar laptops learned; still opt-in, through the separate signed helper, publishing only per-model results (as in `schema/`), never per-person data. Federated averaging of model weights is not needed: the results are already small, per-setting measurements.
+
+**Left out, by the safety rules** ([docs/SAFETY.md](docs/SAFETY.md)): changing graphics or processor voltage, clocks beyond the driver's own range, fan speed, thermal trip points and switching processor cores off (rule 5); the service talking to the network (rule 6).
+
+**Not taken, by design:** a trained prediction model (XGBoost) choosing settings by itself. Dynamis Power decides from measured, repeatable tests that can each be explained ("saves 0.4 W, no lag") and undone; a model's choices cannot. Calendar access for predictive hibernation (personal data the service does not need).
+
 ## Realistic expectations
 
 This is a spare-time project. Phases 1 to 4 make a useful first version and will likely take several months. Dates are not promised.

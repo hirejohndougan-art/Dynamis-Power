@@ -16,7 +16,35 @@ function Estimate({ s }: { s: Status }) {
   return (
     <div className="stack">
       <p className="big">{text}</p>
-      {p.battery_pct != null && <p className="muted">{t("battery_pct", { pct: p.battery_pct })}</p>}
+      {p.battery_pct != null && <BatteryMeter pct={p.battery_pct} charging={!!p.charging} />}
+    </div>
+  );
+}
+
+/** A battery-shaped meter across the card with the percentage inside. The
+ * label is drawn twice (dark over the fill, normal text over the empty part)
+ * so it stays readable wherever the fill ends. */
+function BatteryMeter({ pct, charging }: { pct: number; charging: boolean }) {
+  const v = Math.max(0, Math.min(100, Math.round(pct)));
+  const label = charging ? t("meter_charging", { pct: v }) : t("meter_pct", { pct: v });
+  return (
+    <div
+      className={`meter${v <= 20 ? " meter-low" : ""}`}
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={v}
+      aria-valuetext={label}
+      aria-label={t("meter_label")}
+    >
+      <div className="meter-body">
+        <div className="meter-fill" style={{ width: `${v}%` }} />
+        <span className="meter-text" aria-hidden="true">{label}</span>
+        <span className="meter-text meter-text-on" aria-hidden="true" style={{ clipPath: `inset(0 ${100 - v}% 0 0)` }}>
+          {label}
+        </span>
+      </div>
+      <div className="meter-cap" aria-hidden="true" />
     </div>
   );
 }
@@ -87,6 +115,7 @@ function PowerCard(props: { s: Status; watts: number[] }) {
         {now != null && avg != null && watts.length > 1 && (
           <p className="muted">{t("draw_avg", { w: avg.toFixed(1), m: minutes })}</p>
         )}
+        {s.power.temp_c != null && <p className="muted">{t("draw_temp", { c: Math.round(s.power.temp_c) })}</p>}
       </div>
       <PowerChart
         values={s.power.on_ac ? [] : watts}
@@ -221,9 +250,16 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
           ) : (
             <p className="muted">{t("learn_off")}</p>
           )}
-          <button type="button" className="btn-link" onClick={() => props.go("learning")}>
-            {t("learn_details")}
-          </button>
+          <div className="row">
+            <button type="button" className="btn-link" onClick={() => props.go("learning")}>
+              {t("learn_details")}
+            </button>
+            {backend.learnSession && s.learning.progress && s.learning.progress.left > 0 && (
+              <button type="button" className="btn-link" onClick={() => props.go("learning")}>
+                {t("learn_now_link")}
+              </button>
+            )}
+          </div>
         </section>
       </div>
 

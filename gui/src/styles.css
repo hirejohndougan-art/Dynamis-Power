@@ -17,6 +17,7 @@
   --accent-text: #5c4d00;
   --accent-soft: #fff9bf;
   --on-accent: #1b1d1f;
+  --meter-low: #ff9a1f;
   --warn-bg: #fdf4e4;
   --warn-border: #f0dcb4;
   --warn-text: #7a4204;
@@ -202,3 +203,13 @@ fieldset.choice { border: 0; padding: 0; margin-inline: 0; min-width: 0; }
 .chart-fade-bottom { stop-color: var(--accent); stop-opacity: 0.08; }
 .chart-line { fill: none; stroke: var(--accent-strong); stroke-width: 2; stroke-linejoin: round; }
 .stat-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: baseline; }
+
+/* Battery meter on Home */
+.meter { display: flex; align-items: center; gap: 3px; }
+.meter-body { position: relative; flex: 1; height: 40px; border: 2px solid var(--accent-strong); border-radius: 10px; background: var(--surface-2); overflow: hidden; }
+.meter-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); transition: width 0.6s ease; }
+.meter-low .meter-fill { background: var(--meter-low); }
+.meter-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; color: var(--text); }
+.meter-text-on { color: var(--on-accent); }
+.meter-cap { width: 6px; height: 16px; border-radius: 0 4px 4px 0; background: var(--accent-strong); }
+@media (prefers-reduced-motion: reduce) { .meter-fill { transition: none; } }

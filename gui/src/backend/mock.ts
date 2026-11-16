@@ -2,12 +2,12 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, SleepTestInfo } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, SleepTestInfo, LearnSession } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
 /** Things only the demo can do, such as pretending the laptop froze. */
-export const demoControls: { freeze?: () => void; outside?: () => void } = {};
+export const demoControls: { freeze?: () => void; outside?: () => void; touch?: () => void } = {};
 
 export function mockBackend(): Backend {
   let profile: Profile = "balanced";
@@ -143,6 +143,52 @@ export function mockBackend(): Backend {
   const kept = () => records.filter((r) => r.verdict === "keep");
 
   const blockedIds = new Map<string, string>();
+  // "Learn now" (a mockup: the service does not have it yet). Each test
+  // lasts STEP_MS here instead of about 9 minutes.
+  const STEP_MS = 1500;
+  const PLAN: [string, string, string, boolean, LearnSession["results"][number]["verdict"], string, number | null][] = [
+    ["kernel.nmi_watchdog", "Watchdog wakeups", "off", false, "keep", "saves 0.39 W (about 6%)", 0.39],
+    ["audio.power_save", "Sound chip sleep", "1", false, "keep", "saves 0.12 W (about 2%)", 0.12],
+    ["vm.dirty_writeback", "Disk write batching", "1500", false, "unclear", "too small to tell; will retry in everyday use", null],
+    ["vm.swappiness", "Swap eagerness", "10", false, "reject", "no useful saving", null],
+    ["cpu.turbo", "Turbo boost", "off", true, "reject", "made the laptop less responsive (+4.8 points of lag)", null],
+    ["cpu.epp", "CPU speed preference", "balance_power", true, "keep", "saves 0.45 W with no measurable lag", 0.45],
+    ["cpu.max_perf_pct", "CPU speed limit", "90", true, "keep", "saves 0.21 W with no measurable lag", 0.21],
+    ["storage.sata_alpm", "SATA link power saving", "med_power_with_dipm", false, "keep", "saves 0.08 W (about 1%)", 0.08],
+  ];
+  let session: LearnSession = { phase: "idle", total: PLAN.length, done: 0, current: null, minutes_left: null, results: [], stopped_reason: null, saves_w: 0, preview: true };
+  let sessionTimer: ReturnType<typeof setTimeout> | undefined;
+  let sessionLoad = true;
+  const sessionStep = () => {
+    const i = session.done;
+    if (i >= PLAN.length) {
+      session = { ...session, phase: "done", current: null, minutes_left: 0 };
+      sleepChanged();
+      return;
+    }
+    const [setting, lbl, value, load] = PLAN[i];
+    const underLoad = load && sessionLoad;
+    session = { ...session, phase: "testing", current: { setting, label: lbl, value, under_load: underLoad }, minutes_left: (PLAN.length - i) * 9 };
+    sleepChanged();
+    sessionTimer = setTimeout(() => {
+      const [, , , , verdict, reason, saves] = PLAN[i];
+      // Without the workload, speed settings cannot be judged for lag.
+      const r = load && !sessionLoad
+        ? { verdict: "unclear" as const, reason: "idle only: lag cannot be measured without a workload", saves_w: null }
+        : { verdict, reason, saves_w: saves };
+      const results = [...session.results, { setting, label: lbl, value, under_load: underLoad, ...r }];
+      session = { ...session, done: i + 1, results, saves_w: results.reduce((a, x) => a + (x.verdict === "keep" ? x.saves_w ?? 0 : 0), 0) };
+      sessionStep();
+    }, STEP_MS);
+  };
+  demoControls.touch = () => {
+    if (session.phase === "waiting_screen" || session.phase === "testing") {
+      clearTimeout(sessionTimer);
+      session = { ...session, phase: "stopped", current: null, stopped_reason: "you used the laptop" };
+      sleepChanged();
+    }
+  };
+
   // The sleep test, played out quickly: each "sleep" lasts SLEEP_MS.
   const SLEEP_MS = 1200;
   let sleep: SleepTestInfo = { phase: "idle", current: null, left: [], minutes: 30, results: [], recommended: null, original: null, note: null, offered: ["s2idle", "deep"], active: "s2idle", alarm: true };
@@ -274,7 +320,7 @@ export function mockBackend(): Backend {
         })(),
       },
       power: {
-        on_ac: prefs.power_source === "mains", has_battery: true, battery_pct: 79, charging: false,
+        on_ac: prefs.power_source === "mains", has_battery: true, temp_c: Math.round(48 + Math.random() * 3), battery_pct: 79, charging: false,
         watts: Math.round(watts * 100) / 100, hours_left: Math.round((31.2 / watts) * 10) / 10, hours_to_full: null,
         health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: Number(values["battery.charge_limit"]),
       },
@@ -379,6 +425,21 @@ export function mockBackend(): Backend {
       refuse();
       if (p.never_slow.some((a) => p.always_slow.includes(a))) throw new Error("an app cannot be both never and always slowed");
       appPolicy = { ...p, v: 1 };
+    },
+    learnSession: async () => delay({ ...session }),
+    startLearnSession: async (withWorkload) => {
+      refuse();
+      if (status().power.on_ac) throw new Error("unplug the charger first: learning measures the battery");
+      sessionLoad = withWorkload;
+      clearTimeout(sessionTimer);
+      session = { ...session, phase: "waiting_screen", done: 0, results: [], current: null, stopped_reason: null, saves_w: 0, minutes_left: PLAN.length * 9 + 5 };
+      sessionTimer = setTimeout(sessionStep, STEP_MS);
+    },
+    stopLearnSession: async () => {
+      clearTimeout(sessionTimer);
+      if (session.phase === "waiting_screen" || session.phase === "testing") {
+        session = { ...session, phase: "stopped", current: null, stopped_reason: "you stopped it" };
+      }
     },
     sleepTest: async () => delay({ ...sleep, active: values["system.mem_sleep"] }),
     startSleepTest: async (minutes) => {

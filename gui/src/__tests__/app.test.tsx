@@ -214,6 +214,22 @@ describe("the app with the stand-in backend", () => {
     await waitFor(async () => expect((await backend.status()).power.on_ac).toBe(false));
   });
 
+  it("runs Learn now, and stops when the laptop is touched", async () => {
+    window.location.hash = "#learning";
+    render(<App />);
+    const start = await screen.findByRole("button", { name: "Start learning now" });
+    await act(async () => fireEvent.click(start));
+    const dialog = screen.getByRole("dialog", { name: "Learn now?", hidden: true });
+    expect((within(dialog).getByRole("checkbox", { hidden: true }) as HTMLInputElement).checked).toBe(true);
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Start", hidden: true })));
+    expect(await screen.findByText(/Waiting for the screen to turn off/)).toBeTruthy();
+    expect(await screen.findByText(/Test 2 of 8: Sound chip sleep/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Results of this session" })).getAllByText("Kept").length).toBe(1);
+    await act(async () => { demoControls.touch!(); window.dispatchEvent(new Event("dynamis:changed")); });
+    expect(await screen.findByText(/Stopped: you used the laptop\. 1 of 8 tests finished/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Run again" })).toBeTruthy();
+  }, 15000);
+
   it("runs the sleep test and uses the kind it recommends", async () => {
     window.location.hash = "#battery";
     render(<App />);

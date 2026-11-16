@@ -195,6 +195,17 @@ export function Demo() {
           >
             Pretend another tool changed a setting
           </button>
+          <button
+            type="button"
+            className="btn btn-small"
+            title="As if someone used the laptop during Learn now: the session stops."
+            onClick={() => {
+              demoControls.touch?.();
+              changed();
+            }}
+          >
+            Pretend someone touched the laptop
+          </button>
           {!appOpen && <button type="button" className="btn btn-small" onClick={() => setAppOpen(true)}>Open the app</button>}
         </span>
       </div>

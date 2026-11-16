@@ -35,7 +35,8 @@ A sidebar with six main sections. Advanced is always last and visually separated
 
 ## Home
 
-- **Power use, at the top:** watts now, the average, and a chart of the last 30 minutes with grid lines (watts from zero up the side, minutes along the bottom). Readings come from the app while it is open on battery; plugged in, the chart says most laptops report nothing while charging.
+- **Power use, at the top:** watts now, the average, the hottest temperature, and a chart of the last 30 minutes with grid lines (watts from zero up the side, minutes along the bottom). Readings come from the app while it is open on battery; plugged in, the chart says most laptops report nothing while charging.
+- **Battery meter:** a battery-shaped bar across the time-left card, filled to the charge with the percentage inside ("79%", "79% · charging"); orange at 20% or less.
 - **Big estimate:** "About 4 h 10 min left" as a range ("3 h 50 – 4 h 30"), or "Fully charged in 40 min".
 - **Status sentence:** "Saving battery while you browse." with the active mode as a chip.
 - **The slider:** Longer battery ↔ Faster, five steps.
@@ -56,6 +57,8 @@ Health percentage against design capacity, wear trend, charge limit toggle (only
 A ranked list of apps by estimated energy today and this week, clearly marked as estimates. Plugged in, where there are no battery watts to share out, the list ranks by processor time instead. Each app has an *Options* dialog: share of the processor (*Normal*, *Never slow it down*, *Always slow it down*) and *Mode while it is open*. Below the list: *Slow down apps in the background on battery*, *Give the app in front priority*, *Count battery use per app*, and *Forget app history*. Tags on each row say whether it is open or in front, its mode, and whether it is slowed or has priority right now. **(Built.)** Still planned: a warning with one action for misbehaving apps.
 
 ## Learning
+
+**Learn now** (planned; mocked up in the app, marked *Planned*): start a baseline session, leave the laptop unplugged and alone for about two hours, and every test runs back to back, with a light workload for the settings whose cost is lag. Shows what it needs, the test running and time left, and each result; any use of the laptop stops it. See the roadmap, "To do: Learn now".
 
 **Built.** Its own place in the main menu. The top card shows the switch and progress as a percentage of the tests this laptop needs, with a bar, the stage (one setting at a time, or processor settings together), and about how many tests and how much quiet time on battery are left. The percentage is an estimate: while settings are tuned together, a kept change can open a step or two more, so it can step back slightly; it reads 100% only when nothing is left to test. Below: what it kept (plain names, what each was, what it saves, *Forget*) and the tests so far. The technical table stays in Advanced → Learning. Home's learning card shows the same percentage and bar.
 

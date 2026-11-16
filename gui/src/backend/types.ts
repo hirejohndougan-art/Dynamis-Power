@@ -35,6 +35,8 @@ export interface Status {
     design_wh: number | null;
     full_wh: number | null;
     charge_limit: number | null;
+    /** The hottest temperature sensor, °C. */
+    temp_c?: number | null;
   };
   safe_mode: string | null;
   /** The last unclean shutdown (freeze, crash, power cut) and safe mode as a test. */
@@ -252,6 +254,12 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** "Learn now": a session that runs every test back to back while the
+   * laptop is left alone. Optional: planned, not in the service yet, so the
+   * real app hides it; the demo shows a mockup. */
+  learnSession?(): Promise<LearnSession>;
+  startLearnSession?(withWorkload: boolean): Promise<void>;
+  stopLearnSession?(): Promise<void>;
   /** The guided sleep test. */
   sleepTest(): Promise<SleepTestInfo>;
   startSleepTest(minutes: number): Promise<void>;
@@ -365,4 +373,26 @@ export type SleepTestInfo = {
   active: string | null;
   /** The laptop can wake itself (it has a wake-up alarm). */
   alarm: boolean;
+};
+
+export type LearnSessionResult = {
+  setting: string;
+  label: string;
+  value: string;
+  verdict: "keep" | "reject" | "unclear";
+  reason: string;
+  saves_w: number | null;
+  under_load: boolean;
+};
+export type LearnSession = {
+  phase: "idle" | "waiting_screen" | "testing" | "done" | "stopped";
+  total: number;
+  done: number;
+  current: { setting: string; label: string; value: string; under_load: boolean } | null;
+  minutes_left: number | null;
+  results: LearnSessionResult[];
+  stopped_reason: string | null;
+  saves_w: number;
+  /** Shown as a mockup (not built in the service yet). */
+  preview?: boolean;
 };

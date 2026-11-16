@@ -1,5 +1,6 @@
-import { backend, type Status } from "../backend";
-import { ProgressBar, Switch } from "../components";
+import { useEffect, useState } from "react";
+import { backend, type LearnSession, type Status } from "../backend";
+import { Dialog, ProgressBar, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { duration, formatTime, t, tn, valueName } from "../i18n";
 
@@ -53,6 +54,8 @@ export function Learning(props: { status: Status; refresh: () => void }) {
           <p className="muted small">{t("learn_slow_battery", { s: Math.round(s.power_update_s) })}</p>
         )}
       </section>
+
+      {backend.learnSession && <LearnNow status={props.status} run={run} />}
 
       <section className="card" aria-labelledby="lkept-heading">
         <h2 id="lkept-heading">{t("learning_kept_heading")}</h2>
@@ -113,5 +116,132 @@ export function Learning(props: { status: Status; refresh: () => void }) {
       </section>
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
+  );
+}
+
+const VERDICT_BADGE: Record<string, string> = { keep: "badge-safe", reject: "badge-risky", unclear: "" };
+
+/** "Learn now": the person leaves the laptop alone and every test runs back
+ * to back to set a baseline; everyday learning carries on afterwards. */
+function LearnNow(props: { status: Status; run: (a: () => Promise<string | void>) => void }) {
+  const [d, setD] = useState<LearnSession | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [workload, setWorkload] = useState(true);
+  const load = () => backend.learnSession?.().then(setD).catch(() => setD(null));
+  useEffect(() => {
+    load();
+    const again = () => load();
+    window.addEventListener("dynamis:changed", again);
+    const id = window.setInterval(load, 3000);
+    return () => {
+      window.removeEventListener("dynamis:changed", again);
+      window.clearInterval(id);
+    };
+  }, []);
+  if (!d) return null;
+  const pw = props.status.power;
+  const running = d.phase === "waiting_screen" || d.phase === "testing";
+  const ready = !pw.on_ac && (pw.battery_pct ?? 0) >= 40 && !props.status.safe_mode;
+  const act = (a: () => Promise<void>) =>
+    props.run(async () => {
+      await a();
+      await load();
+    });
+  const minutesSaved = pw.full_wh && d.saves_w > 0 ? Math.round((pw.full_wh / Math.max(0.5, (pw.watts ?? 6) - d.saves_w) - pw.full_wh / (pw.watts ?? 6)) * 60) : null;
+  return (
+    <section className="card" aria-labelledby="lnow-heading">
+      <div className="row spread">
+        <h2 id="lnow-heading">{t("lnow_heading")}</h2>
+        {d.preview && <span className="badge">{t("lnow_preview")}</span>}
+      </div>
+      <p className="muted">{t("lnow_intro")}</p>
+
+      {running && (
+        <>
+          <ProgressBar pct={Math.round((d.done / d.total) * 100)} />
+          <div className="notice notice-info" role="status">
+            <span>
+              {d.phase === "waiting_screen"
+                ? t("lnow_waiting_screen")
+                : t("lnow_testing", { n: d.done + 1, total: d.total, label: d.current?.label ?? "", value: valueName(d.current?.setting ?? "", d.current?.value ?? null) })}
+              {d.current?.under_load && ` ${t("lnow_under_load")}`}
+            </span>
+            <button type="button" className="btn btn-small" onClick={() => act(() => backend.stopLearnSession!())}>
+              {t("lnow_stop")}
+            </button>
+          </div>
+          <p className="small muted">
+            {d.minutes_left != null && t("lnow_left", { time: duration(d.minutes_left / 60) })} {t("lnow_touch_stops")}
+          </p>
+        </>
+      )}
+
+      {!running && (
+        <>
+          {d.phase === "done" && (
+            <p>
+              <strong>{t("lnow_done", { kept: d.results.filter((r) => r.verdict === "keep").length, w: d.saves_w.toFixed(2) })}</strong>
+              {minutesSaved != null && minutesSaved > 0 && ` ${t("lnow_done_minutes", { min: minutesSaved })}`} {t("lnow_continues")}
+            </p>
+          )}
+          {d.phase === "stopped" && (
+            <p className="notice">{t("lnow_stopped", { why: d.stopped_reason ?? "", done: d.done, total: d.total })}</p>
+          )}
+          <ul className="small muted" aria-label={t("lnow_needs")}>
+            <li>{pw.on_ac ? "✗" : "✓"} {t("lnow_need_battery")}</li>
+            <li>{(pw.battery_pct ?? 0) >= 40 ? "✓" : "✗"} {t("lnow_need_charge")}</li>
+            <li>{t("lnow_need_alone")}</li>
+          </ul>
+          <button type="button" className="btn btn-primary" disabled={!ready} onClick={() => setAsking(true)}>
+            {d.phase === "idle" ? t("lnow_start") : t("lnow_again")}
+          </button>
+        </>
+      )}
+
+      {d.results.length > 0 && (
+        <ul className="entries" aria-label={t("lnow_results")}>
+          {d.results.map((r) => (
+            <li key={r.setting} className="entry">
+              <div className="stack" style={{ gap: 2 }}>
+                <span>
+                  {r.label}: {valueName(r.setting, r.value)}
+                  {r.under_load && <span className="muted small"> · {t("lnow_with_workload")}</span>}
+                </span>
+                <span className="muted small">{r.reason}</span>
+              </div>
+              <span className={`badge ${VERDICT_BADGE[r.verdict]}`}>{t(`lnow_verdict_${r.verdict}` as "lnow_verdict_keep")}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Dialog
+        open={asking}
+        onClose={() => setAsking(false)}
+        title={t("lnow_confirm_title")}
+        actions={
+          <>
+            <button type="button" className="btn" onClick={() => setAsking(false)}>{t("cancel")}</button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setAsking(false);
+                act(() => backend.startLearnSession!(workload));
+              }}
+            >
+              {t("lnow_confirm")}
+            </button>
+          </>
+        }
+      >
+        <p>{t("lnow_confirm_desc", { time: duration((d.total * 9 + 5) / 60) })}</p>
+        <label className="check">
+          <input type="checkbox" checked={workload} onChange={(e) => setWorkload(e.target.checked)} />
+          {t("lnow_workload")}
+        </label>
+        <p className="muted small">{t("lnow_workload_desc")}</p>
+      </Dialog>
+    </section>
   );
 }

@@ -113,6 +113,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 ### Changed
 
 - Canary yellow is the app's colour, with dark gold for lines and text on light backgrounds; the app icon and the panel icon for Balanced are yellow with a dark bolt.
+- Home: a battery meter across the time-left card with the percentage inside (orange at 20% or less), and the hottest temperature next to power use (`power.temp_c` in `Status`).
+- Learning: *Learn now* mocked up (marked *Planned*; the service does not have it yet): a baseline session run while the laptop is left alone. The demo plays it out, with "Pretend someone touched the laptop".
 - Advanced → Settings always shows the details (setting IDs, raw values, allowed ranges, why a value is not allowed); the Details switch is gone.
 - Home: Power use is at the top, with a chart of the last 30 minutes with grid lines, watts and time labels, and the average.
 - The settings lock is now a kernel file lock, released automatically when a process exits, instead of a PID file. Rust 1.89 or newer is required.
