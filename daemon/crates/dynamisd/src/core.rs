@@ -459,10 +459,14 @@ impl Core {
         self.sleeptest.start(&root, &dir, minutes, &ctx, unix_now())
     }
 
-    /// Whether device power saving should be in force: on battery, and not
-    /// in Faster.
+    /// Whether device power saving should be in force: on battery (or on a
+    /// computer without one, which is always on mains; decision 0023), and
+    /// not in Faster.
     fn devices_save(&self, on_ac: bool) -> bool {
-        !on_ac && self.active() != Profile::Performance
+        let no_battery = dynamis_core::sensors::power::read(&self.root)
+            .batteries
+            .is_empty();
+        (!on_ac || no_battery) && self.active() != Profile::Performance
     }
 
     pub fn set_device_policy(&mut self, p: crate::devices::DevicePolicy) -> Result<(), String> {

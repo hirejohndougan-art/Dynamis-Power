@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Computers without a battery (decision 0023): the Battery screen leaves the menu, Modes asks only for the mode for ordinary use, Learning says it cannot measure there yet and hides Learn now and the sleep test, the welcome says what works, and letting idle devices sleep (when switched on) applies on mains there, since such a computer is never on battery.
+
 - Other power tools (decision 0022): while Asus Linux (asusd) runs, the firmware power mode, charge limit and charge start are left to it; while supergfxctl runs, the second graphics chip is. The engine refuses them with "left to …" (not counted as a failure when a mode is applied), Advanced shows "Left to … which is running", and the Battery screen says who sets the charge limit. TUXEDO Control Center and Slimbook Battery join the tools Dynamis Power offers to switch off.
 
 - Learning on slow laptops (decision 0020): a moment counts as quiet when power use has been steady for a minute; busier interactive use also counts on laptops with few cores (below 120% of one core, between 40% and 80% of the chip), so learning runs on a two-core laptop in everyday light work. Moving between quiet kinds of use no longer ends a test. New waiting reason "power use kept changing".

@@ -358,4 +358,22 @@ describe("the app with the stand-in backend", () => {
     expect(within(card).getByText("Graphics")).toBeTruthy();
     expect(within(card).getByText("Screen")).toBeTruthy();
   }, 10000);
+  it("hides the battery features on a computer without a battery", async () => {
+    const real = backend.status;
+    const spy = vi.spyOn(backend, "status").mockImplementation(async () => {
+      const s = await real();
+      return { ...s, power: { ...s.power, has_battery: false, battery_pct: null, hours_left: null, on_ac: true } };
+    });
+    try {
+      window.location.hash = "#battery";
+      render(<App />);
+      expect(await screen.findByText("No battery: running on mains power")).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Battery" })).toBeNull();
+      await act(async () => fireEvent.click(screen.getByRole("link", { name: "Learning" })));
+      expect(await screen.findByText(/This computer has no battery/)).toBeTruthy();
+      expect(screen.queryByRole("heading", { name: "Learn now" })).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

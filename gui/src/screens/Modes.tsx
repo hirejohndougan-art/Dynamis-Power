@@ -198,21 +198,23 @@ export function Modes(props: { status: Status; refresh: () => void }) {
         {prefs && (
           <>
             <div className="row">
-              {select("on_ac", t("modes_on_ac"))}
-              {select("on_battery", t("modes_on_battery"))}
+              {select("on_ac", s.power.has_battery ? t("modes_on_ac") : t("modes_on_mains_only"))}
+              {s.power.has_battery && select("on_battery", t("modes_on_battery"))}
             </div>
-            <label className="field">
-              <span className="field-label">{t("modes_low_battery")}: {prefs.low_battery_pct}%</span>
-              <input
-                type="range"
-                min={Math.max(10, prefs.critical_battery_pct)}
-                max={60}
-                step={5}
-                value={prefs.low_battery_pct}
-                onChange={(e) => set("low_battery_pct", Number(e.target.value))}
-                aria-label={t("modes_low_battery")}
-              />
-            </label>
+            {s.power.has_battery && (
+              <label className="field">
+                <span className="field-label">{t("modes_low_battery")}: {prefs.low_battery_pct}%</span>
+                <input
+                  type="range"
+                  min={Math.max(10, prefs.critical_battery_pct)}
+                  max={60}
+                  step={5}
+                  value={prefs.low_battery_pct}
+                  onChange={(e) => set("low_battery_pct", Number(e.target.value))}
+                  aria-label={t("modes_low_battery")}
+                />
+              </label>
+            )}
             <Switch checked={prefs.boost_on_ac} onChange={(v) => set("boost_on_ac", v)} label={t("modes_boost")} />
             <div>
               <button type="button" className="btn btn-primary" onClick={() => run(() => backend.setAutoPrefs(prefs).then(() => t("modes_saved")))}>

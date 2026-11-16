@@ -20,7 +20,7 @@ The visual mock-ups are kept with the project's design files. This document is t
 
 ## Navigation
 
-A sidebar, in this order: Dashboard, Modes, Apps, Battery, Devices, Learning, Activity, then Advanced, always last and visually separated.
+A sidebar, in this order: Dashboard, Modes, Apps, Battery, Devices, Learning, Activity, then Advanced, always last and visually separated. On a computer without a battery, Battery is left out ([decision 0023](decisions/0023-desktops-two-gpus-image-based-flatpak.md)); Modes then asks only for the mode for ordinary use, and Learning explains that it cannot measure power there yet.
 
 | Section | Who it's for | Purpose |
 | --- | --- | --- |

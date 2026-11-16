@@ -59,7 +59,10 @@ export function App() {
           <Logo />
           <span>{t("app_name")}</span>
         </div>
-        {nav.map(([k, label]) => (
+        {nav
+          // A computer without a battery has no Battery screen (decision 0023).
+          .filter(([k]) => k !== "battery" || status?.power.has_battery !== false)
+          .map(([k, label]) => (
           <a key={k} href={`#${k}`} className="nav-link" aria-current={screen === k ? "page" : undefined}>
             {t(label)}
           </a>
@@ -78,13 +81,13 @@ export function App() {
           </div>
         ) : !status ? (
           <p className="muted" role="status">{t("loading")}</p>
-        ) : screen === "home" ? (
+        ) : screen === "home" || (screen === "battery" && !status.power.has_battery) ? (
           <Home status={status} watts={watts} refresh={refresh} go={go} />
         ) : screen === "modes" ? (
           <Modes status={status} refresh={refresh} />
         ) : screen === "apps" ? (
           <Apps status={status} refresh={refresh} />
-        ) : screen === "battery" ? (
+        ) : screen === "battery" && status.power.has_battery ? (
           <Battery status={status} refresh={refresh} go={go} />
         ) : screen === "devices" ? (
           <Devices status={status} refresh={refresh} />

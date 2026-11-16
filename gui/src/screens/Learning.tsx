@@ -32,6 +32,7 @@ export function Learning(props: { status: Status; refresh: () => void }) {
         </div>
         {p && <ProgressBar pct={p.pct} />}
         <p className="muted">{t("learning_intro")}</p>
+        {!props.status.power.has_battery && <p className="notice notice-info">{t("learning_no_battery")}</p>}
         {p && (
           <>
             <p>{t(`learning_stage_${p.stage}` as "learning_stage_single")}</p>
@@ -56,7 +57,7 @@ export function Learning(props: { status: Status; refresh: () => void }) {
         )}
       </section>
 
-      <LearnNow status={props.status} run={run} />
+      {props.status.power.has_battery && <LearnNow status={props.status} run={run} />}
       {props.status.power.has_battery && <SleepTest locked={!!props.status.safe_mode} run={run} />}
 
       <section className="card" aria-labelledby="lkept-heading">
