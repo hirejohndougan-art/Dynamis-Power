@@ -33,6 +33,7 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &StorageSataAlpm,
         &WifiPowerSave,
         &NetWakeOnLan,
+        &DiskApm,
         &GpuAmdPowerLevel,
         &GpuMaxFreq,
         &GpuMinFreq,
@@ -1579,6 +1580,66 @@ impl Setting for GpuDiscretePower {
             .map(|g| Write {
                 path: format!("{g}/power/control"),
                 contents: v.into(),
+            })
+            .collect())
+    }
+}
+
+/// Spinning hard disks' power management level (TLP's `DISK_APM_LEVEL`),
+/// through ATA commands (`crate::ata`), every spinning disk with APM at
+/// once. 128 saves the most without the disk spinning down by itself; 254
+/// is fastest; `off` switches APM off. Experimental until confirmed on real
+/// disks, so it needs an explicit yes.
+pub struct DiskApm;
+
+impl DiskApm {
+    fn disks(root: &SysRoot) -> Vec<(String, Option<u8>)> {
+        crate::ata::rotational_disks(root)
+            .into_iter()
+            .filter_map(|d| crate::ata::get_apm(root, &d).ok().map(|l| (d, l)))
+            .collect()
+    }
+}
+
+impl Setting for DiskApm {
+    fn id(&self) -> &'static str {
+        "storage.disk_apm"
+    }
+    fn label(&self) -> &'static str {
+        "Hard disk power level"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Experimental
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if crate::ata::rotational_disks(root).is_empty() {
+            return unsupported("no spinning hard disk here");
+        }
+        if DiskApm::disks(root).is_empty() {
+            return unsupported("the hard disk has no power management level");
+        }
+        Probe::Supported {
+            allowed: Allowed::Choices {
+                values: ["128", "192", "254", "off"].map(String::from).to_vec(),
+            },
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let disks = DiskApm::disks(root);
+        let Some((_, first)) = disks.first() else {
+            return Err(ReadError::Missing);
+        };
+        if disks.iter().any(|(_, l)| l != first) {
+            return Ok("mixed".into());
+        }
+        Ok(first.map_or("off".into(), |l| l.to_string()))
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(DiskApm::disks(root)
+            .into_iter()
+            .map(|(d, _)| Write {
+                path: format!("ata-apm:{d}"),
+                contents: value.into(),
             })
             .collect())
     }

@@ -10,6 +10,7 @@
 
 pub mod advisor;
 pub mod apps;
+pub mod ata;
 pub mod auto;
 pub mod boots;
 pub mod calibrate;

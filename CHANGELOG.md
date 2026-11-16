@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Hard disk power level (TLP list): `storage.disk_apm` sets a spinning disk's APM level (128, 192, 254 or off) with ATA commands as `hdparm -B` does; experimental, so it needs a yes, and never below 128. Spin-down time is not offered because it cannot be read back for Restore. TLP's `DISK_APM_LEVEL` maps to it.
+
 - Docking (TLP list): radios can be switched off while the laptop is in its dock and back on when it leaves (Devices → Radios). TLP's `DEVICES_TO_DISABLE_*` lines point there when imported.
 
 - Radios (TLP list; Devices screen): turn Bluetooth or mobile broadband off on battery or when the computer starts, and Wi-Fi off while a network cable is plugged in. Through the rfkill software switches, journaled and undone by Restore; a rule acts only when the situation changes, so a radio switched back on by hand stays on. `Radios`, `SetRadioPolicy`.

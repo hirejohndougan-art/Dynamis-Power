@@ -1627,3 +1627,31 @@ mod vendor_charge {
         assert!(matches!(s.probe(&sb.root()), Probe::Unsupported { .. }));
     }
 }
+
+#[test]
+fn hard_disk_power_level_needs_a_yes_and_never_goes_below_128() {
+    let sb = Sandbox::new();
+    let root = sb.dir.join("root");
+    dynamis_core::ata::fixture::disk(&root, "sda", Some("254"));
+    dynamis_core::ata::fixture::disk(&root, "sdb", None); // no APM: left alone
+    let apm = || std::fs::read_to_string(root.join("run/dynamis-test/ata/sda/apm")).unwrap();
+    let mut e = sb.engine();
+    assert!(matches!(
+        e.apply(&req("storage.disk_apm", "128")),
+        Err(EngineError::NeedsOptIn(_))
+    ));
+    let yes = |v| Request {
+        id: "storage.disk_apm",
+        value: v,
+        allow_risky: true,
+        trial_secs: None,
+        reason: "test",
+    };
+    e.apply(&yes("128")).unwrap();
+    assert_eq!(apm(), "128");
+    assert!(e.apply(&yes("64")).is_err(), "not offered");
+    e.apply(&yes("off")).unwrap();
+    assert_eq!(apm(), "off");
+    e.restore().unwrap();
+    assert_eq!(apm(), "254");
+}

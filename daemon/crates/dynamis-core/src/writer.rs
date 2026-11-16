@@ -87,6 +87,25 @@ fn wifi_power_save(path: &str) -> Option<&str> {
 
 pub(crate) fn write_all(root: &SysRoot, writes: &[Write]) -> Result<(), String> {
     for w in writes {
+        if let Some(disk) = w.path.strip_prefix("ata-apm:") {
+            if !crate::ata::valid_disk(disk) {
+                return Err(format!(
+                    "refused to write outside the allowed paths: {}",
+                    w.path
+                ));
+            }
+            let level = match w.contents.as_str() {
+                "off" => None,
+                v => Some(
+                    v.parse::<u8>()
+                        .ok()
+                        .filter(|l| *l >= 128 && *l <= 254)
+                        .ok_or_else(|| format!("{}: {v} is not 128-254 or off", w.path))?,
+                ),
+            };
+            crate::ata::set_apm(root, disk, level).map_err(|e| format!("{}: {e}", w.path))?;
+            continue;
+        }
         if w.path.starts_with("nl80211:") {
             let ifname = wifi_power_save(&w.path)
                 .ok_or_else(|| format!("refused to write outside the allowed paths: {}", w.path))?;
@@ -149,6 +168,9 @@ mod tests {
             "/sys/class/drm/card0/gt_RP0_freq_mhz",
             "/sys/class/net/eth0/address",
             "nl80211:wlan0/ps",
+            "ata-apm:nvme0n1",
+            "ata-apm:sda1",
+            "ata-apm:../sda",
             "nl80211:../x/power_save",
             "nl80211:wlan0/../../power_save",
             "/sys/class/backlight/intel_backlight/max_brightness",

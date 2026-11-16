@@ -107,7 +107,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 - [x] SATA link power (`storage.sata_alpm`; "minimum power" not offered)
 - [x] AHCI controller runtime power management (part of "Let idle built-in hardware sleep")
-- [ ] Hard disk power level (APM) and spin-down time, for laptops with spinning disks
+- [x] Hard disk power level (APM) for laptops with spinning disks (`storage.disk_apm`, experimental, 128 to 254 or off). Spin-down time not offered: it cannot be read back, so Restore could not put it back
 - [x] I/O scheduler (`storage.io_scheduler`)
 
 **Processor**

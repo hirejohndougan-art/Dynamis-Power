@@ -148,6 +148,18 @@ fn wol(v: &str) -> Option<String> {
         _ => None,
     }
 }
+/// TLP's APM levels are per disk ("128 128"); the first one counts, moved
+/// up to the nearest level offered (never below 128); 255 means off.
+fn apm_level(v: &str) -> Option<String> {
+    let l: u32 = v.split_whitespace().next()?.parse().ok()?;
+    Some(match l {
+        255 => "off".into(),
+        0..=128 => "128".into(),
+        129..=192 => "192".into(),
+        _ => "254".into(),
+    })
+}
+
 /// Graphics frequencies are offered in 50 MHz steps.
 fn gpu_mhz(v: &str) -> Option<String> {
     v.parse::<u64>()
@@ -191,6 +203,7 @@ const PER_SOURCE: &[(&str, &str, Convert)] = &[
     ("WIFI_PWR", "wifi.power_save", same),
     ("INTEL_GPU_MAX_FREQ", "gpu.max_freq", gpu_mhz),
     ("INTEL_GPU_MIN_FREQ", "gpu.min_freq", gpu_mhz),
+    ("DISK_APM_LEVEL", "storage.disk_apm", apm_level),
 ];
 
 /// TLP keys with one value.
