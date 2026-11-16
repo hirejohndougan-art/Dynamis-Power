@@ -104,6 +104,23 @@ export function SleepTest(props: { locked: boolean; run: (a: () => Promise<strin
           </div>
         )
       )}
+      {d.hibernate && (
+        <div className="stack" style={{ gap: 4 }}>
+          <h3>{t("hib_heading")}</h3>
+          {d.hibernate.ready ? (
+            <p className="small">{t("hib_ready")}</p>
+          ) : (
+            <>
+              <p className="small muted">{t("hib_not_ready")}</p>
+              <ul className="small muted">
+                {d.hibernate.missing.map((m) => (
+                  <li key={m}>{t(`hib_missing_${m}`)}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
       <Dialog
         open={asking}
         onClose={() => setAsking(false)}

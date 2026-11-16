@@ -551,6 +551,9 @@ impl SleepTest {
             "offered": types,
             "active": active,
             "alarm": root.exists("/sys/class/rtc/rtc0/wakealarm"),
+            // Whether "sleep, then hibernate" could be set up here, and what
+            // is missing (advice only; decision 0025).
+            "hibernate": dynamis_core::hibernate::check(root),
         })
     }
 }

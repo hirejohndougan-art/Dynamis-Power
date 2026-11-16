@@ -423,6 +423,8 @@ export type SleepTestInfo = {
   active: string | null;
   /** The laptop can wake itself (it has a wake-up alarm). */
   alarm: boolean;
+  /** Whether "sleep, then hibernate" could be set up here (advice only). */
+  hibernate?: { ready: boolean; missing: ("kernel" | "lockdown" | "swap" | "resume")[]; locked_down: boolean };
 };
 
 export type LearnSessionResult = {

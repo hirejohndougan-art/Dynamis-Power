@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Hibernation readiness (decision 0025): under the sleep test, the app says whether "sleep, then hibernate when the battery runs low" could be used here and, if not, what is missing (the kernel does not offer it, kernel lockdown, not enough swap, no resume setting). Advice only: Dynamis Power never sets it up. Also in `dynamis stat`.
+
 - Battery recalibration (Battery screen; decision 0019): with the charger plugged in, the battery runs the laptop down to 15% (`charge_behaviour` = `force-discharge`, only where the kernel offers it in the standard file), then charges fully, lifting a charge limit for that one charge. Only after a yes. Unplugging, warmth, safe mode, sleep, Stop, Restore or a day passing end it, and a restart of the service in the middle switches the battery back at once. Shows what the gauge says the battery holds before and after. Engine `set_charge_behaviour` (journaled as `charge-behaviour`); `Recalibration`, `StartRecalibration`, `StopRecalibration`.
 
 - Wi-Fi power saving (`wifi.power_save`, decision 0018): read and set through the kernel's wireless interface (nl80211 netlink, written by hand with no new dependency), for every wireless interface whose driver reports it. Learning tests it; built-in quirks keep it off on Realtek RTL8821CE and RTL8723BE; TLP's `WIFI_PWR_ON_*` imports to it. The service's unit now allows netlink and no longer sets `PrivateNetwork=`; IP sockets and IP traffic stay forbidden, and a test guards that.

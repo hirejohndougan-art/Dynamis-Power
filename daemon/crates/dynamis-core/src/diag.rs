@@ -258,6 +258,25 @@ pub fn report(
     }
     let _ = writeln!(o);
 
+    let h = crate::hibernate::check(root);
+    let _ = writeln!(
+        o,
+        "Hibernation:    {}",
+        if h.ready {
+            "could be used (not set up by Dynamis Power)".to_string()
+        } else {
+            format!(
+                "not ready: {}",
+                h.missing
+                    .iter()
+                    .map(|k| crate::hibernate::describe(k))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        }
+    );
+    let _ = writeln!(o);
+
     let (baseline, blocked) = state
         .map(|d| (baseline_at(d), blocked_at(d)))
         .unwrap_or_default();

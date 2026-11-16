@@ -21,6 +21,7 @@ pub mod engine;
 pub mod fs;
 pub mod gauge;
 pub mod health;
+pub mod hibernate;
 pub mod inventory;
 pub mod logfmt;
 pub mod overview;

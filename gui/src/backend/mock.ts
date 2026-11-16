@@ -209,7 +209,7 @@ export function mockBackend(): Backend {
 
   // The sleep test, played out quickly: each "sleep" lasts SLEEP_MS.
   const SLEEP_MS = 1200;
-  let sleep: SleepTestInfo = { phase: "idle", current: null, left: [], minutes: 30, results: [], recommended: null, original: null, note: null, offered: ["s2idle", "deep"], active: "s2idle", alarm: true };
+  let sleep: SleepTestInfo = { phase: "idle", current: null, left: [], minutes: 30, results: [], recommended: null, original: null, note: null, offered: ["s2idle", "deep"], active: "s2idle", alarm: true, hibernate: { ready: false, locked_down: false, missing: ["swap", "resume"] } };
   let sleepTimer: ReturnType<typeof setTimeout> | undefined;
   const sleepChanged = () => {
     if (typeof window !== "undefined") window.dispatchEvent(new Event("dynamis:changed"));

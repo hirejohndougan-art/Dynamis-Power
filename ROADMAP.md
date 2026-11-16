@@ -87,7 +87,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [x] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
 - [x] Desktops: hide battery features without a battery; the welcome says which features apply (0023)
 - [ ] GNOME extension in the package, with help switching it on (0024)
-- [ ] Hibernation readiness check and plain advice, in the sleep test report (0025)
+- [x] Hibernation readiness check and plain advice, in the sleep test report (0025)
 
 ## To do: fully replace TLP
 
@@ -174,7 +174,7 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 - [ ] **Brightness through the desktop:** setting brightness through the kernel works everywhere, but KDE Plasma's brightness slider may show the old level until it is next moved. Have the session agent set it through the desktop (`org.kde.ScreenBrightness` on Plasma 6, GNOME's settings daemon) when it is running, and fall back to the service.
 - [ ] **App power trend:** "Firefox uses 20% more power than last month" from the per-app energy totals, kept locally.
 - [ ] **What wakes the laptop:** list wake-up sources and wake reasons after sleep (`/sys/power/wakeup_sources`, the kernel log), to explain overnight drain.
-- [ ] **Sleep that turns into hibernation when the battery runs low:** advice only, never set up by the service ([0025](docs/decisions/0025-hibernate-on-low-battery-is-advice.md)).
+- [x] **Sleep that turns into hibernation when the battery runs low:** advice only, never set up by the service ([0025](docs/decisions/0025-hibernate-on-low-battery-is-advice.md)).
 - [ ] **Signals for the app:** `ThermalAlert`, `AppDetected`, `LearningProgress` on D-Bus, so the app and panel icon update without asking.
 - [ ] **Shared hardware profiles** (phase 8): a new laptop starts from what similar laptops learned; still opt-in, through the separate signed helper, publishing only per-model results (as in `schema/`), never per-person data. Federated averaging of model weights is not needed: the results are already small, per-setting measurements.
 
