@@ -1875,3 +1875,58 @@ fn the_sleep_test_compares_sleep_types() {
         );
     });
 }
+
+/// The brightness chosen for a mode is set when that mode starts, once:
+/// the person's own changes in between are left alone.
+#[test]
+fn brightness_follows_the_mode() {
+    let Some(env) = Env::new("brightness") else {
+        return;
+    };
+    let file = env
+        .dir
+        .join("root/sys/class/backlight/intel_backlight/brightness");
+    let level = || fs::read_to_string(&file).unwrap().trim().to_string();
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let b = c.brightness().await.unwrap();
+        assert_eq!(b["supported"], true, "{b}");
+        assert_eq!(b["now_pct"], 50.0, "{b}");
+        c.set_brightness_prefs(&serde_json::json!({"levels": {"power-saver": 30, "balanced": 60}}))
+            .await
+            .unwrap();
+        // Balanced is in use: set at once.
+        assert_eq!(level(), "28800");
+        c.set_profile("power-saver").await.unwrap();
+        assert_eq!(level(), "14400");
+        // The person brightens by hand; Faster has no level: left alone.
+        fs::write(&file, "40000").unwrap();
+        c.set_profile("performance").await.unwrap();
+        assert_eq!(level(), "40000");
+        assert!(c
+            .set_brightness_prefs(&serde_json::json!({"levels": {"balanced": 0}}))
+            .await
+            .is_err());
+        // Restore forgets the choices and leaves the screen as it is.
+        c.restore().await.unwrap();
+        assert_eq!(
+            c.brightness().await.unwrap()["levels"],
+            serde_json::json!({})
+        );
+        c.set_profile("balanced").await.unwrap();
+        assert_eq!(level(), "40000");
+        let j = c.journal(20).await.unwrap();
+        assert!(
+            j.as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["event"] == "brightness"),
+            "{j}"
+        );
+    });
+}

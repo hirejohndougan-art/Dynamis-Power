@@ -85,7 +85,7 @@ export function App() {
         ) : screen === "apps" ? (
           <Apps status={status} refresh={refresh} />
         ) : screen === "battery" ? (
-          <Battery status={status} refresh={refresh} />
+          <Battery status={status} refresh={refresh} go={go} />
         ) : screen === "devices" ? (
           <Devices status={status} refresh={refresh} />
         ) : screen === "learning" ? (

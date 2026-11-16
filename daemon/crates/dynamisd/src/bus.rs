@@ -661,6 +661,32 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// The screen brightness chosen for each mode, whether this screen's
+    /// brightness can be set, and its level now (JSON).
+    fn brightness(&self) -> String {
+        let c = self.0.lock();
+        c.brightness.json(&c.root).to_string()
+    }
+
+    /// Choose the screen brightness for each mode. Takes
+    /// `{"levels": {"power-saver": 40, ...}}`; a mode left out is left
+    /// alone. A new level for the mode in use is set at once.
+    async fn set_brightness_prefs(
+        &self,
+        prefs: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let p: crate::brightness::BrightnessPrefs =
+            serde_json::from_str(&prefs).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        self.0
+            .lock()
+            .set_brightness_prefs(p)
+            .map_err(fdo::Error::InvalidArgs)?;
+        Ok(())
+    }
+
     /// Forget every per-app energy total.
     async fn forget_app_usage(
         &self,

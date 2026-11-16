@@ -329,4 +329,33 @@ describe("the app with the stand-in backend", () => {
     const rows = await backend.settings();
     expect(rows.find((r) => r.id === "vm.swappiness")?.blocked).toBeNull();
   });
+  it("sets the screen brightness chosen for each mode", async () => {
+    window.location.hash = "#modes";
+    render(<App />);
+    const set = await screen.findAllByRole("switch", { name: "Set the screen brightness for this mode" });
+    expect(set).toHaveLength(3);
+    // Longer battery is the first card.
+    await act(async () => fireEvent.click(set[0]));
+    const slider = await screen.findByRole("slider", { name: "Screen brightness, Longer battery" });
+    await act(async () => fireEvent.change(slider, { target: { value: "30" } }));
+    await waitFor(async () => expect((await backend.brightness()).levels["power-saver"]).toBe(30), { timeout: 2000 });
+    expect(screen.getByText(/min more on battery than at the brightness now/)).toBeTruthy();
+    // Switching to that mode sets it once.
+    await act(async () => backend.setProfile("power-saver"));
+    expect((await backend.brightness()).now_pct).toBe(30);
+    const j = await backend.journal(5);
+    expect(j.some((e) => e.event === "brightness" && e.to === "30%")).toBe(true);
+    await act(async () => backend.setProfile("balanced"));
+    await act(async () => backend.setBrightnessPrefs({ levels: {} }));
+  });
+
+  it("shows what uses the battery", async () => {
+    window.location.hash = "#battery";
+    render(<App />);
+    const card = await screen.findByRole("region", { name: "What uses the battery" });
+    await waitFor(() => expect(within(card).getByText("Everything else")).toBeTruthy(), { timeout: 5000 });
+    expect(within(card).getByText("Processor")).toBeTruthy();
+    expect(within(card).getByText("Graphics")).toBeTruthy();
+    expect(within(card).getByText("Screen")).toBeTruthy();
+  }, 10000);
 });

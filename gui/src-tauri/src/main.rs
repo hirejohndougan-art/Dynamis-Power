@@ -191,6 +191,16 @@ async fn set_device_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), S
 }
 
 #[tauri::command]
+async fn brightness(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.brightness().await
+}
+
+#[tauri::command]
+async fn set_brightness_prefs(conn: State<'_, Conn>, prefs: Value) -> Result<(), String> {
+    client(&conn).await?.set_brightness_prefs(&prefs).await
+}
+
+#[tauri::command]
 async fn forget_app_usage(conn: State<'_, Conn>) -> Result<(), String> {
     client(&conn).await?.forget_app_usage().await
 }
@@ -286,6 +296,8 @@ fn main() {
             forget_app_usage,
             devices,
             set_device_policy,
+            brightness,
+            set_brightness_prefs,
             diagnostics,
             sleep_test,
             start_sleep_test,

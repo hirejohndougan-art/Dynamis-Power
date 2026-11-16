@@ -260,6 +260,21 @@ impl Client {
             .map_err(explain)
     }
 
+    /// The screen brightness chosen for each mode, and the level now.
+    pub async fn brightness(&self) -> Result<Value> {
+        self.json("Brightness", &()).await
+    }
+
+    /// Choose the screen brightness for each mode
+    /// (`{"levels": {"power-saver": 40}}`).
+    pub async fn set_brightness_prefs(&self, prefs: &Value) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetBrightnessPrefs", &(prefs.to_string(),))
+            .await
+            .map_err(explain)
+    }
+
     pub async fn forget_app_usage(&self) -> Result<()> {
         self.own()
             .await?

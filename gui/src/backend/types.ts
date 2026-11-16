@@ -269,6 +269,9 @@ export interface Backend {
   /** Devices that can sleep when idle (USB, internal), and the two switches. */
   devices(): Promise<DevicesInfo>;
   setDevicePolicy(p: DevicePolicy): Promise<void>;
+  /** The screen brightness chosen for each mode. */
+  brightness(): Promise<BrightnessInfo>;
+  setBrightnessPrefs(p: BrightnessPrefs): Promise<void>;
   predict(): Promise<Predict>;
   /** Unix seconds; 0 ends "Last until". */
   setTarget(until: number): Promise<void>;
@@ -316,6 +319,17 @@ export type Unclean = {
   in_safe_mode: number;
   /** Settings changed shortly before the freezes that led to safe mode. */
   suspects: Labelled[];
+};
+
+export type BrightnessPrefs = {
+  /** Percent for each mode; a mode left out is left alone. */
+  levels: { [P in Profile]?: number };
+};
+export type BrightnessInfo = BrightnessPrefs & {
+  /** Whether this screen's brightness can be set. */
+  supported: boolean;
+  now_pct: number | null;
+  min_pct: number;
 };
 
 export type DevicePolicy = {

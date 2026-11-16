@@ -175,6 +175,7 @@ dynamis auto off
 | `SleepTest()`, `StartSleepTest(minutes)`, `StopSleepTest()` | method | The guided sleep test: progress and results (JSON); start (5–60 minutes per sleep type; battery only); stop and put the original sleep type back |
 | `Diagnostics()` | method → text | The full diagnostic report (`dynamis stat`) |
 | `ChargeFullyOnce(on)` | method | Lift the charge limit until the battery is full or the charger is unplugged, or stop |
+| `Brightness()`, `SetBrightnessPrefs(json)` | method | The screen brightness chosen for each mode (`{"levels": {"power-saver": 40}}`; a mode left out is left alone), whether it can be set here and the level now. Set once when a mode starts; a new level for the mode in use at once |
 | `Devices()`, `SetDevicePolicy(json)` | method | USB devices and PCI functions that can sleep when idle, with why some are kept awake; the two switches (`{"usb": bool, "pci": bool}`) |
 | `ReportSession(facts)` | method | For the session agent only |
 

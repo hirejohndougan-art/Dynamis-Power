@@ -139,6 +139,12 @@ On the VivoBook (and any laptop where Modes used to show only Balanced):
 3. Plug the charger in: every device goes back to what it was. *Restore original settings* does the same and switches both off.
 4. Compare power on battery with the switches off and on (`sudo dynamis gauge`), with the same light use.
 
+### Screen brightness for each mode
+
+1. In the app, on Modes, switch on *Set the screen brightness for this mode* for Longer battery and move it to 30%. Switch to Longer battery: the screen should dim to about 30% once.
+2. Brighten it with the keys. Wait a minute: it should stay where you put it. Switch to Balanced and back: it dims to 30% again.
+3. Note whether the desktop's own brightness slider shows the new level. On KDE Plasma it may show the old one until it is moved; say so in the report.
+
 ### Tuning together (phase 5) and its gate
 
 1. Leave learning on. Once every setting has been tested on its own, `dynamis learn` shows tests of `cpu.turbo` and `cpu.max_perf_pct` again, one step at a time. `dynamis learned` lists each result with what it was tested together with.

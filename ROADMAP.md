@@ -160,6 +160,7 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 - [ ] **Time-of-day habits in auto mode:** use the habits already learned for charging (hour of the week) to prefer a mode at usual times, as a suggestion first.
 - [ ] **Re-check learned results over time** (every few months, and after a kernel or firmware update, see everyday problem 6): seasons, dust and updates change what is best.
 - [ ] **Graphics speed per activity:** test the graphics power level (`gpu.amd_power_level` low/auto now; Intel minimum and maximum graphics frequency, on the TLP list) in learning, within the driver's own limits, per activity.
+- [ ] **Brightness through the desktop:** setting brightness through the kernel works everywhere, but KDE Plasma's brightness slider may show the old level until it is next moved. Have the session agent set it through the desktop (`org.kde.ScreenBrightness` on Plasma 6, GNOME's settings daemon) when it is running, and fall back to the service.
 - [ ] **App power trend:** "Firefox uses 20% more power than last month" from the per-app energy totals, kept locally.
 - [ ] **What wakes the laptop:** list wake-up sources and wake reasons after sleep (`/sys/power/wakeup_sources`, the kernel log), to explain overnight drain.
 - [ ] **Sleep that turns into hibernation when the battery runs low** (systemd's suspend-then-hibernate): needs swap and a desktop setting, so a decision record first.

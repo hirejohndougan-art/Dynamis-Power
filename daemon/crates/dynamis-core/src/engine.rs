@@ -730,6 +730,62 @@ impl Engine {
         writer::write_all(&self.root, &writes).map_err(EngineError::Write)
     }
 
+    // --- Screen brightness per mode --------------------------------------
+
+    /// Set the screen's brightness to `pct` percent (5–100), for the
+    /// brightness the person chose for a mode. Brightness is the person's
+    /// own preference, not a tuned setting: it has no original value and
+    /// Restore does not put it back (the person moves it all the time).
+    /// Still journaled, refused in safe mode, and logged only in dry run.
+    /// Never below 5% (some screens go dark at 0). Returns whether it
+    /// changed.
+    pub fn set_brightness(&mut self, pct: f64, reason: &str) -> Result<bool> {
+        if let Some(why) = self.safe_mode() {
+            return Err(EngineError::SafeMode(why));
+        }
+        if !(5.0..=100.0).contains(&pct) {
+            return Err(EngineError::Invalid(format!(
+                "brightness {pct}% is outside 5–100%"
+            )));
+        }
+        let b = crate::sensors::backlight::read(&self.root).ok_or_else(|| {
+            EngineError::Unsupported("this laptop's screen brightness cannot be set".into())
+        })?;
+        if b.name.contains('/') || b.name.contains("..") {
+            return Err(EngineError::Invalid(format!(
+                "odd backlight name {}",
+                b.name
+            )));
+        }
+        let raw =
+            ((pct / 100.0 * b.max_brightness as f64).round() as u64).clamp(1, b.max_brightness);
+        if raw == b.brightness {
+            return Ok(false);
+        }
+        let to = format!("{pct:.0}%");
+        let from = format!("{:.0}%", b.percent);
+        if self.dry_run() {
+            self.log(
+                "would",
+                "display.brightness",
+                Some(&from),
+                Some(&to),
+                reason,
+            )?;
+            return Ok(false);
+        }
+        self.log(
+            "brightness",
+            "display.brightness",
+            Some(&from),
+            Some(&to),
+            reason,
+        )?;
+        let path = format!("/sys/class/backlight/{}/brightness", b.name);
+        self.write_device(&path, &raw.to_string())?;
+        Ok(true)
+    }
+
     // --- Device runtime power management (TLP batch 2) -------------------
 
     /// Let one USB device or PCI function sleep when idle (`auto`) or keep it

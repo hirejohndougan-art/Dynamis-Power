@@ -1290,3 +1290,40 @@ mod device_power {
         assert_eq!(sb.file(&format!("{CAM}/power/control")).trim(), "on");
     }
 }
+
+mod brightness {
+    use super::*;
+
+    const B: &str = "/sys/class/backlight/intel_backlight/brightness";
+
+    #[test]
+    fn sets_journals_and_refuses_where_it_must() {
+        let sb = Sandbox::new();
+        let mut e = sb.engine();
+        // The fixture is at 24000 of 48000 (50%).
+        assert!(!e.set_brightness(50.0, "test").unwrap());
+        assert!(e.set_brightness(40.0, "power saver chosen").unwrap());
+        assert_eq!(sb.file(B).trim(), "19200");
+        let j = e.journal(5);
+        assert_eq!(j.last().unwrap().event, "brightness");
+        assert_eq!(j.last().unwrap().to.as_deref(), Some("40%"));
+        // Not a setting: Restore leaves it alone.
+        e.restore().unwrap();
+        assert_eq!(sb.file(B).trim(), "19200");
+        for bad in [0.0, 4.0, 101.0, f64::NAN] {
+            assert!(
+                matches!(e.set_brightness(bad, "test"), Err(EngineError::Invalid(_))),
+                "{bad}"
+            );
+        }
+        e.set_dry_run(true).unwrap();
+        assert!(!e.set_brightness(80.0, "test").unwrap());
+        assert_eq!(sb.file(B).trim(), "19200");
+        e.set_dry_run(false).unwrap();
+        e.set_safe_mode(Some("test")).unwrap();
+        assert!(matches!(
+            e.set_brightness(80.0, "test"),
+            Err(EngineError::SafeMode(_))
+        ));
+    }
+}

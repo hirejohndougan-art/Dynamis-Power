@@ -13,6 +13,7 @@
 
 mod api;
 mod apps;
+mod brightness;
 mod bus;
 mod conflicts;
 mod core;

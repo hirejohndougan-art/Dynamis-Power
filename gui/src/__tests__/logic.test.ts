@@ -124,3 +124,42 @@ describe("sensors", () => {
     expect(w.cpu_w).toBeCloseTo(3);
   });
 });
+
+describe("what uses the battery", () => {
+  const base = { on_ac: false, battery_w: 6, battery_pct: 80, pressure: { cpu: 0, memory: 0, io: 0 }, thermal: [], cpu_mhz: 1000, brightness_pct: 50, idle: null };
+  const counters = (time: number, pkg: number, gpu: number) => ({
+    ...base,
+    time,
+    rapl: [
+      { id: "r0", name: "package-0", energy_uj: pkg, max_energy_range_uj: 1e12 },
+      { id: "r1", name: "uncore", energy_uj: gpu, max_energy_range_uj: 1e12 },
+    ],
+  });
+  const display = { w_per_pct: 0.03, base_w: 3, r2: 0.9, samples: 100 };
+
+  it("splits the total between screen, processor, graphics and the rest", async () => {
+    const { powerSplit } = await import("../power");
+    const s = powerSplit(counters(10, 0, 0), counters(12, 4e6, 1e6), display);
+    const w = Object.fromEntries(s.parts.map((p) => [p.key, p.w]));
+    expect(s.total).toBe(6);
+    expect(w.screen).toBeCloseTo(1.5);
+    expect(w.graphics).toBeCloseTo(0.5);
+    expect(w.processor).toBeCloseTo(1.5); // 2 W for the chip, less graphics
+    expect(w.rest).toBeCloseTo(2.5); // 6 - 2 - 1.5
+    expect(s.parts[0].key).toBe("rest"); // biggest first
+    // Plugged in: no total, no "everything else".
+    const p = powerSplit(counters(10, 0, 0), { ...counters(12, 4e6, 1e6), on_ac: true }, null);
+    expect(p.total).toBeNull();
+    expect(p.parts.map((x) => x.key).sort()).toEqual(["graphics", "processor"]);
+  });
+
+  it("estimates battery minutes for another brightness", async () => {
+    const { brightnessMinutes } = await import("../power");
+    const power = { on_ac: false, has_battery: true, battery_pct: 80, charging: false, watts: 6, hours_left: 5, hours_to_full: null, health_pct: null, cycles: null, design_wh: null, full_wh: null, charge_limit: null };
+    // 30 Wh left. Dimming 50% → 30% saves 0.6 W: 30/5.4 h instead of 5 h.
+    expect(brightnessMinutes(30, 50, display, power)).toBeCloseTo((30 / 5.4 - 5) * 60);
+    expect(brightnessMinutes(70, 50, display, power)!).toBeLessThan(0);
+    expect(brightnessMinutes(30, 50, null, power)).toBeNull();
+    expect(brightnessMinutes(30, 50, display, { ...power, on_ac: true })).toBeNull();
+  });
+});

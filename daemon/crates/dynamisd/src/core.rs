@@ -102,6 +102,8 @@ pub struct Core {
     pub fullcharge: crate::fullcharge::FullCharge,
     /// The guided sleep test.
     pub sleeptest: crate::sleeptest::SleepTest,
+    /// The screen brightness chosen for each mode.
+    pub brightness: crate::brightness::BrightnessState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -135,6 +137,7 @@ impl Core {
         let devices = crate::devices::DevicesState::load(&state_dir);
         let fullcharge = crate::fullcharge::FullCharge::load(&state_dir);
         let sleeptest = crate::sleeptest::SleepTest::load(&state_dir, 60.0);
+        let brightness = crate::brightness::BrightnessState::load(&state_dir);
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
@@ -149,7 +152,7 @@ impl Core {
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
             ..AutoState::default()
         };
-        Core {
+        let core = Core {
             root,
             state_dir,
             available,
@@ -166,7 +169,12 @@ impl Core {
             devices,
             fullcharge,
             sleeptest,
-        }
+            brightness,
+        };
+        // Nothing is set for the mode in force at start, so restarting the
+        // service leaves the screen alone.
+        core.brightness.prime(core.active());
+        core
     }
 
     pub fn available(&self) -> &[Profile] {
@@ -322,6 +330,10 @@ impl Core {
                 failures.join("; ")
             ));
         }
+        // The brightness chosen for this mode, once per mode change (the
+        // engine is one at a time, so let go of ours first).
+        drop(engine);
+        self.brightness.follow(&self.root, &self.state_dir, target);
         Ok(())
     }
 
@@ -452,6 +464,15 @@ impl Core {
         let want = self.devices_save(on_ac);
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
         self.devices.set_policy(p, &root, &dir, want)
+    }
+
+    pub fn set_brightness_prefs(
+        &mut self,
+        p: crate::brightness::BrightnessPrefs,
+    ) -> Result<(), String> {
+        let active = self.active();
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.brightness.set_prefs(p, &root, &dir, active)
     }
 
     pub fn report_session(&mut self, owner: &str, report: SessionReport) {

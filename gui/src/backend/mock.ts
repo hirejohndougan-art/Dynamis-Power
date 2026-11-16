@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, SleepTestInfo, LearnSession } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, SleepTestInfo, LearnSession } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -77,21 +77,39 @@ export function mockBackend(): Backend {
     overrides: JSON.parse(JSON.stringify(overrides)),
   });
   let energy = 1_000_000_000;
+  let gpuEnergy = 200_000_000;
+  let lastRead = Date.now() / 1000 - 2;
   let idleUs = [5e9, 2e10, 9e10];
+  // The screen: its level now and the level chosen for each mode.
+  let brightnessPct = 60;
+  let brightLevels: BrightnessPrefs["levels"] = {};
+  const setBrightness = (pct: number, reason: string) => {
+    if (Math.round(pct) === Math.round(brightnessPct)) return;
+    log({ event: "brightness", id: "display.brightness", label: "Screen brightness", from: `${Math.round(brightnessPct)}%`, to: `${Math.round(pct)}%`, reason });
+    brightnessPct = pct;
+  };
+  const screenExtraW = () => (brightnessPct - 60) * 0.031;
   const sensorsInfo = (): Sensors => {
-    energy += 1_400_000 + Math.random() * 300_000;
+    const t = Date.now() / 1000;
+    const dt = Math.max(0.1, t - lastRead);
+    lastRead = t;
+    energy += dt * (1_250_000 + Math.random() * 400_000);
+    gpuEnergy += dt * (220_000 + Math.random() * 120_000);
     idleUs = idleUs.map((v, i) => v + [5e3, 2e5, 1.5e6][i] * (0.8 + Math.random() * 0.4));
     return {
       time: Date.now() / 1000,
       on_ac: false,
-      battery_w: Math.round(watts * 100) / 100,
+      battery_w: Math.round((watts + screenExtraW()) * 100) / 100,
       battery_pct: 79,
-      rapl: [{ id: "intel-rapl:0", name: "package-0", energy_uj: Math.round(energy), max_energy_range_uj: 262143328850 }],
+      rapl: [
+        { id: "intel-rapl:0", name: "package-0", energy_uj: Math.round(energy), max_energy_range_uj: 262143328850 },
+        { id: "intel-rapl:0:1", name: "uncore", energy_uj: Math.round(gpuEnergy), max_energy_range_uj: 262143328850 },
+      ],
       pressure: { cpu: 1.2, memory: 0, io: 0.4 },
       thermal: [{ name: "thermal_zone0", kind: "x86_pkg_temp", temp_c: 48 + Math.random() * 3 }, { name: "thermal_zone1", kind: "acpitz", temp_c: 41 }],
       cpu_mhz: 1100 + Math.round(Math.random() * 400),
       idle: { cpus: 2, states: ["POLL", "C1", "C10"].map((name, index) => ({ name, index, time_us: Math.round(idleUs[index]) })) },
-      brightness_pct: 60,
+      brightness_pct: brightnessPct,
     };
   };
   const systemInfo = (): SystemInfo => ({
@@ -321,7 +339,7 @@ export function mockBackend(): Backend {
       },
       power: {
         on_ac: prefs.power_source === "mains", has_battery: true, temp_c: Math.round(48 + Math.random() * 3), battery_pct: 79, charging: false,
-        watts: Math.round(watts * 100) / 100, hours_left: Math.round((31.2 / watts) * 10) / 10, hours_to_full: null,
+        watts: Math.round((watts + screenExtraW()) * 100) / 100, hours_left: Math.round((31.2 / (watts + screenExtraW())) * 10) / 10, hours_to_full: null,
         health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: Number(values["battery.charge_limit"]),
       },
       safe_mode: safeMode,
@@ -345,7 +363,10 @@ export function mockBackend(): Backend {
     learned: async () => delay({ records, learned: kept(), display: status().display }),
     setProfile: async (p) => {
       refuse();
+      const before = profile;
       profile = p;
+      const pName = { "power-saver": "Longer battery", balanced: "Balanced", performance: "Faster" }[p];
+      if (before !== p && brightLevels[p] != null) setBrightness(brightLevels[p]!, `your brightness for ${pName}`);
       // As the service does: picking a mode by hand pauses auto mode.
       if (auto) pausedByHand = true;
       const epp = { "power-saver": "power", balanced: "balance_performance", performance: "performance" }[p];
@@ -372,6 +393,7 @@ export function mockBackend(): Backend {
       appPolicy = { ...appPolicy, slow_background: false, boost_front: false, always_slow: [] };
       keptSettings.clear();
       devicePolicy = { usb: false, pci: false, never: devicePolicy.never ?? [] };
+      brightLevels = {};
       fullCharge = null;
       target = null;
       adaptive = false;
@@ -492,6 +514,16 @@ export function mockBackend(): Backend {
         }
       }
       devicePolicy = p;
+    },
+    brightness: async () => delay({ supported: true, now_pct: brightnessPct, min_pct: 5, levels: { ...brightLevels } }),
+    setBrightnessPrefs: async (b) => {
+      refuse();
+      if (Object.values(b.levels).some((v) => v == null || v < 5 || v > 100)) throw new Error("brightness must be 5–100%");
+      const now = b.levels[profile];
+      const changed = now !== brightLevels[profile];
+      brightLevels = { ...b.levels };
+      const pName = { "power-saver": "Longer battery", balanced: "Balanced", performance: "Faster" }[profile];
+      if (changed && now != null) setBrightness(now, `you chose it for ${pName}`);
     },
     forgetAppUsage: async () => { usage = { today: [], week: [] }; },
     predict: async () => delay(predictInfo()),

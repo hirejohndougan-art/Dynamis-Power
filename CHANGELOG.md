@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Screen brightness for each mode (Modes screen): pick a level per mode, with what the screen uses there and how many minutes more or less the battery lasts. Set once when the mode starts (by hand, auto mode, an app or *Make it last*), so the brightness keys still win in between. Engine `set_brightness` (journaled as `brightness`, 5–100%); `Brightness`, `SetBrightnessPrefs`. Restore forgets the levels.
+- Battery screen: the four cards two by two, and *What uses the battery* at the bottom (screen, processor, graphics, everything else, measured while the page is open).
+
 - Guided sleep test, on the Battery screen and as `dynamis sleep-test`: with an explicit yes, the laptop sleeps 15–60 minutes with each kind of sleep it offers and wakes by itself (real-time clock alarm), then compares battery used per hour, devices that did not come back and resume errors in the kernel log. The original sleep type comes back; the one that woke cleanly and used least is recommended and applied (and kept) only after another yes. A type the laptop did not wake from properly is recorded as failed. `SleepTest`, `StartSleepTest`, `StopSleepTest`; engine `set_wake_alarm`.
 
 - Devices: "Keep awake" per device model on the Battery screen, for a device that misbehaves asleep but is not caught by class or driver. Kept across Restore.

@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { backend, type Predict, type Status } from "../backend";
+import { useEffect, useState } from "react";
+import { backend, type Predict, type Sensors, type Status } from "../backend";
 import { Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { clock, t } from "../i18n";
+import { powerSplit } from "../power";
 
-export function Battery(props: { status: Status; refresh: () => void }) {
+export function Battery(props: { status: Status; refresh: () => void; go?: (screen: string) => void }) {
   const p = props.status.power;
   const settings = useLoad(() => backend.settings(), []);
   const limitRow = settings.data?.find((r) => r.id === "battery.charge_limit");
@@ -14,7 +15,6 @@ export function Battery(props: { status: Status; refresh: () => void }) {
     props.refresh();
     predict.reload();
   });
-  const d = props.status.display;
   const fc = props.status.full_charge;
   const pr = predict.data;
 
@@ -23,7 +23,9 @@ export function Battery(props: { status: Status; refresh: () => void }) {
       <header className="page-head">
         <h1>{t("battery_title")}</h1>
       </header>
-      <section className="card">
+      <div className="grid grid-2">
+      <section className="card" aria-labelledby="health-heading">
+        <h2 id="health-heading">{t("battery_health_heading")}</h2>
         <dl className="stack" style={{ margin: 0 }}>
           <Row term={t("battery_health")} value={p.health_pct != null ? t("battery_health_value", { pct: Math.round(p.health_pct) }) : t("unknown")} />
           <Row
@@ -56,6 +58,7 @@ export function Battery(props: { status: Status; refresh: () => void }) {
           )}
         </section>
       )}
+      </div>
       <section className="card" aria-labelledby="limit-heading">
         <h2 id="limit-heading">{t("battery_limit")}</h2>
         {limitRow?.available && pr?.adaptive_charging ? (
@@ -103,10 +106,7 @@ export function Battery(props: { status: Status; refresh: () => void }) {
           </>
         )}
       </section>
-      <section className="card" aria-labelledby="screen-heading">
-        <h2 id="screen-heading">{t("battery_screen")}</h2>
-        <p>{d ? t("battery_screen_value", { w: (d.w_per_pct * 10).toFixed(2) }) : t("battery_screen_learning")}</p>
-      </section>
+      <PowerUse status={props.status} go={props.go} />
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
   );
@@ -174,6 +174,79 @@ function LastUntil(props: { predict: Predict; locked: boolean; run: (a: () => Pr
             </button>
           </div>
         </>
+      )}
+    </section>
+  );
+}
+
+/** What uses the battery: screen, processor, graphics and the rest,
+ * measured while this page is open. */
+function PowerUse(props: { status: Status; go?: (screen: string) => void }) {
+  const [reads, setReads] = useState<Sensors[]>([]);
+  useEffect(() => {
+    let live = true;
+    const read = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const s = await backend.sensors();
+        if (live) setReads((r) => [...r.slice(-1), s]);
+      } catch {
+        // Shown as still measuring.
+      }
+    };
+    read();
+    const id = window.setInterval(read, 3000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, []);
+  const d = props.status.display;
+  const [a, b] = reads;
+  const split = a && b ? powerSplit(a, b, d) : null;
+  const top = split ? Math.max(split.total ?? 0, ...split.parts.map((x) => x.w)) : 0;
+  const desc = (key: string) =>
+    key === "screen" && d && b?.brightness_pct != null
+      ? t("use_screen_desc", { pct: Math.round(b.brightness_pct), w: (d.w_per_pct * 10).toFixed(2) })
+      : t(`use_${key}_desc` as "use_rest_desc");
+  return (
+    <section className="card" aria-labelledby="use-heading">
+      <div className="row spread">
+        <h2 id="use-heading">{t("use_heading")}</h2>
+        {split?.total != null && <strong>{t("use_total", { w: split.total.toFixed(1) })}</strong>}
+      </div>
+      <p className="muted small">{t("use_desc")}</p>
+      {!split ? (
+        <p className="muted" role="status">{t("use_measuring")}</p>
+      ) : (
+        <ul className="use-list">
+          {split.parts.map((x) => (
+            <li key={x.key}>
+              <div className="row spread">
+                <span>
+                  <strong>{t(`use_${x.key}` as "use_rest")}</strong>
+                  <span className="muted small use-desc">{desc(x.key)}</span>
+                </span>
+                <span className="use-w">
+                  {t("use_watts", { w: x.w.toFixed(2) })}
+                  {split.total != null && <span className="muted small"> · {t("use_share", { pct: Math.round((x.w / split.total) * 100) })}</span>}
+                </span>
+              </div>
+              <div className="bar" aria-hidden="true">
+                <span style={{ width: `${top > 0 ? Math.min(100, (x.w / top) * 100) : 0}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!d && <p className="muted small">{t("use_screen_learning")}</p>}
+      {b?.on_ac && <p className="muted small">{t("use_plugged")}</p>}
+      {props.go && (
+        <div>
+          <button type="button" className="btn-link" onClick={() => props.go?.("modes")}>
+            {t("use_brightness_link")}
+          </button>
+        </div>
       )}
     </section>
   );
