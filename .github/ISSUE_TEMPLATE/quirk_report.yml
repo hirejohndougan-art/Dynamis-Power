@@ -1,0 +1,40 @@
+name: Quirk report (a setting misbehaves on my hardware)
+description: A setting caused a freeze, glitch, disconnect or other problem on your machine.
+labels: [quirk]
+body:
+  - type: markdown
+    attributes:
+      value: These reports feed the safety blocklist that protects everyone with the same laptop. Thank you.
+  - type: input
+    id: laptop
+    attributes:
+      label: Laptop vendor and model
+      description: From the app's Advanced → System tab, or `cat /sys/class/dmi/id/sys_vendor /sys/class/dmi/id/product_name`
+    validations:
+      required: true
+  - type: input
+    id: setting
+    attributes:
+      label: Setting ID and value
+      placeholder: e.g. wifi.power_save = on
+    validations:
+      required: true
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What went wrong?
+      options: [Freeze or hang, Unclean shutdown or reboot, Graphics glitch or flicker, Wi-Fi drop, USB device disconnect, Audio pop or dropout, Disk error, Overheating, Other]
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      description: "`uname -r`"
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details and logs
+      description: Export logs from the app (Activity → Export logs) and attach, or describe what happened.

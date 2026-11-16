@@ -1,0 +1,26 @@
+# Rust
+/target/
+**/target/
+*.rs.bk
+
+# Node / Tauri front end
+node_modules/
+gui/dist/
+gui/src-tauri/target/
+gui/src-tauri/gen/
+*.log
+npm-debug.log*
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local data and secrets
+*.db
+*.sqlite
+.env
+*.pem
+*.key
+exports/

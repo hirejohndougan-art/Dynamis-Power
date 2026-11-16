@@ -1,0 +1,46 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    name: Validate result schemas and examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install check-jsonschema
+      - name: Schema is valid JSON Schema
+        run: check-jsonschema --check-metaschema schema/v1/results.schema.json
+      - name: Examples match the schema
+        run: check-jsonschema --schemafile schema/v1/results.schema.json schema/v1/examples/*.json
+
+  docs:
+    name: Check documentation links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check relative links point to real files
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, sys
+          bad = []
+          for md in pathlib.Path('.').rglob('*.md'):
+              if any(p in md.parts for p in ('node_modules', 'target', '.git')):
+                  continue
+              for link in re.findall(r'\]\(([^)#\s]+)(?:#[^)]*)?\)', md.read_text()):
+                  if link.startswith(('http://', 'https://', 'mailto:')) or '?' in link:
+                      continue
+                  if not (md.parent / link).resolve().exists():
+                      bad.append(f'{md}: {link}')
+          print('\n'.join(bad) or 'All relative links resolve.')
+          sys.exit(1 if bad else 0)
+          PY

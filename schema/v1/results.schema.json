@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hirejohndougan-art/dynamis-power/schema/v1/results.schema.json",
+  "title": "Dynamis Power shared results, version 1",
+  "description": "One submission of experiment results from one install. Contains no identifying data: no serial numbers, usernames, app names, usage times or locations.",
+  "$comment": "Never edit after publication. Make schema/v2 instead. See docs/SHARING.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "submission_id", "install_id", "created_on", "app_version", "hardware", "software", "results"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "submission_id": { "type": "string", "format": "uuid", "description": "Random ID for this submission." },
+    "install_id": { "type": "string", "format": "uuid", "description": "Random anonymous ID created at install. Used only to delete this install's submissions." },
+    "created_on": { "type": "string", "format": "date", "description": "Day only, no time, for privacy." },
+    "app_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$" },
+    "hardware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["form_factor", "vendor", "model", "cpu"],
+      "properties": {
+        "form_factor": { "enum": ["laptop", "desktop", "handheld", "other"] },
+        "vendor": { "type": "string", "maxLength": 100, "description": "DMI system vendor." },
+        "model": { "type": "string", "maxLength": 100, "description": "DMI product name. Never a serial number." },
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model", "cores", "threads"],
+          "properties": {
+            "model": { "type": "string", "maxLength": 120 },
+            "cores": { "type": "integer", "minimum": 1, "maximum": 1024 },
+            "threads": { "type": "integer", "minimum": 1, "maximum": 2048 },
+            "scaling_driver": { "type": "string", "maxLength": 40 }
+          }
+        },
+        "gpus": {
+          "type": "array", "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["vendor", "model"],
+            "properties": {
+              "vendor": { "type": "string", "maxLength": 60 },
+              "model": { "type": "string", "maxLength": 120 },
+              "driver": { "type": "string", "maxLength": 40 },
+              "discrete": { "type": "boolean" }
+            }
+          }
+        },
+        "ram_gb": { "type": "integer", "minimum": 1, "maximum": 4096, "description": "Rounded to the nearest whole GB." },
+        "storage": {
+          "type": "array", "maxItems": 8,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["type"],
+            "properties": {
+              "type": { "enum": ["emmc", "sata_ssd", "nvme", "hdd", "other"] },
+              "size_gb": { "type": "integer", "minimum": 1, "description": "Rounded." }
+            }
+          }
+        },
+        "wifi_chip": { "type": "string", "maxLength": 120, "description": "Chip name or PCI/USB vendor:device ID." },
+        "panel": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "width_px": { "type": "integer", "minimum": 1 },
+            "height_px": { "type": "integer", "minimum": 1 },
+            "max_refresh_hz": { "type": "number", "minimum": 1 }
+          }
+        },
+        "battery_design_wh": { "type": "number", "minimum": 0, "maximum": 1000 }
+      }
+    },
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kernel", "distro"],
+      "properties": {
+        "kernel": { "type": "string", "maxLength": 80 },
+        "distro": { "type": "string", "maxLength": 60 },
+        "distro_version": { "type": "string", "maxLength": 40 },
+        "desktop": { "type": "string", "maxLength": 40 },
+        "session": { "enum": ["wayland", "x11", "other"] },
+        "firmware_version": { "type": "string", "maxLength": 80, "description": "BIOS/UEFI version string." }
+      }
+    },
+    "results": {
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/result" }
+    },
+    "faults": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/fault" }
+    }
+  },
+  "$defs": {
+    "setting_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
+      "maxLength": 64,
+      "description": "Permanent setting ID from docs/SETTINGS.md."
+    },
+    "setting_value": {
+      "description": "A setting value as the plugin reports it.",
+      "type": ["string", "number", "boolean"]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["setting", "value", "baseline", "context", "metric", "effect", "samples", "verdict"],
+      "properties": {
+        "setting": { "$ref": "#/$defs/setting_id" },
+        "value": { "$ref": "#/$defs/setting_value" },
+        "baseline": { "$ref": "#/$defs/setting_value" },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["power_source", "workload"],
+          "properties": {
+            "power_source": { "enum": ["battery", "ac", "ac_force_discharge"] },
+            "workload": { "enum": ["idle", "light_interactive", "bursty_interactive", "video", "call", "sustained_compute", "gaming", "background_transfer"] }
+          }
+        },
+        "metric": { "enum": ["system_watts", "cpu_watts", "stall_pct", "temp_c", "job_seconds", "launch_ms", "sustained_mhz"] },
+        "effect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mean", "ci_low", "ci_high"],
+          "description": "Change versus baseline, in the metric's unit. Negative watts means a saving.",
+          "properties": {
+            "mean": { "type": "number" },
+            "ci_low": { "type": "number" },
+            "ci_high": { "type": "number" },
+            "confidence": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "default": 0.95 }
+          }
+        },
+        "samples": { "type": "integer", "minimum": 1 },
+        "verdict": { "enum": ["keep", "reject", "inconclusive"] }
+      }
+    },
+    "fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["setting", "value", "kind"],
+      "properties": {
+        "setting": { "$ref": "#/$defs/setting_id" },
+        "value": { "$ref": "#/$defs/setting_value" },
+        "kind": { "enum": ["freeze", "unclean_shutdown", "gpu_hang", "disk_error", "usb_disconnect", "wifi_drop", "display_glitch", "audio_glitch", "thermal", "other"] },
+        "kernel": { "type": "string", "maxLength": 80 }
+      }
+    }
+  }
+}

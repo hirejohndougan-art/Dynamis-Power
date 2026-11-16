@@ -1,0 +1,26 @@
+# Roadmap
+
+Dynamis Power is built in eight phases. Each phase is usable on its own and ends with a gate that must pass before the next one starts.
+
+| Phase | Builds | Gate: done when |
+| --- | --- | --- |
+| 1. Measure | Logger, hardware inventory, power report | Readings are trustworthy and the daemon stays within its overhead budget |
+| 2. Profiles | Setting plugins, standard D-Bus profiles, change journal, quirk list, clean uninstall | The desktop power slider works and every change reverts |
+| 3. Auto-switch | Session agent, context rules, workload detection | The right profile is chosen in scripted scenarios |
+| 4. Calibrate | Per-setting tests, display power model | Beats stock "Balanced" on battery |
+| 5. Learn | Optimiser for interacting CPU settings | Beats a hand-tuned TLP configuration |
+| 6. Apps | Per-app accounting, foreground boost, background throttle | The focused app stalls less under load |
+| 7. Predict | "Last until" mode, adaptive charging, habits | Time targets are met within a margin |
+| 8. Release | Full app, shared results, optional AI helper | Public release with published benchmark data |
+
+**Phase 4 is the go/no-go point.** If per-setting calibration cannot beat stock settings on battery, the approach gets rethought before more is built.
+
+## Realistic expectations
+
+This is a spare-time project. Phases 1 to 4 make a useful first version and will likely take several months. Dates are not promised.
+
+## Not yet planned, but kept possible
+
+- Desktop PCs (no battery: noise, heat and electricity cost)
+- Gaming handhelds and read-only systems such as SteamOS and Fedora Silverblue
+- Laptops with two graphics cards

@@ -1,0 +1,97 @@
+# User interface
+
+The app must be usable by someone who has never opened a terminal, while still giving experienced users full control. It does this with layers: simple on top, detail one click down, and everything in **Advanced**.
+
+The visual mock-ups are kept with the project's design files. This document is the written specification; when the two disagree, update both.
+
+## Principles
+
+1. **Plain words first.** "Saving battery while you browse", not "EPP balance_power". Technical names appear only in Advanced and in the technical log.
+2. **Every automatic change is visible and reversible.** Each one shows a reason, a measured result and Undo.
+3. **One obvious control.** The slider from *Longer battery* to *Faster* is always on the home screen.
+4. **Nothing risky without a clear yes.** Risky settings are off until switched on individually, with a plain explanation.
+5. **Quiet.** Few notifications, none during calls or full-screen video.
+6. **Accessible.** Full keyboard use, screen-reader labels, readable contrast, scalable text, follows the desktop's light or dark theme.
+7. **Free when closed.** The window costs nothing when it isn't open. The tray icon is optional.
+
+## Navigation
+
+A sidebar with six main sections. Advanced is always last and visually separated.
+
+| Section | Who it's for | Purpose |
+| --- | --- | --- |
+| Home | Everyone | How things stand and the one main control |
+| Modes | Everyone | Choose or schedule profiles; "Last until" |
+| Battery | Everyone | Health, charge limit, history |
+| Apps | Everyone | What uses power; per-app rules |
+| Activity | Everyone | Plain-language history of changes, with Undo; logs and export |
+| Sharing | Everyone | Opt-in results sharing, what's sent, delete my data |
+| Advanced | Experienced users | Every setting, learning controls, sensors, profiles, safety, developer tools |
+
+## Home
+
+- **Big estimate:** "About 4 h 10 min left" as a range ("3 h 50 – 4 h 30"), or "Fully charged in 40 min".
+- **Status sentence:** "Saving battery while you browse." with the active mode as a chip.
+- **The slider:** Longer battery ↔ Faster, five steps.
+- **Live draw:** current watts with a small 30-minute sparkline.
+- **Learning card:** "Learning your laptop — 6 of 18 settings checked. Saved about 25 min so far." with a link to Activity.
+- **Last change card:** the most recent automatic change, its result and Undo.
+- **Safety strip** (only when relevant): "A test was undone because Wi-Fi dropped. Nothing else changed."
+
+## Modes
+
+Cards for each profile with a one-line description. "Last until" opens a time picker and shows whether the target looks achievable. Rules ("When I open Steam, use Gaming") are added with a simple *When … use …* builder.
+
+## Battery
+
+Health percentage against design capacity, wear trend, charge limit toggle (only where supported), adaptive charging, overnight drain report, and charge history.
+
+## Apps
+
+A ranked list of apps by estimated energy today and this week, clearly marked as estimates. Each app has a menu: *Always throttle on battery*, *Never throttle*, *Use a mode when open*. Misbehaving apps show a warning with one action.
+
+## Activity, logs and export
+
+**Activity** is the plain-language history. Each entry: time, what changed, why, measured result, Undo. Filters: *Automatic changes*, *My changes*, *Tests*, *Rollbacks*, *Problems*.
+
+**Logs** tab (inside Activity) shows the technical log: the full change journal with setting IDs, old and new values, trial status and errors, plus daemon messages. It has search, level filter (info, warning, error), time range, and a live-follow toggle.
+
+**Export logs** opens a dialog:
+
+| Option | Choices |
+| --- | --- |
+| What to include | Change journal · Daemon log · Experiment results · Hardware summary · Current settings · Sensor samples |
+| Time range | Last 24 hours · Last 7 days · Last 30 days · All · Custom |
+| Format | Bundle for a bug report (`.zip`) · JSON · CSV · Plain text |
+| Privacy | *Remove personal details* (on by default): strips usernames, hostnames, serial numbers, MAC addresses, network names and app names |
+
+A **preview** shows exactly what will be exported before saving. **Copy summary** puts a short text summary on the clipboard for pasting into a GitHub issue. Export never sends anything anywhere; it only saves a file.
+
+## Sharing
+
+Off by default. Shows, field by field, what would be shared, then a single Share button. Also: share automatically after each new result (off by default), *Delete my submissions*, and a link to the privacy policy.
+
+## Advanced
+
+Advanced opens with a one-line notice: "These controls are for experienced users. Everything here can be undone."
+
+| Tab | Contents |
+| --- | --- |
+| Settings | Every setting the app manages, grouped by component. Each row: plain name, technical ID, current value, learned best value, risk tier badge, status (*learned*, *testing*, *pinned*, *blocked*), and controls to pin a value, exclude it from learning, or reset it. Risky and experimental settings each need their own switch |
+| Learning | Pause learning; how much time to spend testing (low, normal, eager); test only on battery / also plugged in; allow running from battery while plugged in; reset everything learned (with confirmation) |
+| Profiles | Edit any profile's goal, limits and allowed ranges; clone a profile; import and export profiles as files |
+| Sensors | Live readings: power, CPU energy, stall pressure, temperatures, idle residency, with small charts |
+| Safety | Safe-mode status and switch, quirk list version and blocked settings for this machine, trial in progress, rollback history, dead-man timer length, battery floor for tests |
+| System | Conflicting power tools detected, desktop integration choices (who controls brightness and sleep), update channel (stable or beta), daemon resource use |
+| Developer | Dry-run mode, advisor mode (write a TLP or TuneD config instead of applying), log level, D-Bus inspector, "Restore original settings" |
+
+## Dialogs and notifications
+
+- **Risky setting switch:** explains what can go wrong in one sentence and requires a deliberate confirmation.
+- **Rollback notice:** one notification, at most, saying what was undone and why.
+- **Restore original settings:** available from Home's menu, Advanced, and the tray, and always works, even in safe mode.
+- **First run:** a four-step welcome — what the app does, hardware check, conflicts found (with a fix button), and a baseline measurement. Nothing changes until the user clicks *Start*.
+
+## Strings and translation
+
+Every user-facing string goes through the translation layer. Technical IDs are never translated. Sentence case for all labels and buttons.

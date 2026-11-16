@@ -1,0 +1,37 @@
+name: Bug report
+description: Something isn't working as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. If a setting caused a freeze or hardware problem, please use the **Quirk report** form instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open Dynamis Power\n2. ..."
+  - type: input
+    id: version
+    attributes:
+      label: Dynamis Power version
+  - type: input
+    id: laptop
+    attributes:
+      label: Laptop model
+  - type: input
+    id: distro
+    attributes:
+      label: Linux distribution and desktop
+      placeholder: e.g. KDE neon 24.04, Plasma 6.5, Wayland
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: In the app, go to Activity → Export logs → "Bundle for a bug report", and attach the file, or paste "Copy summary" here.
