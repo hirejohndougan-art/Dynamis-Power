@@ -2,7 +2,7 @@
 
 **Battery and performance tuning for Linux laptops that learns your machine.**
 
-> **Status: early development.** The first piece is a read-only command that inventories your laptop and records power use; it changes nothing. See [daemon/README.md](daemon/README.md) to try it, and the [roadmap](ROADMAP.md) for what comes next.
+> **Status: early development.** The first piece is a command that inventories your laptop and records power use. Changing settings is being built now: it works from the command line, every change is journaled and can be undone, and nothing changes unless you ask. See [daemon/README.md](daemon/README.md) to try it, and the [roadmap](ROADMAP.md) for what comes next.
 
 Most Linux power tools apply the same fixed rules to every laptop. Dynamis Power measures *your* laptop instead. It starts from safe, standard settings, then tests small changes one at a time and keeps only the ones that measurably help, whether that means longer battery life, a faster system, or a cooler, quieter one.
 

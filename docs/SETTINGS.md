@@ -4,6 +4,8 @@ Every lever the app can tune. Each row becomes one setting plugin (see [ARCHITEC
 
 **Status:** planned unless marked otherwise. Interface paths are typical and vary by driver and kernel; every plugin must probe for its path and report "unsupported" when absent. Paths below are from general kernel knowledge and must be verified on real hardware when each plugin is written.
 
+**Implemented so far (phase 2):** `cpu.epp`, `cpu.turbo`, `cpu.max_perf_pct`, `platform.profile`, `vm.swappiness`, `vm.dirty_writeback`, `kernel.nmi_watchdog`, `audio.power_save`, `pcie.aspm`, `battery.charge_limit`. See the [implemented plugins](#implemented-plugins) section for the exact values each accepts. `dynamis settings` lists them on a real machine.
+
 **Setting IDs are permanent.** They appear in journals, learned data and shared results. Add new IDs; never rename or reuse old ones. To retire one, mark it deprecated here.
 
 ## CPU
@@ -84,6 +86,31 @@ Some firmware expects either `platform.profile` or `cpu.epp`, not both. Each plu
 | --- | --- | --- | --- |
 | `battery.charge_limit` | Stop charging at a set level | `/sys/class/power_supply/BAT*/charge_control_end_threshold` | Safe where supported |
 | `battery.charge_behaviour` | Run from battery while plugged in, for measurement | `/sys/class/power_supply/BAT*/charge_behaviour` | Usually safe, with floor and temperature limits |
+
+## Implemented plugins
+
+Code: `daemon/crates/dynamis-core/src/settings/plugins.rs`. Values are what people type and what `dynamis settings` shows; the plugin translates them to kernel values.
+
+| ID | Values | Notes |
+| --- | --- | --- |
+| `cpu.epp` | The CPU's own list, minus `default` | Written to every CPU policy. Refused while the governor is `performance`, which locks it. Refused when CPUs disagree, so there is one value to return to |
+| `cpu.turbo` | `on`, `off` | `intel_pstate/no_turbo` (inverted) or `cpufreq/boost` |
+| `cpu.max_perf_pct` | `min_perf_pct` (but at least 30) to 100 | Intel only |
+| `platform.profile` | The firmware's own list | |
+| `vm.swappiness` | 0–200 | |
+| `vm.dirty_writeback` | 100–6000 centiseconds (1–60 s) | Usually safe: longer means more unsaved data in a crash |
+| `kernel.nmi_watchdog` | `on`, `off` | |
+| `audio.power_save` | 0–60 seconds | Usually safe: may pop on some hardware |
+| `pcie.aspm` | `default`, `performance`, `powersave` | `powersupersave` deliberately not offered |
+| `battery.charge_limit` | 50–100% | First battery with `charge_control_end_threshold` |
+
+### Adding a plugin
+
+1. Pick a permanent ID from the tables above (or add a new row).
+2. Implement `Setting` in `plugins.rs`: probe, read, plan. `plan` returns the writes; it must not write.
+3. Add its path prefix to `ALLOWED_PREFIXES` in `writer.rs` if it is new. Keep that list short.
+4. Add it to `all()`, add fixture files, and test it on a fixture copy in `tests/settings_engine.rs`.
+5. Update the table here. A test fails if the ID is missing from this file.
 
 ## Never
 

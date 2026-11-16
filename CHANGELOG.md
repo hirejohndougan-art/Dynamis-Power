@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Phase 2 (started): changing settings safely, from the command line.
+  - Ten setting plugins: CPU speed preference, turbo, CPU speed limit, firmware power mode, swap eagerness, disk write batching, watchdog, sound chip sleep, PCIe link power, battery charge limit.
+  - Change engine: probe and limit checks, journal flushed to disk before every write, read-back verification, one change at a time, original values kept for restore, safe mode.
+  - Trials that undo themselves unless confirmed, and crash-aware recovery that undoes and blocks a change left unfinished.
+  - New commands: `settings`, `set`, `restore`, `journal`, `unblock`.
+  - Decision record 0007: plain files for the change journal.
+  - 13 new tests, all on temporary copies of the fixture.
 - Phase 1 (in progress): read-only `dynamis` command with `inventory`, `status` and `log`.
   - Sensors: battery and charger, CPU frequency and turbo, pressure stall (lag), temperatures, CPU energy counters, backlight.
   - Hardware inventory with 14 tunable settings probed (read only).

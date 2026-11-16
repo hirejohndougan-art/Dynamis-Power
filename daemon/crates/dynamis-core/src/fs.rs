@@ -5,9 +5,9 @@
 //! under `tests/fixtures/sysfs/<machine>/`. This is what lets the whole crate be
 //! tested without real hardware.
 //!
-//! There is deliberately **no write method** here. Phase 1 is read-only, and
-//! when writing arrives it will live in setting plugins that journal first
-//! (see `docs/SAFETY.md`).
+//! There is deliberately **no write method** here. Writing lives in the private
+//! `writer` module and is reached only through `engine::Engine`, which journals
+//! first (see `docs/SAFETY.md`).
 
 use std::fs;
 use std::io;

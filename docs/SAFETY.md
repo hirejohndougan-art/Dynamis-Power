@@ -39,4 +39,24 @@ Every setting plugin declares one tier.
 
 ## The change journal
 
-Every change is written to the journal before it is applied: time, setting, old value, new value, reason, and whether it is a trial. The journal is what makes rollback, safe mode and diagnosis possible. If a laptop starts misbehaving, the journal shows exactly what was active at the time.
+Every change is written to the journal before it is applied: time, setting, old value, new value, reason, and whether it is a trial. The journal is what makes rollback, safe mode and diagnosis possible. If a laptop starts misbehaving, the journal shows exactly what was active at the time. Format: [decision 0007](decisions/0007-plain-file-change-journal.md).
+
+## What is implemented today
+
+Phase 2 has started. These rails exist in code (`daemon/crates/dynamis-core/src/engine.rs`, `writer.rs`, `settings/`) and are covered by tests in `daemon/crates/dynamis-core/tests/settings_engine.rs`:
+
+| Rail | How |
+| --- | --- |
+| Probe first, within limits | Each plugin probes the machine and declares the values it accepts. Anything else is refused before the journal is touched. Some limits are tighter than the kernel's: CPU speed limit never below 30%, charge limit never below 50%, PCIe `powersupersave` not offered at all |
+| One write path | Only the private `writer` module writes, only `Engine` calls it, and it refuses any path outside a fixed allow-list and never creates files |
+| Journal before writing | `pending.json` and a `start` line are flushed to disk before the kernel is touched |
+| Verify after writing | The value is read back; if it differs, the old value is written back and the change is journaled as `failed` |
+| One change at a time | A lock file allows one process; a pending trial must be kept or reverted before the next change |
+| Dead-man trial | `dynamis set … --trial N` undoes the change unless the user types `y` within N seconds. No answer, end of input or anything else means undo |
+| Crash-aware rollback | If Dynamis Power starts and finds `pending.json`, it puts the old value back, journals `recover` and **blocks** the setting until `dynamis unblock` |
+| Restore original settings | `baseline.json` keeps each setting's first-seen value, never overwritten. `dynamis restore` writes them all back |
+| Safe mode | `/etc/dynamis-power/disable` or `dynamis.safe=1` on the kernel command line refuses every change. Restore still works |
+| Risk tiers | Risky and Experimental settings need `--allow-risky`; Advisory settings are never applied |
+| Runtime only | Plugins write only live kernel values under `/sys` and `/proc/sys`. Nothing is written to persistent configuration, so a reboot also undoes everything |
+
+Not yet built: the health monitor, the systemd watchdog, the quirk list and kill switch, pre-flight checks, the change rate limit, and the "three unclean boots" trigger for safe mode. Until the daemon exists, recovery runs the next time any `dynamis` command that changes settings is started, not at boot.

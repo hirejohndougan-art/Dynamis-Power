@@ -30,7 +30,20 @@ Dynamis Power is a small privileged daemon, a per-user session agent, and thin f
 
 ## Current state
 
-Phase 1 code lives in `daemon/crates/`: `dynamis-core` (read-only sensors, inventory, log format) and `dynamis-cli` (the `dynamis` command). Everything below marked *planned* does not exist yet.
+Code lives in `daemon/crates/`: `dynamis-core` (sensors, inventory, log format, setting plugins and the change engine) and `dynamis-cli` (the `dynamis` command). Phase 1 (measure) is waiting on its real-hardware test; phase 2 has started with setting plugins, the journal, trials, crash recovery, restore and safe mode, all driven from the command line. There is no daemon, D-Bus API or app yet. Everything below marked *planned* does not exist yet.
+
+How a change flows today:
+
+```
+dynamis set cpu.epp balance_power --trial 60
+  └─ Engine::apply  (engine.rs)
+       safe mode? blocked? risk opt-in? probe allows the value?
+       baseline.json  ← original value, first time only
+       pending.json + journal.jsonl "start"   (flushed to disk)
+       writer::write_all  (writer.rs, the only write path)
+       read back and compare; on mismatch put the old value back
+  └─ "Keep this change?"  y → journal "keep"   anything else → journal "revert"
+```
 
 ## Components
 
@@ -79,11 +92,15 @@ The setting `id` is permanent. Renaming one breaks journals, learned data and sh
 
 | Path (planned) | Contents | Format |
 | --- | --- | --- |
-| `/var/lib/dynamis-power/state.db` | Samples, experiment records, learned settings, journal | SQLite, versioned with migrations |
+| `/var/lib/dynamis-power/journal.jsonl` **(built)** | Every change: `start`, `done`, `failed`, `keep`, `revert`, `recover`, `restore`, `block`, `unblock` | JSON Lines, `"v": 1`, fsynced ([0007](decisions/0007-plain-file-change-journal.md)) |
+| `/var/lib/dynamis-power/pending.json` **(built)** | The change in flight or under trial | JSON, `"v": 1`; present at start-up means recover |
+| `/var/lib/dynamis-power/baseline.json` **(built)** | Original value of each changed setting | JSON, `"v": 1`; never overwritten |
+| `/var/lib/dynamis-power/blocked.json` **(built)** | Settings blocked after an unfinished change | JSON, `"v": 1` |
+| `/var/lib/dynamis-power/lock` **(built)** | PID of the process changing settings | Text |
+| `/var/lib/dynamis-power/state.db` | Samples, experiment records, learned settings | SQLite, versioned with migrations |
 | `/var/lib/dynamis-power/quirks/` | Downloaded signed quirk list | Signed JSON |
-| `/var/lib/dynamis-power/trial` | Marker for a setting under trial | Used by crash-aware rollback |
 | `/etc/dynamis-power/config.toml` | Admin settings and pinned values | TOML |
-| `/etc/dynamis-power/disable` | If present, daemon starts in safe mode | Empty file |
+| `/etc/dynamis-power/disable` **(built)** | If present, every change is refused (safe mode) | Empty file |
 
 ## Footprint budget
 

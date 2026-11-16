@@ -1,6 +1,9 @@
 //! `dynamis` — the Dynamis Power command line.
 //!
-//! Phase 1 commands are read-only. They never change a system setting.
+//! Most commands only read. `set`, `restore` and `unblock` change settings,
+//! always through the engine's safety checks (see `changes.rs`).
+
+mod changes;
 
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -21,12 +24,16 @@ use dynamis_core::SysRoot;
 #[command(
     name = "dynamis",
     version,
-    about = "Dynamis Power — learns your laptop to save battery and run faster.\n\nThese commands only read; they never change settings."
+    about = "Dynamis Power — learns your laptop to save battery and run faster.\n\nOnly `set`, `restore` and `unblock` change anything, and every change can be undone with `dynamis restore`."
 )]
 struct Cli {
     /// Read from this directory instead of the real system (for testing).
     #[arg(long, global = true, value_name = "DIR", hide = true)]
     root: Option<PathBuf>,
+
+    /// Keep the journal and baseline here instead of /var/lib/dynamis-power.
+    #[arg(long, global = true, value_name = "DIR", hide = true)]
+    state_dir: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Command,
@@ -85,6 +92,46 @@ enum Command {
     /// Print a hardware report to paste into a GitHub "Hardware report" issue.
     /// Contains no serial numbers, usernames or network names.
     HardwareReport,
+    /// List the settings Dynamis Power can change on this machine.
+    Settings {
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Change one setting (needs sudo). Use --trial to have it undone
+    /// automatically unless you confirm it.
+    Set {
+        /// Setting ID, as shown by `dynamis settings`.
+        id: String,
+        /// New value.
+        value: String,
+        /// Undo the change after this many seconds unless you type y.
+        #[arg(long, value_name = "SECONDS")]
+        trial: Option<u64>,
+        /// Confirm a change to a Risky or Experimental setting.
+        #[arg(long)]
+        allow_risky: bool,
+        /// Why, for the journal.
+        #[arg(long, default_value = "set by hand")]
+        reason: String,
+    },
+    /// Put every setting Dynamis Power changed back to how it was. Always works,
+    /// even in safe mode.
+    Restore,
+    /// Show the record of every change.
+    Journal {
+        /// How many entries to show.
+        #[arg(long, default_value_t = 30)]
+        last: usize,
+        /// Print JSON Lines instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Allow a setting that was blocked after a failed or unfinished change.
+    Unblock {
+        /// Setting ID.
+        id: String,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -96,6 +143,9 @@ enum Format {
 fn main() {
     let cli = Cli::parse();
     let root = cli.root.map(SysRoot::at).unwrap_or_else(SysRoot::system);
+    let state = cli
+        .state_dir
+        .unwrap_or_else(|| PathBuf::from(dynamis_core::engine::DEFAULT_STATE_DIR));
     let result = match cli.command {
         Command::Inventory { json } => cmd_inventory(&root, json),
         Command::Status { json, over } => cmd_status(&root, json, over),
@@ -108,6 +158,27 @@ fn main() {
         Command::Report { file, json } => cmd_report(&root, &file, json),
         Command::Gauge { duration, json } => cmd_gauge(&root, duration, json),
         Command::HardwareReport => cmd_hardware_report(&root),
+        Command::Settings { json } => changes::cmd_settings(&root, &state, json),
+        Command::Set {
+            id,
+            value,
+            trial,
+            allow_risky,
+            reason,
+        } => changes::cmd_set(
+            &root,
+            &state,
+            changes::SetArgs {
+                id: &id,
+                value: &value,
+                trial,
+                allow_risky,
+                reason: &reason,
+            },
+        ),
+        Command::Restore => changes::cmd_restore(&root, &state),
+        Command::Journal { last, json } => changes::cmd_journal(&root, &state, last, json),
+        Command::Unblock { id } => changes::cmd_unblock(&root, &state, &id),
     };
     if let Err(e) = result {
         // A closed pipe (for example `dynamis log | head`) is a normal way to stop.

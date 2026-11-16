@@ -1,8 +1,8 @@
 # daemon
 
-The Rust side of Dynamis Power. Today it holds phase 1: read-only sensors, a hardware inventory and the `dynamis` command line. The system service (`dynamisd`) comes in phase 2.
+The Rust side of Dynamis Power. Today it holds phase 1 (sensors, a hardware inventory, logging) and the start of phase 2 (setting plugins and a safe change engine), all driven by the `dynamis` command line. The system service (`dynamisd`) comes later in phase 2.
 
-**Nothing here changes any system setting.** Every command only reads.
+**Only `set`, `restore` and `unblock` change anything.** Every other command only reads.
 
 ## Layout
 
@@ -14,6 +14,9 @@ daemon/
       src/fs.rs              read-only access to /sys and /proc under a configurable root
       src/sensors/           one module per signal: power, cpu, pressure, thermal, rapl, backlight
       src/inventory.rs       what the machine is and which settings it exposes
+      src/settings/          setting plugins: probe, read, and plan a change (never write)
+      src/engine.rs          applies changes: checks, journal, verify, trials, recovery, restore
+      src/writer.rs          the only code that writes to the kernel (private to the crate)
       src/logfmt.rs          CSV / JSON Lines rows built from two snapshots
       src/report.rs          summaries of a recorded log
       src/gauge.rs           battery gauge update rate and resolution
@@ -47,7 +50,25 @@ The program is then at `target/release/dynamis` (under 1 MB).
 ./target/release/dynamis report power.csv   # summarise a recording
 ./target/release/dynamis gauge              # how often the battery gauge updates (run on battery)
 ./target/release/dynamis hardware-report    # text to paste into a GitHub hardware report
+./target/release/dynamis settings           # what can be changed on this machine, and current values
 ```
+
+### Changing settings
+
+```sh
+sudo ./target/release/dynamis set vm.swappiness 20 --trial 60   # undone after 60 s unless you type y
+sudo ./target/release/dynamis set cpu.turbo off                  # applied directly
+sudo ./target/release/dynamis journal                            # every change, with old and new values
+sudo ./target/release/dynamis restore                            # put everything back how it was
+```
+
+- Changes last until reboot. Nothing is written to permanent configuration.
+- **Use `--trial` while trying things.** If the laptop freezes before you confirm, the change is undone and that setting is blocked the next time `dynamis` changes anything (`dynamis unblock <id>` allows it again). A reboot also undoes it.
+- Values outside what the machine and Dynamis Power allow are refused before anything is touched.
+- Safe mode: `sudo mkdir -p /etc/dynamis-power && sudo touch /etc/dynamis-power/disable` refuses every change. `restore` still works.
+- State is kept in `/var/lib/dynamis-power/`; see [../docs/decisions/0007-plain-file-change-journal.md](../docs/decisions/0007-plain-file-change-journal.md).
+
+On a laptop with unexplained freezes (like the project's VivoBook), a freeze during a trial does not prove the setting caused it. Check `dynamis journal` and the system log before drawing conclusions.
 
 For the full phase 1 test on a real laptop, follow [../docs/TESTING-ON-HARDWARE.md](../docs/TESTING-ON-HARDWARE.md).
 
@@ -62,6 +83,10 @@ Useful options:
 | `log` | `--format jsonl` | JSON Lines instead of CSV |
 | `report` | `--json` | Machine-readable summary |
 | `gauge` | `--duration 300` | Watch the gauge for 5 minutes |
+| `set` | `--trial 60` | Undo after 60 s unless confirmed |
+| `set` | `--allow-risky` | Needed for Risky and Experimental settings |
+| `set` | `--reason "..."` | Note for the journal |
+| `journal` | `--last 100`, `--json` | More entries; JSON Lines |
 
 **Run with `sudo` to see CPU power.** On recent kernels the CPU energy counters can only be read by root. Everything else works as a normal user. Reading is all the program does, with or without `sudo`.
 
@@ -102,6 +127,13 @@ Try the command against the test fixture instead of your machine:
 cargo run -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
 ```
 
+To try changes, **copy the fixture first** so the checked-in files never change:
+
+```sh
+cp -a ../tests/fixtures/sysfs/synthetic-laptop /tmp/fx
+cargo run -- --root /tmp/fx --state-dir /tmp/fx-state set vm.swappiness 10 --trial 10
+```
+
 ### Adding a sensor
 
 1. Add a module under `crates/dynamis-core/src/sensors/` that reads through `SysRoot` and never writes.
@@ -110,6 +142,10 @@ cargo run -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
 4. Add the files it reads to a fixture, and a test in `crates/dynamis-core/tests/`.
 5. If it adds a log column, append it to `Row`, its CSV header and `to_csv`, and bump `LOG_FORMAT_VERSION`.
 6. Document it in [../docs/MEASUREMENT.md](../docs/MEASUREMENT.md).
+
+### Adding a setting plugin
+
+See "Adding a plugin" in [../docs/SETTINGS.md](../docs/SETTINGS.md#implemented-plugins).
 
 ### Adding a lever to the inventory
 
