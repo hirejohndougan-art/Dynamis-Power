@@ -66,17 +66,28 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 
 **Follow-up (needs research, real hardware or a decision first):**
 
-- [ ] Learning on busy, slow laptops: judge "quiet" by stable power rather than processor use? Threshold on 2-core chips
+- [x] Learning on busy, slow laptops: decided, steady power plus a processor limit scaled by cores ([0020](docs/decisions/0020-quiet-by-steady-power.md))
 - [ ] Battery power update rates and noise across makers
-- [ ] Testing while plugged in by running from the battery: which laptops support it safely (decision record)
-- [ ] Importing a TLP configuration: TLP's `_ON_AC` and `_ON_BAT` values have no direct place in modes. Options: battery values become Longer battery and Balanced on battery, mains values become Balanced and Faster on mains; or import only values that are the same on both, plus charge thresholds; or show the mapping and let the person choose per line
-- [ ] Each vendor tool (asusctl, supergfxctl, System76 Power, Slimbook, TUXEDO, laptop-mode-tools, `powertop --auto-tune`): conflict or coexist; confirm thermald is compatible
-- [ ] GNOME: extension on extensions.gnome.org or in the package only; any way to know the window in front without one
+- [x] Running from the battery while plugged in: decided, opt-in, standard control only, recalibration first ([0019](docs/decisions/0019-running-from-battery-while-plugged-in.md))
+- [x] Importing a TLP configuration: decided, battery values to Longer battery, mains values to Faster, shared values as settings, all shown first ([0017](docs/decisions/0017-importing-a-tlp-configuration.md))
+- [x] Each vendor tool: decided, thermald, asusd and supergfxctl run alongside; the rest are offered to switch off ([0022](docs/decisions/0022-other-power-tools.md))
+- [x] GNOME: decided, the extension ships in the package; extensions.gnome.org later ([0024](docs/decisions/0024-gnome-extension-in-the-package.md))
 - [ ] Which laptops reset or ignore the charge limit
-- [ ] Should a freeze long after the last change count towards safe mode?
+- [x] A freeze long after the last change: decided, it still counts towards safe mode ([0021](docs/decisions/0021-unclean-shutdowns-always-count.md))
 - [ ] Does the stall measure catch what people feel as "slow"?
-- [ ] Desktops, two-GPU laptops, image-based systems, Flatpak: one decision record each
-- [ ] Wi-Fi power saving without giving the service network access (separate helper or narrow exception)
+- [x] Desktops, two-GPU laptops, image-based systems, Flatpak: decided ([0023](docs/decisions/0023-desktops-two-gpus-image-based-flatpak.md))
+- [x] Wi-Fi power saving without network access: decided, netlink to the local kernel only ([0018](docs/decisions/0018-wifi-power-saving-through-the-kernel-only.md))
+
+**To build, from those decisions:**
+
+- [ ] Learning: quiet means steady power for a minute, with the processor limit scaled by cores (0020)
+- [ ] TLP import: read `tlp.conf` and `tlp.d`, preview line by line, apply after a yes (0017)
+- [ ] `wifi.power_save` through nl80211; unit allows `AF_NETLINK` without `PrivateNetwork`, still no IP sockets; quirk for RTL8821CE and similar (0018)
+- [ ] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)
+- [ ] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
+- [ ] Desktops: hide battery features without a battery; the welcome says which features apply (0023)
+- [ ] GNOME extension in the package, with help switching it on (0024)
+- [ ] Hibernation readiness check and plain advice, in the sleep test report (0025)
 
 ## To do: fully replace TLP
 
@@ -129,7 +140,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] Ignore a charger that reports wrongly (TLP's `TLP_PS_IGNORE`): Advanced → System
 - [ ] A mode to use at boot before auto mode decides (TLP's `TLP_DEFAULT_MODE`; today the last chosen mode is used)
 - [x] A full diagnostic report like `tlp-stat`: `dynamis stat`, `Diagnostics()`, and in the app's Export
-- [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export). Needs a decision first (see the follow-up list): TLP sets values per power source, Dynamis Power per mode
+- [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export), as decided in [0017](docs/decisions/0017-importing-a-tlp-configuration.md)
 
 **Done when:** on the test laptops, with TLP removed, `tlp-stat` run once with TLP reinstalled shows nothing TLP would set that Dynamis Power does not, and battery life is at least as long as with a hand-tuned TLP.
 
@@ -163,7 +174,7 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 - [ ] **Brightness through the desktop:** setting brightness through the kernel works everywhere, but KDE Plasma's brightness slider may show the old level until it is next moved. Have the session agent set it through the desktop (`org.kde.ScreenBrightness` on Plasma 6, GNOME's settings daemon) when it is running, and fall back to the service.
 - [ ] **App power trend:** "Firefox uses 20% more power than last month" from the per-app energy totals, kept locally.
 - [ ] **What wakes the laptop:** list wake-up sources and wake reasons after sleep (`/sys/power/wakeup_sources`, the kernel log), to explain overnight drain.
-- [ ] **Sleep that turns into hibernation when the battery runs low** (systemd's suspend-then-hibernate): needs swap and a desktop setting, so a decision record first.
+- [ ] **Sleep that turns into hibernation when the battery runs low:** advice only, never set up by the service ([0025](docs/decisions/0025-hibernate-on-low-battery-is-advice.md)).
 - [ ] **Signals for the app:** `ThermalAlert`, `AppDetected`, `LearningProgress` on D-Bus, so the app and panel icon update without asking.
 - [ ] **Shared hardware profiles** (phase 8): a new laptop starts from what similar laptops learned; still opt-in, through the separate signed helper, publishing only per-model results (as in `schema/`), never per-person data. Federated averaging of model weights is not needed: the results are already small, per-setting measurements.
 

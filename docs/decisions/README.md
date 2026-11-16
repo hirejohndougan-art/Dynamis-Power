@@ -20,6 +20,15 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0014](0014-tuning-together-one-step-at-a-time.md) | Tune interacting settings together, one step at a time |
 | [0015](0015-prediction-by-feedback-and-habits.md) | "Last until" steers by feedback; habits are simple and kept in UTC |
 | [0016](0016-mode-levers-without-epp.md) | Modes use turbo, the speed limit and the governor where there is no speed preference |
+| [0017](0017-importing-a-tlp-configuration.md) | Importing TLP: battery values to Longer battery, mains values to Faster, shown first |
+| [0018](0018-wifi-power-saving-through-the-kernel-only.md) | Wi-Fi power saving through netlink to the local kernel; still no network access |
+| [0019](0019-running-from-battery-while-plugged-in.md) | Running from the battery while plugged in: opt-in, standard control only, recalibration first |
+| [0020](0020-quiet-by-steady-power.md) | Learning judges "quiet" by steady power, with a processor limit scaled by cores |
+| [0021](0021-unclean-shutdowns-always-count.md) | Every unclean shutdown counts towards safe mode |
+| [0022](0022-other-power-tools.md) | Which power tools run alongside, and which to offer to switch off |
+| [0023](0023-desktops-two-gpus-image-based-flatpak.md) | Desktops, two graphics chips, image-based systems and Flatpak |
+| [0024](0024-gnome-extension-in-the-package.md) | The GNOME extension ships in the package |
+| [0025](0025-hibernate-on-low-battery-is-advice.md) | Sleep that turns into hibernation is advice only |
 
 ## Adding a record
 
