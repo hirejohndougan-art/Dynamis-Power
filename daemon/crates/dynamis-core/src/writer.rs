@@ -22,9 +22,24 @@ const ALLOWED_PREFIXES: &[&str] = &[
     "/proc/sys/kernel/nmi_watchdog",
 ];
 
+/// Per-app CPU weights (phase 6): only this one file, only inside user
+/// sessions. Never system services, never other cgroup controls.
+const CGROUP_PREFIX: &str = "/sys/fs/cgroup/user.slice/";
+const CGROUP_FILE: &str = "/cpu.weight";
+
+fn allowed(path: &str) -> bool {
+    if path.contains("..") {
+        return false;
+    }
+    if path.starts_with(CGROUP_PREFIX) {
+        return path.ends_with(CGROUP_FILE);
+    }
+    ALLOWED_PREFIXES.iter().any(|p| path.starts_with(p))
+}
+
 pub(crate) fn write_all(root: &SysRoot, writes: &[Write]) -> Result<(), String> {
     for w in writes {
-        if w.path.contains("..") || !ALLOWED_PREFIXES.iter().any(|p| w.path.starts_with(p)) {
+        if !allowed(&w.path) {
             return Err(format!(
                 "refused to write outside the allowed paths: {}",
                 w.path
@@ -54,6 +69,9 @@ mod tests {
             "/etc/passwd",
             "/sys/firmware/efi/x",
             "/proc/sys/vm/../kernel/x",
+            "/sys/fs/cgroup/user.slice/app.scope/cgroup.freeze",
+            "/sys/fs/cgroup/user.slice/app.scope/cpu.max",
+            "/sys/fs/cgroup/system.slice/sshd.service/cpu.weight",
         ] {
             let err = write_all(
                 &root,

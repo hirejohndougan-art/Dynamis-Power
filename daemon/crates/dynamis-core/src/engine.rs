@@ -190,6 +190,13 @@ struct Baseline {
     values: BTreeMap<String, String>,
 }
 
+/// App cgroups whose CPU weight was changed, with the original value.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Touched {
+    v: u32,
+    weights: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Blocked {
     v: u32,
@@ -472,13 +479,105 @@ impl Engine {
         result
     }
 
+    // --- Per-app CPU weights (phase 6) ----------------------------------
+
+    /// Set the CPU weight (1–10000, normal 100) of one app's cgroup, given as
+    /// it appears in /proc/PID/cgroup (`/user.slice/…/app-x.scope`). A
+    /// weight is a share when apps compete for the CPU, never a cap, so this
+    /// cannot stop an app from running. Journaled; the first value seen is
+    /// kept so `restore` can put it back. Returns whether anything changed.
+    pub fn set_app_weight(
+        &mut self,
+        app: &str,
+        cgroup: &str,
+        weight: u32,
+        reason: &str,
+    ) -> Result<bool> {
+        if let Some(why) = self.safe_mode() {
+            return Err(EngineError::SafeMode(why));
+        }
+        if !(1..=10_000).contains(&weight) {
+            return Err(EngineError::Invalid(format!(
+                "weight {weight} is outside 1–10000"
+            )));
+        }
+        if !cgroup.starts_with("/user.slice/") || cgroup.contains("..") {
+            return Err(EngineError::Invalid(format!(
+                "not a user app group: {cgroup}"
+            )));
+        }
+        let path = format!("/sys/fs/cgroup{cgroup}/cpu.weight");
+        let current = self
+            .root
+            .read_string(&path)
+            .map_err(|e| EngineError::Unsupported(format!("{path}: {e}")))?;
+        if current == weight.to_string() {
+            return Ok(false);
+        }
+        let file = self.dir.join("cgroups.json");
+        let mut touched: Touched = read_json(&file).unwrap_or_default();
+        if !touched.weights.contains_key(cgroup) {
+            touched.v = STATE_FORMAT_VERSION;
+            touched.weights.insert(cgroup.to_string(), current.clone());
+            write_json(&file, &touched)?;
+        }
+        self.log(
+            "app-weight",
+            app,
+            Some(&current),
+            Some(&weight.to_string()),
+            reason,
+        )?;
+        let w = settings::Write {
+            path: path.clone(),
+            contents: weight.to_string(),
+        };
+        writer::write_all(&self.root, &[w]).map_err(EngineError::Write)?;
+        Ok(true)
+    }
+
+    /// Put every app weight changed back. Apps that have since closed are
+    /// simply skipped. Returns how many were restored.
+    pub fn restore_app_weights(&mut self) -> Result<usize> {
+        let file = self.dir.join("cgroups.json");
+        let touched: Touched = read_json(&file).unwrap_or_default();
+        let mut n = 0;
+        for (cgroup, original) in &touched.weights {
+            let path = format!("/sys/fs/cgroup{cgroup}/cpu.weight");
+            match self.root.read_string(&path) {
+                Ok(v) if v != *original => {
+                    let w = settings::Write {
+                        path,
+                        contents: original.clone(),
+                    };
+                    if writer::write_all(&self.root, &[w]).is_ok() {
+                        n += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if n > 0 {
+            self.log(
+                "restore",
+                "app weights",
+                None,
+                None,
+                &format!("{n} apps back to normal"),
+            )?;
+        }
+        let _ = fs::remove_file(&file);
+        Ok(n)
+    }
+
     /// Put every changed setting back to its original value. Works in safe
     /// mode and on blocked settings. Returns (id, original, ok) per setting
-    /// that needed changing.
+    /// that needed changing. Also puts app CPU weights back.
     pub fn restore(&mut self) -> Result<Vec<(String, String, bool)>> {
         if self.pending().is_some() {
             self.revert("restore requested")?;
         }
+        self.restore_app_weights()?;
         let mut done = Vec::new();
         for (id, original) in self.baseline() {
             let Some(s) = settings::by_id(&id) else {

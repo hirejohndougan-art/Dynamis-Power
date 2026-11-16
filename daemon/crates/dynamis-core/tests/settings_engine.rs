@@ -799,3 +799,89 @@ fn undo_one_setting() {
     let aspm = rows.iter().find(|r| r.id == "pcie.aspm").unwrap();
     assert!(!aspm.not_allowed.is_empty(), "quirk shown");
 }
+
+mod app_weights {
+    use super::*;
+
+    fn app_cgroup(sb: &Sandbox, name: &str) -> String {
+        let cg = format!("/user.slice/user-1000.slice/user@1000.service/app.slice/{name}");
+        let dir = sb.dir.join(format!("root/sys/fs/cgroup{cg}"));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("cpu.weight"), "100").unwrap();
+        cg
+    }
+
+    #[test]
+    fn weights_are_journaled_restorable_and_limited() {
+        let sb = Sandbox::new();
+        let ff = app_cgroup(&sb, "app-firefox-12.scope");
+        let mut e = sb.engine();
+        assert!(e
+            .set_app_weight("firefox", &ff, 25, "background on battery")
+            .unwrap());
+        assert!(
+            !e.set_app_weight("firefox", &ff, 25, "again").unwrap(),
+            "no change, no write"
+        );
+        assert_eq!(
+            fs::read_to_string(sb.dir.join(format!("root/sys/fs/cgroup{ff}/cpu.weight"))).unwrap(),
+            "25"
+        );
+        assert_eq!(e.journal(5).last().unwrap().event, "app-weight");
+
+        // Only user app groups, only sane weights.
+        assert!(e
+            .set_app_weight("sshd", "/system.slice/sshd.service", 1, "x")
+            .is_err());
+        assert!(e
+            .set_app_weight("x", "/user.slice/../system.slice", 1, "x")
+            .is_err());
+        assert!(e.set_app_weight("firefox", &ff, 0, "x").is_err());
+
+        e.restore().unwrap();
+        assert_eq!(
+            fs::read_to_string(sb.dir.join(format!("root/sys/fs/cgroup{ff}/cpu.weight"))).unwrap(),
+            "100"
+        );
+    }
+
+    #[test]
+    fn scans_processes_into_apps() {
+        let sb = Sandbox::new();
+        let ff = app_cgroup(&sb, "app-firefox-12.scope");
+        let mk = |pid: u32, comm: &str, ppid: u32, ticks: u64, cg: &str| {
+            let d = sb.dir.join(format!("root/proc/{pid}"));
+            fs::create_dir_all(&d).unwrap();
+            fs::write(
+                d.join("stat"),
+                format!(
+                    "{pid} ({comm}) S {ppid} 1 1 0 -1 0 0 0 0 0 {ticks} 0 0 0 20 0 1 0 100 0 0"
+                ),
+            )
+            .unwrap();
+            fs::write(d.join("cgroup"), format!("0::{cg}\n")).unwrap();
+        };
+        mk(1001, "firefox", 1, 300, &ff);
+        mk(1002, "Web Content", 1001, 200, &ff);
+        mk(
+            1003,
+            "NetworkManager",
+            1,
+            50,
+            "/system.slice/NetworkManager.service",
+        );
+        mk(1004, "kworker/0:1", 2, 999, "/");
+        let procs = dynamis_core::apps::scan(&sb.root());
+        let ff_ticks: u64 = procs
+            .iter()
+            .filter(|p| p.app == "firefox")
+            .map(|p| p.cpu_ticks)
+            .sum();
+        assert_eq!(ff_ticks, 500);
+        assert!(procs.iter().any(|p| p.app == "System"));
+        assert!(
+            !procs.iter().any(|p| p.pid == 1004),
+            "kernel threads skipped"
+        );
+    }
+}
