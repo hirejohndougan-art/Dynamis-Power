@@ -324,12 +324,12 @@ export function mockBackend(): Backend {
       },
       learning: {
         on: learning,
-        status: learning ? "Waiting: light use right now" : "Learning is off",
+        status: learning ? "Waiting: power use is changing" : "Learning is off",
         tests: records.length,
         tested_settings: new Set(records.filter((r) => r.verdict !== "inconclusive").map((r) => r.setting)).size,
         kept: kept().map((r) => ({ setting: r.setting, label: label(r.setting), value: r.value, baseline: r.baseline, saves_w: -r.effect.mean, reason: r.reason })),
         saves_w: kept().reduce((a, r) => a - r.effect.mean, 0),
-        waiting: learning ? { reason: "busy", share_pct: 62 } : null,
+        waiting: learning ? { reason: "unsteady", share_pct: 62 } : null,
         power_update_s: 15,
         progress: (() => {
           const done = records.length + 1;
