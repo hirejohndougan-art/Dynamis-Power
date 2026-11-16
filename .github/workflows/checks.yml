@@ -43,7 +43,7 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - name: CLI runs against the fixture
-        run: cargo run -q -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
+        run: cargo run -q --bin dynamis -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
       - name: Install scripts pass shellcheck
         run: shellcheck dist/install.sh dist/uninstall.sh scripts/phase1-test.sh packaging/build-deb.sh packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm
       - name: Build the service package
@@ -55,7 +55,7 @@ jobs:
       - name: CLI changes and restores a copy of the fixture
         run: |
           cp -a ../tests/fixtures/sysfs/synthetic-laptop "$RUNNER_TEMP/fx"
-          D="cargo run -q -- --root $RUNNER_TEMP/fx --state-dir $RUNNER_TEMP/state"
+          D="cargo run -q --bin dynamis -- --root $RUNNER_TEMP/fx --state-dir $RUNNER_TEMP/state"
           $D settings
           $D set vm.swappiness 10
           echo n | $D set cpu.turbo off --trial 2
