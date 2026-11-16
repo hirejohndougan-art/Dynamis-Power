@@ -547,7 +547,7 @@ export function mockBackend(): Backend {
           { tlp: 'SOUND_POWER_SAVE_ON_AC="0"  SOUND_POWER_SAVE_ON_BAT="1"', setting: "audio.power_save", label: "Sound card power saving", value: "1", target: "setting", skipped: null, note: "Dynamis Power uses one value for this setting; the battery value is used" },
           { tlp: 'MEM_SLEEP_ON_BAT="deep"', setting: "system.mem_sleep", label: "Sleep type", value: null, target: null, skipped: "risky: set it in Advanced, where it asks for a yes", note: null },
           { tlp: 'USB_AUTOSUSPEND="1"', setting: null, label: null, value: null, target: null, skipped: "use Devices → Let idle USB devices sleep", note: null },
-          { tlp: 'WIFI_PWR_ON_BAT="on"', setting: null, label: null, value: null, target: null, skipped: "Dynamis Power has no setting for this yet", note: null },
+          { tlp: 'DISK_APM_LEVEL_ON_BAT="128 128"', setting: null, label: null, value: null, target: null, skipped: "Dynamis Power has no setting for this yet", note: null },
         ],
       }),
     applyTlpImport: async (lines) => {
