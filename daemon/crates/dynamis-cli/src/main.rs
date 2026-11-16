@@ -154,6 +154,19 @@ enum Command {
         #[arg(long, hide = true)]
         session_bus: bool,
     },
+    /// The guided sleep test: `dynamis sleep-test on` sleeps the laptop with
+    /// each sleep type it offers (30 minutes each, waking by itself), then
+    /// compares battery use and whether everything came back. Needs the
+    /// battery. `off` stops it; no argument shows progress and results.
+    SleepTest {
+        #[arg(value_enum, default_value_t = SafeModeAction::Status)]
+        action: SafeModeAction,
+        /// Minutes per sleep type (5–60).
+        #[arg(long, default_value_t = 30.0)]
+        minutes: f64,
+        #[arg(long, hide = true)]
+        session_bus: bool,
+    },
     /// What learning found. `dynamis learned forget SETTING` undoes one.
     Learned {
         /// `forget` followed by a setting ID.
@@ -257,6 +270,19 @@ fn main() {
                 SafeModeAction::On => Some(true),
                 SafeModeAction::Off => Some(false),
             },
+            session_bus,
+        ),
+        Command::SleepTest {
+            action,
+            minutes,
+            session_bus,
+        } => auto_cmd::cmd_sleep_test(
+            match action {
+                SafeModeAction::Status => None,
+                SafeModeAction::On => Some(true),
+                SafeModeAction::Off => Some(false),
+            },
+            minutes,
             session_bus,
         ),
         Command::Learned {

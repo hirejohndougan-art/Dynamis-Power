@@ -198,3 +198,79 @@ pub fn cmd_stat(root: &dynamis_core::SysRoot, state: &std::path::Path) -> io::Re
     );
     Ok(())
 }
+
+/// `dynamis sleep-test [on|off]`.
+pub fn cmd_sleep_test(switch: Option<bool>, minutes: f64, session_bus: bool) -> io::Result<()> {
+    zbus::block_on(async {
+        let conn = if session_bus {
+            Connection::session().await
+        } else {
+            Connection::system().await
+        }
+        .map_err(err)?;
+        let own = zbus::Proxy::new(&conn, NAME, PATH, IFACE)
+            .await
+            .map_err(err)?;
+        match switch {
+            Some(true) => {
+                own.call::<_, _, ()>("StartSleepTest", &(minutes,))
+                    .await
+                    .map_err(err)?;
+                println!("Sleep test started: the laptop will sleep for {minutes:.0} minutes with each sleep type and wake by itself. Keep it unplugged.");
+                return Ok(());
+            }
+            Some(false) => {
+                own.call::<_, _, ()>("StopSleepTest", &())
+                    .await
+                    .map_err(err)?;
+            }
+            None => {}
+        }
+        let text: String = own.call("SleepTest", &()).await.map_err(err)?;
+        let st: serde_json::Value = serde_json::from_str(&text).map_err(io::Error::other)?;
+        println!("Sleep test: {}", st["phase"].as_str().unwrap_or("?"));
+        println!(
+            "Sleep types here: {} (now {})",
+            st["offered"]
+                .as_array()
+                .map(|a| a
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "))
+                .unwrap_or_default(),
+            st["active"].as_str().unwrap_or("?")
+        );
+        if let Some(c) = st["current"].as_str() {
+            println!("Testing:   {c}");
+        }
+        for r in st["results"].as_array().into_iter().flatten() {
+            println!(
+                "  {:<8} {} min, {} Wh/h ({}%/h), {}{}",
+                r["kind"].as_str().unwrap_or(""),
+                r["minutes"],
+                r["wh_per_h"],
+                r["pct_per_h"],
+                if r["clean"] == true {
+                    "woke cleanly"
+                } else {
+                    "did NOT wake cleanly"
+                },
+                r["invalid"]
+                    .as_str()
+                    .map(|i| format!(" (does not count: {i})"))
+                    .unwrap_or_default()
+            );
+            for p in r["problems"].as_array().into_iter().flatten() {
+                println!("           {}", p.as_str().unwrap_or(""));
+            }
+        }
+        if let Some(n) = st["note"].as_str() {
+            println!("Note:      {n}");
+        }
+        if let Some(r) = st["recommended"].as_str() {
+            println!("Recommended: {r}. Use it from the app's Battery screen (kept after restarts), or until the next restart: sudo dynamis set system.mem_sleep {r} --allow-risky");
+        }
+        Ok(())
+    })
+}

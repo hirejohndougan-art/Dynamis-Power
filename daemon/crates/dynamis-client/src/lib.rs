@@ -215,6 +215,28 @@ impl Client {
             .map_err(explain)
     }
 
+    /// The guided sleep test: what it is doing and its results.
+    pub async fn sleep_test(&self) -> Result<Value> {
+        self.json("SleepTest", &()).await
+    }
+
+    /// Start the sleep test, `minutes` per sleep type.
+    pub async fn start_sleep_test(&self, minutes: f64) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("StartSleepTest", &(minutes,))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn stop_sleep_test(&self) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("StopSleepTest", &())
+            .await
+            .map_err(explain)
+    }
+
     /// The full diagnostic report in plain text (`dynamis stat`).
     pub async fn diagnostics(&self) -> Result<String> {
         self.own()

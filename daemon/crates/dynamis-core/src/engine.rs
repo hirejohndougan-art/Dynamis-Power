@@ -693,6 +693,43 @@ impl Engine {
         Ok(n)
     }
 
+    // --- Wake-up alarm (sleep test) ---------------------------------------
+
+    /// Set the real-time clock's wake-up alarm to a Unix time, or clear it
+    /// (`None`). Used only by the sleep test, so the laptop wakes by itself.
+    /// Journaled. Clearing works in safe mode.
+    pub fn set_wake_alarm(&mut self, at: Option<u64>, reason: &str) -> Result<()> {
+        const ALARM: &str = "/sys/class/rtc/rtc0/wakealarm";
+        if at.is_some() {
+            if let Some(why) = self.safe_mode() {
+                return Err(EngineError::SafeMode(why));
+            }
+        }
+        if !self.root.exists(ALARM) {
+            return Err(EngineError::Unsupported(
+                "this laptop has no wake-up alarm".into(),
+            ));
+        }
+        let mut writes = vec![settings::Write {
+            path: ALARM.into(),
+            contents: "0".into(),
+        }];
+        if let Some(t) = at {
+            writes.push(settings::Write {
+                path: ALARM.into(),
+                contents: t.to_string(),
+            });
+        }
+        self.log(
+            "wake-alarm",
+            "rtc0",
+            None,
+            Some(&at.map_or("off".to_string(), |t| t.to_string())),
+            reason,
+        )?;
+        writer::write_all(&self.root, &writes).map_err(EngineError::Write)
+    }
+
     // --- Device runtime power management (TLP batch 2) -------------------
 
     /// Let one USB device or PCI function sleep when idle (`auto`) or keep it

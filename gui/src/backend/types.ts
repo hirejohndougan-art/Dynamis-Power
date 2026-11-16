@@ -252,6 +252,10 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** The guided sleep test. */
+  sleepTest(): Promise<SleepTestInfo>;
+  startSleepTest(minutes: number): Promise<void>;
+  stopSleepTest(): Promise<void>;
   /** The full diagnostic report in plain text (`dynamis stat`). */
   diagnostics(): Promise<string>;
   /** Devices that can sleep when idle (USB, internal), and the two switches. */
@@ -337,4 +341,28 @@ export type DevicesInfo = {
   /** Why a kind is blocked on this laptop, if it is. */
   blocked: { usb: string | null; pci: string | null };
   devices: DeviceInfo[];
+};
+
+export type SleepTypeResult = {
+  kind: string;
+  minutes: number;
+  wh_per_h: number | null;
+  pct_per_h: number | null;
+  clean: boolean;
+  problems: string[];
+  invalid: string | null;
+};
+export type SleepTestInfo = {
+  phase: "idle" | "ready" | "sleeping" | "settling" | "done";
+  current: string | null;
+  left: string[];
+  minutes: number;
+  results: SleepTypeResult[];
+  recommended: string | null;
+  original: string | null;
+  note: string | null;
+  offered: string[];
+  active: string | null;
+  /** The laptop can wake itself (it has a wake-up alarm). */
+  alarm: boolean;
 };

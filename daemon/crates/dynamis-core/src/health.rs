@@ -158,6 +158,19 @@ impl Monitor {
         problems
     }
 
+    /// Kernel messages since the last read, as (level, message); level 3 or
+    /// lower is an error. For the sleep test, which judges them itself.
+    pub fn kernel_messages(&mut self) -> Vec<(u32, String)> {
+        self.new_kernel_lines()
+            .into_iter()
+            .filter_map(|r| {
+                let (meta, message) = r.split_once(';')?;
+                let prio: u32 = meta.split(',').next()?.parse().ok()?;
+                Some((prio & 7, message.trim().to_string()))
+            })
+            .collect()
+    }
+
     fn new_kernel_lines(&mut self) -> Vec<String> {
         let Some(f) = self.kmsg.as_mut() else {
             return Vec::new();

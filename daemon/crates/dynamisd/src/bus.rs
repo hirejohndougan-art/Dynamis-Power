@@ -715,6 +715,42 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// The guided sleep test: what it is doing and its results (JSON).
+    fn sleep_test(&self) -> String {
+        let c = self.0.lock();
+        c.sleeptest.json(&c.root).to_string()
+    }
+
+    /// Start the sleep test: the laptop sleeps `minutes` (5–60) with each
+    /// sleep type it offers and wakes by itself. Needs the battery.
+    async fn start_sleep_test(
+        &self,
+        minutes: f64,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .start_sleep_test(minutes)
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        Ok(())
+    }
+
+    /// Stop the sleep test and put the original sleep type back.
+    async fn stop_sleep_test(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let mut c = self.0.lock();
+        let (root, dir) = (c.root().clone(), c.state_dir.clone());
+        c.sleeptest.stop(&root, &dir);
+        Ok(())
+    }
+
     /// "Charge fully once": lift the charge limit until the battery is full
     /// or the charger is unplugged (`true`), or stop and put it back.
     async fn charge_fully_once(

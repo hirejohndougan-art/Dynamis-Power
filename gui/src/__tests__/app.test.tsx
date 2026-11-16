@@ -214,6 +214,22 @@ describe("the app with the stand-in backend", () => {
     await waitFor(async () => expect((await backend.status()).power.on_ac).toBe(false));
   });
 
+  it("runs the sleep test and uses the kind it recommends", async () => {
+    window.location.hash = "#battery";
+    render(<App />);
+    const start = await screen.findByRole("button", { name: "Start the sleep test" });
+    await act(async () => fireEvent.click(start));
+    const dialog = screen.getByRole("dialog", { name: "Start the sleep test?", hidden: true });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Start", hidden: true })));
+    expect(await screen.findByText(/Testing Light sleep \(modern standby\)/, {}, { timeout: 3000 })).toBeTruthy();
+    const use = await screen.findByRole("button", { name: "Use Deep sleep" }, { timeout: 6000 });
+    expect(screen.getAllByText("Woke cleanly").length).toBe(2);
+    await act(async () => fireEvent.click(use));
+    await waitFor(() => expect(screen.getByText("Deep sleep is already the best here.")).toBeTruthy());
+    expect((await backend.status()).kept?.settings.some((k) => k.id === "system.mem_sleep")).toBe(true);
+    await backend.restore();
+  }, 15000);
+
   it("charges fully once, then puts the limit back", async () => {
     await backend.setSetting("battery.charge_limit", "80", false);
     window.location.hash = "#battery";

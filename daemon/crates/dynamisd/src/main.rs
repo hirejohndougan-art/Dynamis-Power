@@ -23,6 +23,7 @@ mod kept;
 mod learn;
 mod outside;
 mod predict;
+mod sleeptest;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -58,6 +59,9 @@ struct Args {
     calib_settle_secs: f64,
     #[arg(long, default_value_t = 300.0, hide = true)]
     calib_cooldown_secs: f64,
+    /// Seconds per "minute" in the sleep test (for tests).
+    #[arg(long, default_value_t = 60.0, hide = true)]
+    sleep_test_minute_secs: f64,
     /// Use the session bus and skip polkit (testing only; needs --root, so it
     /// can never change the real system without polkit).
     #[arg(long, hide = true)]
@@ -135,7 +139,7 @@ async fn run(args: Args) -> Result<(), String> {
         }
     }
     drop(engine);
-    let core = Core::with_timing(
+    let mut core = Core::with_timing(
         root,
         state,
         crate::learn::Timing {
@@ -144,6 +148,12 @@ async fn run(args: Args) -> Result<(), String> {
             cooldown_s: args.calib_cooldown_secs,
         },
     );
+    core.sleeptest
+        .set_minute_s(args.sleep_test_minute_secs.max(0.1));
+    {
+        let (root, dir) = (core.root.clone(), core.state_dir.clone());
+        core.sleeptest.after_start(&root, &dir, after_unclean);
+    }
     let svc = Service {
         core: Arc::new(Mutex::new(core)),
         polkit: !args.session,
@@ -295,6 +305,27 @@ fn spawn_auto_thread(conn: zbus::Connection, svc: Service, tick_secs: f64) {
                     format!("{}|{}", c.auto_status().1, c.learn.status()),
                 )
             };
+            // The sleep test asks the system to sleep (logind), outside the lock.
+            let suspend = svc
+                .core
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .sleeptest
+                .take_suspend();
+            if suspend {
+                let r = zbus::block_on(conn.call_method(
+                    Some("org.freedesktop.login1"),
+                    "/org/freedesktop/login1",
+                    Some("org.freedesktop.login1.Manager"),
+                    "Suspend",
+                    &(false,),
+                ));
+                if let Err(e) = r {
+                    let mut c = svc.core.lock().unwrap_or_else(|p| p.into_inner());
+                    let (root, dir) = (c.root.clone(), c.state_dir.clone());
+                    c.sleeptest.suspend_failed(&root, &dir, &e.to_string());
+                }
+            }
             // Signal only real changes, so listeners are not woken every tick.
             if changed {
                 zbus::block_on(bus::notify(&conn, &svc));

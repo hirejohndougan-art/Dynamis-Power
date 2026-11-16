@@ -125,6 +125,13 @@ On the VivoBook (and any laptop where Modes used to show only Balanced):
 2. Modes should now offer Longer battery, Balanced and Faster. Pick each and check: `cat /sys/devices/system/cpu/intel_pstate/no_turbo /sys/devices/system/cpu/intel_pstate/max_perf_pct /sys/devices/system/cpu/cpufreq/policy0/scaling_governor` should read `1 60 powersave` for Longer battery, `0 100 powersave` for Balanced and `0 100 performance` for Faster.
 3. Compare power on battery between Longer battery and Balanced with the same light use (`sudo dynamis gauge`).
 
+### Sleep test
+
+1. Charge to at least 60%, unplug, save your work, then on the Battery screen choose *Start the sleep test* with 15 minutes (or `dynamis sleep-test on --minutes 15`).
+2. The laptop should go to sleep by itself, wake about 15 minutes later, wait a minute, and do the same with the other sleep type. If it does not wake by itself, press the power button and note it: the wake-up alarm may not work on this laptop (`cat /sys/class/rtc/rtc0/wakealarm` while it is set should show a time), or the service's sandbox may block it.
+3. Afterwards, check the results (battery used per hour, *Woke cleanly*) and `cat /sys/power/mem_sleep`: the original type should be bracketed again. Wi-Fi, sound, the touchpad and USB devices should all work.
+4. **On the VivoBook:** if it freezes while asleep or waking with one type, that is useful: after restarting, the app should record that type as failed. Send `dynamis sleep-test` and `journalctl -b -1 -k | tail -50`.
+
 ### Devices (TLP batch 2)
 
 1. On battery, switch on both switches under *Devices* on the Battery screen. Then `grep . /sys/bus/usb/devices/*/power/control /sys/bus/pci/devices/*/power/control`: the devices the screen lists as sleeping should read `auto`; the mouse, keyboard, Bluetooth and graphics should not have changed.

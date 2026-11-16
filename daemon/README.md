@@ -68,6 +68,7 @@ The programs are then at `target/release/dynamis` (under 1 MB) and `target/relea
 ./target/release/dynamis gauge              # how often the battery gauge updates (run on battery)
 ./target/release/dynamis hardware-report    # text to paste into a GitHub hardware report
 ./target/release/dynamis stat               # full diagnostic report, like tlp-stat (sudo for everything)
+./target/release/dynamis sleep-test on      # guided sleep test (the laptop sleeps and wakes by itself); `dynamis sleep-test` for results
 ./target/release/dynamis settings           # what can be changed on this machine, and current values
 ```
 
@@ -171,6 +172,7 @@ dynamis auto off
 | `SetSetting(setting, value, allow_risky)`, `SetSafeMode(on)` | method | Change one setting; safe mode on or off |
 | `AutoPrefs()`, `SetAutoPrefs(json)` | method | Auto mode's preferences; out-of-range values are refused with a reason |
 | `Conflicts()`, `SwitchOffConflict(unit)` | method | Other power tools found running or enabled (asked of systemd); switch one off (administrator password; only known tools; recorded so removal turns it back on) |
+| `SleepTest()`, `StartSleepTest(minutes)`, `StopSleepTest()` | method | The guided sleep test: progress and results (JSON); start (5–60 minutes per sleep type; battery only); stop and put the original sleep type back |
 | `Diagnostics()` | method → text | The full diagnostic report (`dynamis stat`) |
 | `ChargeFullyOnce(on)` | method | Lift the charge limit until the battery is full or the charger is unplugged, or stop |
 | `Devices()`, `SetDevicePolicy(json)` | method | USB devices and PCI functions that can sleep when idle, with why some are kept awake; the two switches (`{"usb": bool, "pci": bool}`) |

@@ -100,6 +100,8 @@ pub struct Core {
     pub devices: crate::devices::DevicesState,
     /// "Charge fully once".
     pub fullcharge: crate::fullcharge::FullCharge,
+    /// The guided sleep test.
+    pub sleeptest: crate::sleeptest::SleepTest,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -132,6 +134,7 @@ impl Core {
         let kept = KeptState::load(&state_dir, unix_now());
         let devices = crate::devices::DevicesState::load(&state_dir);
         let fullcharge = crate::fullcharge::FullCharge::load(&state_dir);
+        let sleeptest = crate::sleeptest::SleepTest::load(&state_dir, 60.0);
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
@@ -162,6 +165,7 @@ impl Core {
             outside: Default::default(),
             devices,
             fullcharge,
+            sleeptest,
         }
     }
 
@@ -414,6 +418,8 @@ impl Core {
     /// in progress is no longer valid, and devices may be new. Apply the
     /// mode, kept settings, learned settings and app shares again.
     pub fn after_resume(&mut self) {
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.sleeptest.on_resume(&root, &dir, unix_now());
         self.outside
             .quiet_until(unix_now() + crate::outside::AFTER_WAKE_S);
         self.stop_experiment_for("the laptop slept");
@@ -426,6 +432,13 @@ impl Core {
         self.learn.reapply_soon();
         self.apps.reassert();
         self.devices.mark_dirty();
+    }
+
+    /// Start the sleep test (`minutes` per sleep type).
+    pub fn start_sleep_test(&mut self, minutes: f64) -> Result<(), String> {
+        let ctx = self.auto.sampler.read(&self.root, 0.0);
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.sleeptest.start(&root, &dir, minutes, &ctx, unix_now())
     }
 
     /// Whether device power saving should be in force: on battery, and not
@@ -462,6 +475,7 @@ impl Core {
             || self.predict.needs_ticks()
             || self.devices.needs_ticks()
             || self.fullcharge.is_active()
+            || self.sleeptest.running()
     }
 
     /// Whether processes need reading this tick.
@@ -497,6 +511,7 @@ impl Core {
             }
         }
         self.fullcharge.tick(&root, &dir, unix, ctx.on_ac);
+        self.sleeptest.tick(&root, &dir, unix, &ctx);
         self.predict.hold_charge = self.fullcharge.is_active();
         let mut target_changed = false;
         if self

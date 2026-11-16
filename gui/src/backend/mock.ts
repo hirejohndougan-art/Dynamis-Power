@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, SleepTestInfo } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -25,6 +25,7 @@ export function mockBackend(): Backend {
     "audio.power_save": "1",
     "pcie.aspm": "default",
     "battery.charge_limit": "100",
+    "system.mem_sleep": "s2idle",
   };
   const original: Record<string, string> = { "kernel.nmi_watchdog": "on" };
   const t0 = now();
@@ -142,6 +143,31 @@ export function mockBackend(): Backend {
   const kept = () => records.filter((r) => r.verdict === "keep");
 
   const blockedIds = new Map<string, string>();
+  // The sleep test, played out quickly: each "sleep" lasts SLEEP_MS.
+  const SLEEP_MS = 1200;
+  let sleep: SleepTestInfo = { phase: "idle", current: null, left: [], minutes: 30, results: [], recommended: null, original: null, note: null, offered: ["s2idle", "deep"], active: "s2idle", alarm: true };
+  let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+  const sleepChanged = () => {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("dynamis:changed"));
+  };
+  const sleepStep = () => {
+    const kind = sleep.left[0];
+    if (!kind) {
+      values["system.mem_sleep"] = sleep.original ?? "s2idle";
+      const good = sleep.results.filter((r) => r.clean && r.wh_per_h != null).sort((a, b) => a.wh_per_h! - b.wh_per_h!);
+      sleep = { ...sleep, phase: "done", current: null, recommended: good[0]?.kind ?? null, active: values["system.mem_sleep"] };
+      sleepChanged();
+      return;
+    }
+    values["system.mem_sleep"] = kind;
+    sleep = { ...sleep, phase: "sleeping", current: kind, left: sleep.left.slice(1), active: kind };
+    sleepChanged();
+    sleepTimer = setTimeout(() => {
+      const wh = kind === "deep" ? 0.36 : 1.14;
+      sleep = { ...sleep, results: [...sleep.results, { kind, minutes: sleep.minutes, wh_per_h: wh, pct_per_h: Math.round((wh / 38) * 1000) / 10, clean: true, problems: [], invalid: null }] };
+      sleepStep();
+    }, SLEEP_MS);
+  };
   let fullCharge: string | null = null;
   let fullChargeEnded: string | null = null;
   let devicePolicy: DevicePolicy = { usb: false, pci: false, never: [] };
@@ -208,6 +234,7 @@ export function mockBackend(): Backend {
       row("audio.power_save", "Sound chip sleep (seconds idle, 0 = never)", "usually_safe", "Usually safe", "0–60 s"),
       row("pcie.aspm", "PCIe link power saving", "usually_safe", "Usually safe", "default | performance | powersave"),
       row("battery.charge_limit", "Battery charge limit", "safe", "Safe", "50–100%"),
+      row("system.mem_sleep", "Sleep type", "risky", "Risky", "s2idle | deep"),
     ];
   };
 
@@ -352,6 +379,20 @@ export function mockBackend(): Backend {
       refuse();
       if (p.never_slow.some((a) => p.always_slow.includes(a))) throw new Error("an app cannot be both never and always slowed");
       appPolicy = { ...p, v: 1 };
+    },
+    sleepTest: async () => delay({ ...sleep, active: values["system.mem_sleep"] }),
+    startSleepTest: async (minutes) => {
+      refuse();
+      if (["sleeping", "settling", "ready"].includes(sleep.phase)) throw new Error("a sleep test is already running");
+      sleep = { ...sleep, phase: "ready", minutes, results: [], recommended: null, note: null, original: values["system.mem_sleep"], left: ["s2idle", "deep"] };
+      sleepTimer = setTimeout(sleepStep, 50);
+    },
+    stopSleepTest: async () => {
+      clearTimeout(sleepTimer);
+      if (sleep.phase !== "idle" && sleep.phase !== "done") {
+        values["system.mem_sleep"] = sleep.original ?? values["system.mem_sleep"];
+        sleep = { ...sleep, phase: "done", current: null, left: [], note: "you stopped it" };
+      }
     },
     diagnostics: async () =>
       delay(

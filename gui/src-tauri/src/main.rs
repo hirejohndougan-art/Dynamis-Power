@@ -161,6 +161,21 @@ async fn set_app_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), Stri
 }
 
 #[tauri::command]
+async fn sleep_test(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.sleep_test().await
+}
+
+#[tauri::command]
+async fn start_sleep_test(conn: State<'_, Conn>, minutes: f64) -> Result<(), String> {
+    client(&conn).await?.start_sleep_test(minutes).await
+}
+
+#[tauri::command]
+async fn stop_sleep_test(conn: State<'_, Conn>) -> Result<(), String> {
+    client(&conn).await?.stop_sleep_test().await
+}
+
+#[tauri::command]
 async fn diagnostics(conn: State<'_, Conn>) -> Result<String, String> {
     client(&conn).await?.diagnostics().await
 }
@@ -272,6 +287,9 @@ fn main() {
             devices,
             set_device_policy,
             diagnostics,
+            sleep_test,
+            start_sleep_test,
+            stop_sleep_test,
             predict,
             set_target,
             set_adaptive_charging,

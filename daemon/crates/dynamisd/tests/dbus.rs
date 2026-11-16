@@ -1728,3 +1728,148 @@ fn a_wrong_charger_report_can_be_ignored() {
         assert_eq!(c.status().await.unwrap()["power"]["on_ac"], true);
     });
 }
+
+/// Stands in for logind: counts requests to sleep.
+struct FakeLogin(Arc<std::sync::atomic::AtomicU32>);
+
+#[zbus::interface(name = "org.freedesktop.login1.Manager")]
+impl FakeLogin {
+    fn suspend(&self, _interactive: bool) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// The guided sleep test sleeps with each type, measures, notices a type
+/// that does not wake cleanly, recommends the other and puts things back.
+#[test]
+fn the_sleep_test_compares_sleep_types() {
+    let Some(env) = Env::new("sleeptest") else {
+        return;
+    };
+    let root = env.dir.join("root");
+    let bat = root.join("sys/class/power_supply/BAT0");
+    let rtc = root.join("sys/class/rtc/rtc0");
+    fs::create_dir_all(&rtc).unwrap();
+    fs::write(rtc.join("wakealarm"), "").unwrap();
+    fs::create_dir_all(root.join("dev")).unwrap();
+    fs::write(root.join("dev/kmsg"), "").unwrap();
+    let mem_sleep = || fs::read_to_string(root.join("sys/power/mem_sleep")).unwrap();
+    let _d = Guard(env.daemon_with(
+        "state",
+        &["--tick-secs", "0.2", "--sleep-test-minute-secs", "0.5"],
+    ));
+    let sleeps = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    zbus::block_on(async {
+        let login = zbus::connection::Builder::address(env.address.as_str())
+            .serve_at("/org/freedesktop/login1", FakeLogin(sleeps.clone()))
+            .name("org.freedesktop.login1")
+            .build()
+            .await
+            .unwrap();
+        wait_ready(&login).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let wake = async |energy_uwh: u64| {
+            let t = Instant::now();
+            while t.elapsed() < Duration::from_millis(1100) {
+                let _ = zbus::fdo::DBusProxy::new(&login)
+                    .await
+                    .unwrap()
+                    .get_id()
+                    .await;
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            fs::write(bat.join("energy_now"), energy_uwh.to_string()).unwrap();
+            // The kernel lists every type, bracketing the active one; a
+            // fixture file holds only what was written.
+            let active = fs::read_to_string(root.join("sys/power/mem_sleep")).unwrap();
+            let shown = if active.contains("s2idle") {
+                "[s2idle] deep"
+            } else {
+                "s2idle [deep]"
+            };
+            fs::write(root.join("sys/power/mem_sleep"), shown).unwrap();
+            zbus::object_server::SignalEmitter::new(&login, "/org/freedesktop/login1")
+                .unwrap()
+                .emit(
+                    "org.freedesktop.login1.Manager",
+                    "PrepareForSleep",
+                    &(false,),
+                )
+                .await
+                .unwrap();
+        };
+
+        // Plugged in: refused.
+        fs::write(root.join("sys/class/power_supply/AC0/online"), "1").unwrap();
+        assert!(c.start_sleep_test(2.0).await.is_err());
+        fs::write(root.join("sys/class/power_supply/AC0/online"), "0").unwrap();
+
+        c.start_sleep_test(2.0).await.unwrap();
+        // First type: s2idle, with the alarm set.
+        eventually("first sleep", async || {
+            // Keep the stand-in serving while waiting.
+            let _ = zbus::fdo::DBusProxy::new(&login)
+                .await
+                .unwrap()
+                .get_id()
+                .await;
+            sleeps.load(Ordering::SeqCst) == 1
+        })
+        .await;
+        assert!(mem_sleep().contains("s2idle"), "{}", mem_sleep());
+        assert_ne!(
+            fs::read_to_string(rtc.join("wakealarm")).unwrap().trim(),
+            "0"
+        );
+        let st = c.sleep_test().await.unwrap();
+        assert_eq!(
+            (st["phase"].as_str(), st["current"].as_str()),
+            (Some("sleeping"), Some("s2idle"))
+        );
+        wake(29_990_000).await;
+
+        // Second type: deep, which logs a failed resume.
+        eventually("second sleep", async || {
+            // Keep the stand-in serving while waiting.
+            let _ = zbus::fdo::DBusProxy::new(&login)
+                .await
+                .unwrap()
+                .get_id()
+                .await;
+            sleeps.load(Ordering::SeqCst) == 2
+        })
+        .await;
+        assert!(mem_sleep().contains("deep"));
+        fs::write(
+            root.join("dev/kmsg"),
+            "3,900,123,-;PM: Device 0000:00:14.0 failed to resume async: error -110\n",
+        )
+        .unwrap();
+        wake(29_985_000).await;
+
+        eventually("finished", async || {
+            c.sleep_test().await.unwrap()["phase"] == "done"
+        })
+        .await;
+        let st = c.sleep_test().await.unwrap();
+        let results = st["results"].as_array().unwrap();
+        assert_eq!(results.len(), 2, "{st}");
+        assert_eq!(results[0]["kind"], "s2idle");
+        assert_eq!(results[0]["clean"], true, "{st}");
+        assert!(results[0]["wh_per_h"].as_f64().unwrap() > 0.0, "{st}");
+        assert_eq!(results[1]["clean"], false, "{st}");
+        assert!(results[1]["problems"][0]
+            .as_str()
+            .unwrap()
+            .contains("failed to resume"));
+        assert_eq!(st["recommended"], "s2idle");
+        // The original type is back, and the alarm is cleared.
+        assert!(mem_sleep().contains("deep"), "{}", mem_sleep());
+        assert_eq!(
+            fs::read_to_string(rtc.join("wakealarm")).unwrap().trim(),
+            "0"
+        );
+    });
+}
