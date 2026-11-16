@@ -232,7 +232,7 @@ export function mockBackend(): Backend {
       sleepStep();
     }, SLEEP_MS);
   };
-  let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [] };
+  let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [], off_when_docked: [] };
   // "It feels slow".
   let relief: number | null = null;
   let learningStrict = false;

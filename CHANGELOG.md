@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Docking (TLP list): radios can be switched off while the laptop is in its dock and back on when it leaves (Devices → Radios). TLP's `DEVICES_TO_DISABLE_*` lines point there when imported.
+
 - Radios (TLP list; Devices screen): turn Bluetooth or mobile broadband off on battery or when the computer starts, and Wi-Fi off while a network cable is plugged in. Through the rfkill software switches, journaled and undone by Restore; a rule acts only when the situation changes, so a radio switched back on by hand stays on. `Radios`, `SetRadioPolicy`.
 
 - Vendor charge controls (TLP list): where the standard charge limit file is missing, the charge limit uses the laptop maker's own control, found by its own file: Lenovo IdeaPad conservation mode, LG, Samsung, Sony and Huawei. The Battery screen offers the levels that control has (for example 60% or 100%).

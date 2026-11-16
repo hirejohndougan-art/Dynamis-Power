@@ -84,6 +84,28 @@ pub fn wired_up(root: &SysRoot) -> bool {
     })
 }
 
+/// Whether the laptop is in a dock (TLP's dock detection, simplified): an
+/// ACPI dock station reporting `docked`, or a Thunderbolt device that calls
+/// itself a dock.
+pub fn docked(root: &SysRoot) -> bool {
+    let acpi = root
+        .list_dir("/sys/devices/platform")
+        .into_iter()
+        .filter(|d| d.starts_with("dock."))
+        .any(|d| {
+            root.read_string(&format!("/sys/devices/platform/{d}/docked"))
+                .is_ok_and(|v| v.trim() == "1")
+        });
+    acpi || root
+        .list_dir("/sys/bus/thunderbolt/devices")
+        .into_iter()
+        .filter(|d| !d.contains('/') && d.contains('-'))
+        .any(|d| {
+            root.read_string(&format!("/sys/bus/thunderbolt/devices/{d}/device_name"))
+                .is_ok_and(|n| n.to_ascii_lowercase().contains("dock"))
+        })
+}
+
 /// For tests: make an rfkill switch in a fixture.
 pub mod fixture {
     use std::path::Path;
@@ -95,6 +117,13 @@ pub mod fixture {
         std::fs::write(d.join("name"), format!("{name}\n")).unwrap();
         std::fs::write(d.join("soft"), if soft_off { "1\n" } else { "0\n" }).unwrap();
         std::fs::write(d.join("hard"), "0\n").unwrap();
+    }
+
+    /// An ACPI dock station, docked or not.
+    pub fn dock(root: &Path, docked: bool) {
+        let d = root.join("sys/devices/platform/dock.0");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("docked"), if docked { "1\n" } else { "0\n" }).unwrap();
     }
 
     /// A wired card, with the cable in or out.

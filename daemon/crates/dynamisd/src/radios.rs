@@ -39,11 +39,20 @@ pub struct RadioPolicy {
     /// Kinds switched off once when the service starts.
     #[serde(default)]
     pub off_at_startup: Vec<String>,
+    /// Kinds switched off while the laptop is in a dock (TLP's
+    /// `DEVICES_TO_DISABLE_ON_DOCK`).
+    #[serde(default)]
+    pub off_when_docked: Vec<String>,
 }
 
 impl RadioPolicy {
     fn check(&mut self) -> Result<(), String> {
-        for k in self.off_on_battery.iter().chain(&self.off_at_startup) {
+        for k in self
+            .off_on_battery
+            .iter()
+            .chain(&self.off_at_startup)
+            .chain(&self.off_when_docked)
+        {
             if !radios::KINDS.contains(&k.as_str()) {
                 return Err(format!("{k} is not bluetooth, wlan or wwan"));
             }
@@ -52,11 +61,15 @@ impl RadioPolicy {
         self.off_on_battery.dedup();
         self.off_at_startup.sort();
         self.off_at_startup.dedup();
+        self.off_when_docked.sort();
+        self.off_when_docked.dedup();
         Ok(())
     }
 
     pub fn enabled(&self) -> bool {
-        !self.off_on_battery.is_empty() || self.wifi_off_when_wired
+        !self.off_on_battery.is_empty()
+            || self.wifi_off_when_wired
+            || !self.off_when_docked.is_empty()
     }
 }
 
@@ -143,6 +156,9 @@ impl RadiosState {
         if self.policy.wifi_off_when_wired && radios::wired_up(root) {
             want.insert("wlan".into());
         }
+        if !self.policy.off_when_docked.is_empty() && radios::docked(root) {
+            want.extend(self.policy.off_when_docked.iter().cloned());
+        }
         let Some(last) = self.last.replace(want.clone()) else {
             // First look: take the situation as it is, and apply it.
             switch(root, dir, &want, true, &reason(&want, on_ac));
@@ -178,12 +194,19 @@ impl RadiosState {
                 })
             })
             .collect();
-        json!({ "policy": self.policy, "radios": list, "wired": radios::wired_up(root) })
+        json!({
+            "policy": self.policy,
+            "radios": list,
+            "wired": radios::wired_up(root),
+            "docked": radios::docked(root),
+        })
     }
 }
 
 fn reason(kinds: &BTreeSet<String>, on_ac: bool) -> String {
-    if kinds.contains("wlan") && !on_ac {
+    if kinds.is_empty() {
+        String::new()
+    } else if kinds.contains("wlan") && !on_ac {
         "on battery or a network cable is plugged in".into()
     } else if kinds.contains("wlan") {
         "a network cable is plugged in".into()
@@ -255,6 +278,7 @@ mod tests {
                 off_on_battery: vec!["bluetooth".into()],
                 wifi_off_when_wired: true,
                 off_at_startup: vec![],
+                off_when_docked: vec![],
             },
             &root,
             &state,
@@ -284,6 +308,29 @@ mod tests {
     }
 
     #[test]
+    fn docked_rule() {
+        let (dir, root, state) = sandbox("dock");
+        let mut r = RadiosState::load(&state);
+        r.set_policy(
+            RadioPolicy {
+                off_when_docked: vec!["wlan".into()],
+                ..RadioPolicy::default()
+            },
+            &root,
+            &state,
+            true,
+        )
+        .unwrap();
+        fixture::dock(&dir.join("root"), true);
+        r.tick(&root, &state, true);
+        assert_eq!(soft(&dir, "rfkill1"), "1", "docked: Wi-Fi off");
+        fixture::dock(&dir.join("root"), false);
+        r.tick(&root, &state, true);
+        assert_eq!(soft(&dir, "rfkill1"), "0", "undocked: back on");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn startup_rule_and_restore() {
         let (dir, root, state) = sandbox("startup");
         let mut r = RadiosState::load(&state);
@@ -292,6 +339,7 @@ mod tests {
                 off_on_battery: vec![],
                 wifi_off_when_wired: false,
                 off_at_startup: vec!["bluetooth".into()],
+                off_when_docked: vec![],
             },
             &root,
             &state,

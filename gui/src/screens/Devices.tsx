@@ -139,6 +139,15 @@ function Radios(props: { locked: boolean; hasBattery: boolean; run: (a: () => Pr
             onChange={(on) => set({ ...d.policy, wifi_off_when_wired: on })}
           />
         )}
+        {kinds.map((k) => (
+          <Switch
+            key={`dock-${k}`}
+            checked={(d.policy.off_when_docked ?? []).includes(k)}
+            disabled={props.locked}
+            label={t("radio_off_when_docked", { radio: kindName(k) })}
+            onChange={(on) => set({ ...d.policy, off_when_docked: toggle(d.policy.off_when_docked ?? [], k, on) })}
+          />
+        ))}
         {kinds
           .filter((k) => k !== "wlan")
           .map((k) => (
@@ -151,6 +160,7 @@ function Radios(props: { locked: boolean; hasBattery: boolean; run: (a: () => Pr
             />
           ))}
       </div>
+      {d.docked && <p className="muted small">{t("radio_docked_now")}</p>}
       <ul className="entries" aria-label={t("radio_now")}>
         {d.radios.map((r) => (
           <li key={r.id} className="entry">

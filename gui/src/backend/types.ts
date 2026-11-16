@@ -349,12 +349,14 @@ export type Unclean = {
 };
 
 export type RadioKind = "bluetooth" | "wlan" | "wwan";
-export type RadioPolicy = { off_on_battery: RadioKind[]; wifi_off_when_wired: boolean; off_at_startup: RadioKind[] };
+export type RadioPolicy = { off_on_battery: RadioKind[]; wifi_off_when_wired: boolean; off_at_startup: RadioKind[]; off_when_docked?: RadioKind[] };
 export type RadiosInfo = {
   policy: RadioPolicy;
   radios: { id: string; kind: RadioKind; name: string; off: boolean; hard_off: boolean; managed: boolean }[];
   /** A network cable is plugged in now. */
   wired: boolean;
+  /** The laptop is in a dock now. */
+  docked?: boolean;
 };
 
 export type FeelsSlowResult = {

@@ -209,6 +209,12 @@ const SINGLE: &[(&str, &str, Convert)] = &[
 
 /// TLP keys Dynamis Power handles another way, with where.
 const ELSEWHERE: &[(&str, &str)] = &[
+    ("DEVICES_TO_DISABLE", "use Devices → Radios"),
+    ("DEVICES_TO_ENABLE", "use Devices → Radios"),
+    (
+        "RESTORE_DEVICE_STATE_ON_STARTUP",
+        "systemd-rfkill already does this",
+    ),
     (
         "USB_AUTOSUSPEND",
         "use Devices → Let idle USB devices sleep",

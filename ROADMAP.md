@@ -121,7 +121,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 **Radios**
 
 - [x] Switch Bluetooth, Wi-Fi or mobile broadband off on battery, at startup, or Wi-Fi when a network cable is plugged in, as the person chooses (Devices → Radios; rfkill software switches through the engine; rules act only when the situation changes, so a radio switched back on by hand stays on). Remembering on/off across restarts is left to systemd-rfkill, which already does it
-- [ ] Optional rules on docking and undocking
+- [x] Optional rules on docking and undocking: radios off while docked (an ACPI dock station reporting `docked`, or a Thunderbolt device that calls itself a dock), back on when undocked
 
 **Battery**
 

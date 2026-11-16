@@ -289,6 +289,8 @@ export const en = {
   radio_wwan: "Mobile broadband",
   radio_off_on_battery: "Turn {radio} off on battery",
   radio_wifi_wired: "Turn Wi-Fi off while a network cable is plugged in",
+  radio_off_when_docked: "Turn {radio} off while the laptop is in its dock",
+  radio_docked_now: "The laptop is in its dock now.",
   radio_off_at_startup: "Turn {radio} off when the computer starts",
   radio_now: "Radios now",
   radio_on: "on",
