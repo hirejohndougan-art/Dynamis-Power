@@ -13,6 +13,7 @@ pub mod fs;
 pub mod gauge;
 pub mod inventory;
 pub mod logfmt;
+pub mod profiles;
 pub mod report;
 pub mod selfstat;
 pub mod sensors;

@@ -510,41 +510,36 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     Ok(())
 }
 
-/// Only one process may change settings at a time. The lock file holds the
-/// owner's PID; a lock left by a process that no longer exists is taken over.
+/// Only one process may change settings at a time.
+///
+/// This uses the kernel's advisory file lock (`flock`) on `lock`. The kernel
+/// releases it the moment the owning process exits, even after a crash or
+/// `kill -9`, so a stale lock can never keep everyone out. The file itself is
+/// never deleted (deleting a lock file lets two processes each lock a different
+/// file); it holds the owner's PID only as a hint for people.
 struct Lock {
-    path: PathBuf,
+    // Held only for its lock; dropping the file releases it.
+    _file: File,
 }
 
 impl Lock {
     fn take(path: &Path) -> Result<Self> {
-        for _ in 0..2 {
-            match OpenOptions::new().write(true).create_new(true).open(path) {
-                Ok(mut f) => {
-                    write!(f, "{}", std::process::id())?;
-                    return Ok(Lock {
-                        path: path.to_path_buf(),
-                    });
-                }
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    let pid = fs::read_to_string(path).unwrap_or_default();
-                    let pid = pid.trim();
-                    // Process liveness is a property of this machine, not of the
-                    // (possibly fixture) SysRoot, so the real /proc is right here.
-                    if !pid.is_empty() && Path::new("/proc").join(pid).exists() {
-                        return Err(EngineError::Locked(format!("process {pid}")));
-                    }
-                    fs::remove_file(path)?;
-                }
-                Err(e) => return Err(e.into()),
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(fs::TryLockError::WouldBlock) => {
+                let pid = fs::read_to_string(path).unwrap_or_default();
+                return Err(EngineError::Locked(format!("process {}", pid.trim())));
             }
+            Err(fs::TryLockError::Error(e)) => return Err(e.into()),
         }
-        Err(EngineError::Locked("could not take the lock".into()))
-    }
-}
-
-impl Drop for Lock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
+        file.set_len(0)?;
+        write!(file, "{}", std::process::id())?;
+        Ok(Lock { _file: file })
     }
 }

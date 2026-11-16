@@ -384,3 +384,74 @@ fn a_torn_journal_line_is_skipped() {
     std::io::Write::write_all(&mut f, b"{\"v\":1,\"time\":").unwrap();
     assert_eq!(e.journal(100).len(), 2);
 }
+
+mod profiles {
+    use super::*;
+    use dynamis_core::profiles::{self, Profile};
+
+    #[test]
+    fn plans_from_what_the_machine_offers() {
+        let sb = Sandbox::new();
+        let root = sb.root();
+        // The fixture has CPU speed preferences but no firmware profile.
+        assert_eq!(
+            profiles::plan(&root, Profile::PowerSaver)
+                .iter()
+                .map(|s| (s.id, s.value.as_str()))
+                .collect::<Vec<_>>(),
+            [("cpu.epp", "power")]
+        );
+        assert_eq!(profiles::available(&root), Profile::ALL);
+        let (cpu, platform) = profiles::drivers(&root);
+        assert!(cpu.is_some());
+        assert!(platform.is_none());
+    }
+
+    #[test]
+    fn firmware_profile_is_used_when_present() {
+        let sb = Sandbox::new();
+        let acpi = sb.dir.join("root/sys/firmware/acpi");
+        fs::create_dir_all(&acpi).unwrap();
+        fs::write(
+            acpi.join("platform_profile_choices"),
+            "quiet balanced performance",
+        )
+        .unwrap();
+        fs::write(acpi.join("platform_profile"), "balanced").unwrap();
+        let steps = profiles::plan(&sb.root(), Profile::PowerSaver);
+        assert!(steps
+            .iter()
+            .any(|s| s.id == "platform.profile" && s.value == "quiet"));
+    }
+
+    #[test]
+    fn nothing_to_tune_means_balanced_only() {
+        let sb = Sandbox::new();
+        fs::remove_dir_all(sb.dir.join("root/sys/devices/system/cpu/cpufreq")).unwrap();
+        assert_eq!(profiles::available(&sb.root()), [Profile::Balanced]);
+    }
+
+    #[test]
+    fn apply_goes_through_the_engine_and_restores() {
+        let sb = Sandbox::new();
+        let mut e = sb.engine();
+        let root = sb.root();
+        let done = profiles::apply(&mut e, &root, Profile::Performance, "test");
+        assert!(done.iter().all(|a| a.result.is_ok()), "{done:?}");
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/cpufreq/policy1/energy_performance_preference"),
+            "performance"
+        );
+        assert!(e
+            .journal(5)
+            .iter()
+            .any(|j| j.event == "start" && j.reason == "test"));
+        e.restore().unwrap();
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/cpufreq/policy1/energy_performance_preference"),
+            "balance_performance"
+        );
+        assert_eq!(Profile::parse("power-saver"), Some(Profile::PowerSaver));
+        assert_eq!(Profile::parse("turbo"), None);
+    }
+}
