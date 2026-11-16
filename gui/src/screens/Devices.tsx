@@ -1,4 +1,4 @@
-import { backend, type DeviceInfo, type DevicesInfo, type Status } from "../backend";
+import { backend, type DeviceInfo, type DevicesInfo, type RadioKind, type RadiosInfo, type Status } from "../backend";
 import { Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { t, tn } from "../i18n";
@@ -14,6 +14,7 @@ export function Devices(props: { status: Status; refresh: () => void }) {
       </header>
       <p className="muted">{t("dev_intro")}</p>
       <DeviceLists locked={!!props.status.safe_mode} run={run} />
+      <Radios locked={!!props.status.safe_mode} hasBattery={props.status.power.has_battery} run={run} />
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
   );
@@ -97,3 +98,70 @@ function DeviceLists(props: { locked: boolean; run: (a: () => Promise<string | v
   );
 }
 
+
+/** Radios switched off by rule (TLP's DEVICES_TO_DISABLE_ON_*). Rules act
+ * when the situation changes; switching a radio back on yourself is
+ * respected until the next change. */
+function Radios(props: { locked: boolean; hasBattery: boolean; run: (a: () => Promise<string | void>) => void }) {
+  const info = useLoad<RadiosInfo>(() => backend.radios(), []);
+  const d = info.data;
+  if (!d || d.radios.length === 0) return null;
+  const kinds = Array.from(new Set(d.radios.map((r) => r.kind)));
+  const set = (p: RadiosInfo["policy"]) =>
+    props.run(async () => {
+      await backend.setRadioPolicy(p);
+      info.reload();
+    });
+  const toggle = (list: RadioKind[], k: RadioKind, on: boolean) => (on ? [...list.filter((x) => x !== k), k] : list.filter((x) => x !== k));
+  const kindName = (k: RadioKind) => t(`radio_${k}`);
+  return (
+    <section className="card" aria-labelledby="radios-heading">
+      <h2 id="radios-heading">{t("radio_heading")}</h2>
+      <p className="muted">{t("radio_intro")}</p>
+      <div className="stack" style={{ gap: 8 }}>
+        {props.hasBattery &&
+          kinds
+            .filter((k) => k !== "wlan")
+            .map((k) => (
+              <Switch
+                key={`bat-${k}`}
+                checked={d.policy.off_on_battery.includes(k)}
+                disabled={props.locked}
+                label={t("radio_off_on_battery", { radio: kindName(k) })}
+                onChange={(on) => set({ ...d.policy, off_on_battery: toggle(d.policy.off_on_battery, k, on) })}
+              />
+            ))}
+        {kinds.includes("wlan") && (
+          <Switch
+            checked={d.policy.wifi_off_when_wired}
+            disabled={props.locked}
+            label={t("radio_wifi_wired")}
+            onChange={(on) => set({ ...d.policy, wifi_off_when_wired: on })}
+          />
+        )}
+        {kinds
+          .filter((k) => k !== "wlan")
+          .map((k) => (
+            <Switch
+              key={`start-${k}`}
+              checked={d.policy.off_at_startup.includes(k)}
+              disabled={props.locked}
+              label={t("radio_off_at_startup", { radio: kindName(k) })}
+              onChange={(on) => set({ ...d.policy, off_at_startup: toggle(d.policy.off_at_startup, k, on) })}
+            />
+          ))}
+      </div>
+      <ul className="entries" aria-label={t("radio_now")}>
+        {d.radios.map((r) => (
+          <li key={r.id} className="entry">
+            <span>{kindName(r.kind)}</span>
+            <span className="muted small">
+              {r.hard_off ? t("radio_hard_off") : r.off ? t("radio_off") : t("radio_on")}
+              {r.managed && ` · ${t("radio_managed")}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

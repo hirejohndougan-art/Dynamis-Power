@@ -25,6 +25,7 @@ mod learn;
 mod learnnow;
 mod outside;
 mod predict;
+mod radios;
 mod recal;
 mod relief;
 mod sleeptest;
@@ -247,6 +248,11 @@ async fn run(args: Args) -> Result<(), String> {
         let n = core
             .kept
             .apply_all(&root, &dir, after_unclean, "at startup");
+        // Radios the person switches off when the computer starts (not
+        // after an unclean shutdown: one thing less to wonder about).
+        if !after_unclean {
+            core.radios.at_startup(&root, &dir);
+        }
         if n > 0 {
             eprintln!("dynamisd: applied {n} kept setting(s)");
         }

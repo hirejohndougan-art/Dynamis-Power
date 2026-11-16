@@ -340,6 +340,19 @@ impl Client {
             .map_err(explain)
     }
 
+    /// Radios and the rules that switch them off.
+    pub async fn radios(&self) -> Result<Value> {
+        self.json("Radios", &()).await
+    }
+
+    pub async fn set_radio_policy(&self, policy: &Value) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetRadioPolicy", &(policy.to_string(),))
+            .await
+            .map_err(explain)
+    }
+
     /// The screen brightness chosen for each mode, and the level now.
     pub async fn brightness(&self) -> Result<Value> {
         self.json("Brightness", &()).await

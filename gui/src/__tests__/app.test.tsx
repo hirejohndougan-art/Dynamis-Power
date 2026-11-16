@@ -434,4 +434,14 @@ describe("the app with the stand-in backend", () => {
     expect(open).toHaveBeenCalledWith("Problem: Wi-Fi drops after sleep", expect.stringContaining("Please attach the file"));
     open.mockRestore();
   });
+  it("switches radios off by rule", async () => {
+    window.location.hash = "#devices";
+    render(<App />);
+    const card = await screen.findByRole("region", { name: "Radios" }, { timeout: 3000 });
+    const sw = within(card).getByRole("switch", { name: "Turn Bluetooth off on battery" });
+    await act(async () => fireEvent.click(sw));
+    await waitFor(() => expect(within(card).getByRole("switch", { name: "Turn Bluetooth off on battery" }).getAttribute("aria-checked")).toBe("true"));
+    expect(within(card).getByRole("switch", { name: "Turn Wi-Fi off while a network cable is plugged in" })).toBeTruthy();
+    await backend.setRadioPolicy({ off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [] });
+  });
 });

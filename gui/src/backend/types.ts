@@ -263,6 +263,9 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** Radios and the rules that switch them off. */
+  radios(): Promise<RadiosInfo>;
+  setRadioPolicy(p: RadioPolicy): Promise<void>;
   /** "It feels slow": undo what costs speed for the rest of the day. */
   feelsSlow(lasting: boolean): Promise<FeelsSlowResult>;
   endRelief(): Promise<void>;
@@ -343,6 +346,15 @@ export type Unclean = {
   in_safe_mode: number;
   /** Settings changed shortly before the freezes that led to safe mode. */
   suspects: Labelled[];
+};
+
+export type RadioKind = "bluetooth" | "wlan" | "wwan";
+export type RadioPolicy = { off_on_battery: RadioKind[]; wifi_off_when_wired: boolean; off_at_startup: RadioKind[] };
+export type RadiosInfo = {
+  policy: RadioPolicy;
+  radios: { id: string; kind: RadioKind; name: string; off: boolean; hard_off: boolean; managed: boolean }[];
+  /** A network cable is plugged in now. */
+  wired: boolean;
 };
 
 export type FeelsSlowResult = {

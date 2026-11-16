@@ -795,6 +795,30 @@ impl DynamisPower {
         Ok(r.to_string())
     }
 
+    /// Radios and the rules that switch them off (JSON).
+    fn radios(&self) -> String {
+        let c = self.0.lock();
+        c.radios.json(&c.root, &c.state_dir).to_string()
+    }
+
+    /// Change the radio rules. Takes the `policy` object from `Radios`.
+    async fn set_radio_policy(
+        &self,
+        policy: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let p: crate::radios::RadioPolicy =
+            serde_json::from_str(&policy).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        self.0
+            .lock()
+            .set_radio_policy(p)
+            .map_err(fdo::Error::InvalidArgs)?;
+        self.0.ticker.poke();
+        Ok(())
+    }
+
     /// The screen brightness chosen for each mode, whether this screen's
     /// brightness can be set, and its level now (JSON).
     fn brightness(&self) -> String {

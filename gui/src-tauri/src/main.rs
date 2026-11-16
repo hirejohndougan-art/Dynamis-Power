@@ -221,6 +221,16 @@ async fn set_device_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), S
 }
 
 #[tauri::command]
+async fn radios(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.radios().await
+}
+
+#[tauri::command]
+async fn set_radio_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), String> {
+    client(&conn).await?.set_radio_policy(&policy).await
+}
+
+#[tauri::command]
 async fn feels_slow(conn: State<'_, Conn>, lasting: bool) -> Result<Value, String> {
     client(&conn).await?.feels_slow(lasting).await
 }
@@ -385,6 +395,8 @@ fn main() {
             set_brightness_prefs,
             tlp_import,
             apply_tlp_import,
+            radios,
+            set_radio_policy,
             feels_slow,
             end_relief,
             recalibration,

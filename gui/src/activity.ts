@@ -87,6 +87,8 @@ export function describe(e: JournalEntry): Item | null {
     }
     case "charge-behaviour":
       return item(t(e.to === "force-discharge" ? "ev_bat_run_down" : "ev_bat_normal"), reason, reason.includes("you stopped") ? "mine" : "auto");
+    case "radio":
+      return item(t(e.to === "off" ? "ev_radio_off" : "ev_radio_on", { name: e.label || e.id }), reason, reason === "restore" ? "rollbacks" : "auto");
     case "import":
       return item(t("ev_import"), reason, "mine");
     case "brightness":

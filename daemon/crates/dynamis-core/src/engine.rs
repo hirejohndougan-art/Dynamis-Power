@@ -224,6 +224,13 @@ struct DevicesTouched {
     control: BTreeMap<String, String>,
 }
 
+/// Radios switched off by rule, with whether each was off before.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct RadiosTouched {
+    v: u32,
+    soft: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Blocked {
     v: u32,
@@ -1039,6 +1046,107 @@ impl Engine {
         Ok(n)
     }
 
+    // --- Radios (TLP's DEVICES_TO_DISABLE_ON_*) ---------------------------
+
+    /// Switch one radio (`rfkill3`) off or back on in software. Refused in
+    /// safe mode for switching off (switching back on always works), for
+    /// anything but an rfkill switch, and while the `radios` id is blocked.
+    /// The first state seen is kept so Restore can put it back. Returns
+    /// whether anything changed.
+    pub fn set_radio(&mut self, id: &str, off: bool, reason: &str) -> Result<bool> {
+        if !crate::radios::valid_id(id) {
+            return Err(EngineError::Invalid(format!("not a radio switch: {id}")));
+        }
+        if off {
+            if let Some(why) = self.safe_mode() {
+                return Err(EngineError::SafeMode(why));
+            }
+            if let Some(why) = self.blocked().get("radios") {
+                return Err(EngineError::Blocked {
+                    id: "radios".into(),
+                    reason: why.clone(),
+                });
+            }
+        }
+        let path = format!("{}/{id}/soft", crate::radios::RFKILL);
+        let current = self
+            .root
+            .read_string(&path)
+            .map_err(|e| EngineError::Unsupported(format!("{path}: {e}")))?
+            .trim()
+            .to_string();
+        let want = if off { "1" } else { "0" };
+        if current == want {
+            return Ok(false);
+        }
+        if off && self.dry_run() {
+            self.log("would", id, Some(&current), Some(want), reason)?;
+            return Ok(false);
+        }
+        let file = self.dir.join("radios.json");
+        let mut touched: RadiosTouched = read_json(&file).unwrap_or_default();
+        if !touched.soft.contains_key(id) {
+            touched.v = STATE_FORMAT_VERSION;
+            touched.soft.insert(id.to_string(), current.clone());
+            write_json(&file, &touched)?;
+        }
+        self.log(
+            "radio",
+            id,
+            Some(if current == "1" { "off" } else { "on" }),
+            Some(if off { "off" } else { "on" }),
+            reason,
+        )?;
+        self.write_device(&path, want)?;
+        Ok(true)
+    }
+
+    /// Put one radio back to the state it had before any rule touched it
+    /// and forget it. Returns whether it changed.
+    pub fn reset_radio(&mut self, id: &str, reason: &str) -> Result<bool> {
+        let file = self.dir.join("radios.json");
+        let mut touched: RadiosTouched = read_json(&file).unwrap_or_default();
+        let Some(original) = touched.soft.remove(id) else {
+            return Ok(false);
+        };
+        write_json(&file, &touched)?;
+        let path = format!("{}/{id}/soft", crate::radios::RFKILL);
+        let Ok(current) = self.root.read_string(&path) else {
+            return Ok(false);
+        };
+        if current.trim() == original {
+            return Ok(false);
+        }
+        self.log(
+            "radio",
+            id,
+            Some(if current.trim() == "1" { "off" } else { "on" }),
+            Some(if original == "1" { "off" } else { "on" }),
+            reason,
+        )?;
+        self.write_device(&path, &original)?;
+        Ok(true)
+    }
+
+    /// The radios switched by rule, with their states before.
+    pub fn touched_radios(&self) -> BTreeMap<String, String> {
+        read_json::<RadiosTouched>(&self.dir.join("radios.json"))
+            .unwrap_or_default()
+            .soft
+    }
+
+    /// Put every radio back (Restore).
+    pub fn restore_radios(&mut self) -> Result<usize> {
+        let mut n = 0;
+        for id in self.touched_radios().into_keys() {
+            if self.reset_radio(&id, "restore")? {
+                n += 1;
+            }
+        }
+        let _ = fs::remove_file(self.dir.join("radios.json"));
+        Ok(n)
+    }
+
     /// Put every changed setting back to its original value. Works in safe
     /// mode and on blocked settings. Returns (id, original, ok) per setting
     /// that needed changing. Also puts app CPU weights back.
@@ -1048,6 +1156,7 @@ impl Engine {
         }
         self.restore_app_weights()?;
         self.restore_device_power()?;
+        self.restore_radios()?;
         let mut done = Vec::new();
         for (id, original) in self.baseline() {
             let Some(s) = settings::by_id(&id) else {

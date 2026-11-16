@@ -29,6 +29,7 @@ pub mod overview;
 pub mod predict;
 pub mod profiles;
 pub mod quirks;
+pub mod radios;
 pub mod report;
 pub mod selfstat;
 pub mod sensors;

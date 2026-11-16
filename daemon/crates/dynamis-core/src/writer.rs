@@ -41,6 +41,8 @@ const ONE_FILE_ONLY: &[(&str, &str)] = &[
     ("/sys/class/scsi_host/", "/link_power_management_policy"),
     // The wake-up alarm, for the sleep test only.
     ("/sys/class/rtc/", "/wakealarm"),
+    // Radios switched off by rule (rfkill, software switch only).
+    ("/sys/class/rfkill/", "/soft"),
     // Whether a wired network card may wake the laptop (Wake-on-LAN).
     ("/sys/class/net/", "/device/power/wakeup"),
     // Screen brightness, for the brightness the person chose for each mode.
@@ -139,6 +141,8 @@ mod tests {
             "/sys/class/backlight/intel_backlight/bl_power",
             "/sys/class/net/eth0/device/power/control",
             "/sys/devices/platform/lg-laptop/fan_mode",
+            "/sys/class/rfkill/rfkill0/hard",
+            "/sys/class/rfkill/rfkill0/state",
             "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/fn_lock",
             "/sys/bus/platform/drivers/ideapad_acpi/../conservation_mode",
             "/sys/class/drm/card0/gt_boost_freq_mhz",

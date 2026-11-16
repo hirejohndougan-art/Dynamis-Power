@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, SleepTestInfo, LearnSession } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -232,6 +232,7 @@ export function mockBackend(): Backend {
       sleepStep();
     }, SLEEP_MS);
   };
+  let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [] };
   // "It feels slow".
   let relief: number | null = null;
   let learningStrict = false;
@@ -524,6 +525,12 @@ export function mockBackend(): Backend {
         }
       }
       devicePolicy = p;
+    },
+    radios: async () => delay({ policy: { ...radioPolicy }, radios: [{ id: "rfkill0", kind: "bluetooth", name: "hci0", off: radioPolicy.off_on_battery.includes("bluetooth"), hard_off: false, managed: radioPolicy.off_on_battery.includes("bluetooth") }, { id: "rfkill1", kind: "wlan", name: "phy0", off: false, hard_off: false, managed: false }], wired: false }),
+    setRadioPolicy: async (p) => {
+      refuse();
+      if (p.off_on_battery.includes("bluetooth") && !radioPolicy.off_on_battery.includes("bluetooth")) log({ event: "radio", id: "rfkill0", label: "Bluetooth", from: "on", to: "off", reason: "on battery" });
+      radioPolicy = { ...p };
     },
     feelsSlow: async (lasting) => {
       refuse();

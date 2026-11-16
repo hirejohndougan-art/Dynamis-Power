@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Radios (TLP list; Devices screen): turn Bluetooth or mobile broadband off on battery or when the computer starts, and Wi-Fi off while a network cable is plugged in. Through the rfkill software switches, journaled and undone by Restore; a rule acts only when the situation changes, so a radio switched back on by hand stays on. `Radios`, `SetRadioPolicy`.
+
 - Vendor charge controls (TLP list): where the standard charge limit file is missing, the charge limit uses the laptop maker's own control, found by its own file: Lenovo IdeaPad conservation mode, LG, Samsung, Sony and Huawei. The Battery screen offers the levels that control has (for example 60% or 100%).
 
 - Graphics (TLP list): `gpu.dgpu_runtime_pm` lets a second graphics chip (not the one driving the screen) sleep when idle, and learning tests it; `gpu.max_freq` and `gpu.min_freq` set the Intel graphics top and lowest speed in 50 MHz steps (TLP's `INTEL_GPU_MAX_FREQ` and `INTEL_GPU_MIN_FREQ`, which import to them). The writer now allows several files under one prefix.

@@ -108,6 +108,8 @@ pub struct Core {
     pub recal: crate::recal::Recal,
     /// "It feels slow", for the rest of the day.
     pub relief: crate::relief::Relief,
+    /// Radios switched off by rule.
+    pub radios: crate::radios::RadiosState,
     /// Parts of the system the app needs that are missing (`systemd`,
     /// `polkit`), found at startup.
     pub missing_parts: Vec<&'static str>,
@@ -146,6 +148,7 @@ impl Core {
         let sleeptest = crate::sleeptest::SleepTest::load(&state_dir, 60.0);
         let brightness = crate::brightness::BrightnessState::load(&state_dir);
         let recal = crate::recal::Recal::load(&root, &state_dir);
+        let state_dir_for_radios = state_dir.clone();
         let relief = crate::relief::Relief::load(&state_dir, unix_now());
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
@@ -188,6 +191,7 @@ impl Core {
             recal,
             relief,
             missing_parts: Vec::new(),
+            radios: crate::radios::RadiosState::load(&state_dir_for_radios),
         };
         let on = core.relief.active(unix_now());
         core.learn.relief = on;
@@ -586,6 +590,12 @@ impl Core {
         }
     }
 
+    pub fn set_radio_policy(&mut self, p: crate::radios::RadioPolicy) -> Result<(), String> {
+        let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.radios.set_policy(p, &root, &dir, on_ac)
+    }
+
     pub fn set_brightness_prefs(
         &mut self,
         p: crate::brightness::BrightnessPrefs,
@@ -618,6 +628,7 @@ impl Core {
             || self.fullcharge.is_active()
             || self.recal.is_active()
             || self.relief.until.is_some()
+            || self.radios.needs_ticks()
             || self.sleeptest.running()
     }
 
@@ -722,6 +733,9 @@ impl Core {
         let want = self.devices_save(ctx.on_ac);
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
         self.devices.tick(&root, &dir, want);
+        if self.radios.needs_ticks() {
+            self.radios.tick(&root, &dir, ctx.on_ac);
+        }
         if self.learn.enabled {
             self.learn_tick(now, &ctx, workload);
         }
