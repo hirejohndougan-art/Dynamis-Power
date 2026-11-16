@@ -731,3 +731,91 @@ fn auto_preferences_and_conflicts() {
     let saved = fs::read_to_string(env.dir.join("state/auto.json")).unwrap();
     assert!(saved.contains("\"low_battery_pct\":40"), "{saved}");
 }
+
+#[test]
+fn apps_share_the_cpu_by_policy_and_restore_puts_it_back() {
+    let Some(env) = Env::new("apps") else { return };
+    let root = env.dir.join("root");
+    let base = "/user.slice/user-1000.slice/user@1000.service/app.slice";
+    let mut weights = Vec::new();
+    for (pid, name) in [(1001, "firefox"), (1002, "thunderbird")] {
+        let cg = format!("{base}/app-{name}-{pid}.scope");
+        let dir = root.join(format!("sys/fs/cgroup{cg}"));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("cpu.weight"), "100").unwrap();
+        weights.push(dir.join("cpu.weight"));
+        let p = root.join(format!("proc/{pid}"));
+        fs::create_dir_all(&p).unwrap();
+        fs::write(
+            p.join("stat"),
+            format!("{pid} ({name}) S 1 1 1 0 -1 0 0 0 0 0 100 10 0 0 20 0 1 0 100 0 0"),
+        )
+        .unwrap();
+        fs::write(p.join("cgroup"), format!("0::{cg}\n")).unwrap();
+    }
+    let weight = |i: usize| fs::read_to_string(&weights[i]).unwrap().trim().to_string();
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        eventually("apps listed", async || {
+            c.apps().await.unwrap()["running"]
+                .as_array()
+                .is_some_and(|a| a.len() == 2)
+        })
+        .await;
+        assert_eq!(weight(0), "100", "nothing changes by default");
+
+        // Bad lists are refused with a reason.
+        let mut p = c.apps().await.unwrap()["policy"].clone();
+        p["never_slow"] = serde_json::json!(["firefox"]);
+        p["always_slow"] = serde_json::json!(["firefox"]);
+        let err = c.set_app_policy(&p).await.unwrap_err();
+        assert!(err.contains("both"), "{err}");
+
+        p["never_slow"] = serde_json::json!([]);
+        p["always_slow"] = serde_json::json!([]);
+        p["slow_background"] = true.into();
+        p["boost_front"] = true.into();
+        c.set_app_policy(&p).await.unwrap();
+        // Without knowing the app in front, nothing is slowed.
+        sleep(Duration::from_millis(600));
+        assert_eq!(weight(1), "100");
+
+        // The session agent says Firefox is in front.
+        let agent = env.client().await;
+        let ap = zbus::Proxy::new(
+            &agent,
+            "net.dynamis.Power",
+            "/net/dynamis/Power",
+            "net.dynamis.Power1",
+        )
+        .await
+        .unwrap();
+        let report =
+            HashMap::from([("focused_pid".to_string(), zbus::OwnedVariant::from(1001u32))]);
+        ap.call::<_, _, ()>("ReportSession", &(report,))
+            .await
+            .unwrap();
+        eventually("front boosted, background slowed", async || {
+            weight(0) == "400" && weight(1) == "25"
+        })
+        .await;
+        let a = c.apps().await.unwrap();
+        assert_eq!(a["front"], "firefox");
+        let j = c.journal(10).await.unwrap();
+        assert!(j.to_string().contains("app-weight"), "{j}");
+
+        // Restore puts both back and stops changing shares.
+        c.restore().await.unwrap();
+        assert_eq!((weight(0).as_str(), weight(1).as_str()), ("100", "100"));
+        sleep(Duration::from_millis(600));
+        assert_eq!((weight(0).as_str(), weight(1).as_str()), ("100", "100"));
+        let p = &c.apps().await.unwrap()["policy"];
+        assert_eq!(p["slow_background"], false);
+    });
+}

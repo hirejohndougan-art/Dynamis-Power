@@ -138,6 +138,10 @@ impl Core {
         if self.auto.enabled {
             self.set_auto(false, now)?;
         }
+        if self.apps.policy.changes_shares() {
+            let dir = self.state_dir.clone();
+            self.apps.stop_changing_shares(&dir)?;
+        }
         let mut e = open_engine(&self.root, &self.state_dir)?;
         let done = e.restore().map_err(|e| e.to_string())?;
         Ok(json!(done

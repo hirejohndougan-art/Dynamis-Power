@@ -12,6 +12,7 @@
 //! D-Bus message arrives. It has no network access (see the systemd unit).
 
 mod api;
+mod apps;
 mod bus;
 mod conflicts;
 mod core;
@@ -94,7 +95,12 @@ async fn run(args: Args) -> Result<(), String> {
     }
 
     // Recovery happens here, before anything else touches a setting.
-    crate::core::open_engine(&root, &state)?;
+    // App shares left from a run that did not stop cleanly go back too.
+    let mut engine = crate::core::open_engine(&root, &state)?;
+    if let Err(e) = engine.restore_app_weights() {
+        eprintln!("dynamisd: could not put app shares back: {e}");
+    }
+    drop(engine);
     let core = Core::with_timing(
         root,
         state,

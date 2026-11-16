@@ -579,6 +579,46 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// Apps: energy today and this week (estimates), what is open now, the
+    /// app in front, the slow-down policy and per-app modes (JSON).
+    fn apps(&self) -> String {
+        let c = self.0.lock();
+        c.apps
+            .json(crate::core::unix_now(), &c.auto_prefs().app_rules)
+            .to_string()
+    }
+
+    /// Change how apps share the CPU. Takes the `policy` object from `Apps`.
+    async fn set_app_policy(
+        &self,
+        policy: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let p: crate::apps::AppPolicy =
+            serde_json::from_str(&policy).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        self.0
+            .lock()
+            .set_app_policy(p)
+            .map_err(fdo::Error::InvalidArgs)?;
+        self.0.ticker.poke();
+        Ok(())
+    }
+
+    /// Forget every per-app energy total.
+    async fn forget_app_usage(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let mut c = self.0.lock();
+        let dir = c.state_dir.clone();
+        c.apps.forget_usage(&dir, crate::core::unix_now());
+        Ok(())
+    }
+
     /// Every calibration result and the display model, as JSON.
     fn learned_json(&self) -> String {
         let c = self.0.lock();
@@ -604,7 +644,8 @@ impl DynamisPower {
 
     /// Called by the session agent when something in the desktop session
     /// changes. Keys: media_playing, screen_inhibited, game_running,
-    /// screen_locked, user_idle (booleans). Unknown keys are ignored.
+    /// screen_locked, user_idle (booleans) and focused_pid (u32, the process
+    /// of the window in front; 0 if unknown). Unknown keys are ignored.
     async fn report_session(
         &self,
         report: HashMap<String, OwnedVariant>,
@@ -624,6 +665,10 @@ impl DynamisPower {
             game_running: flag("game_running"),
             screen_locked: flag("screen_locked"),
             user_idle: flag("user_idle"),
+            focused_pid: report
+                .get("focused_pid")
+                .and_then(|v| u32::try_from(&**v).ok())
+                .unwrap_or(0),
         };
         self.0.lock().report_session(&sender, r);
         self.0.ticker.poke();

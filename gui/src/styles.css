@@ -157,3 +157,8 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   .segmented { grid-template-columns: 1fr; }
   .segment { min-height: 0; }
 }
+
+/* Apps */
+.app-row { align-items: center; }
+.bar { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }

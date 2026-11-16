@@ -31,7 +31,12 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
-ProtectControlGroups=yes
+# Apps (phase 6) change one file, cpu.weight, in app groups of user
+# sessions. The cgroup tree is read-only except user.slice; the daemon's own
+# writer also refuses anything but cpu.weight there.
+ProtectControlGroups=no
+ReadOnlyPaths=/sys/fs/cgroup
+ReadWritePaths=-/sys/fs/cgroup/user.slice
 ProtectClock=yes
 ProtectHostname=yes
 NoNewPrivileges=yes

@@ -20,5 +20,8 @@ export const tauriBackend: Backend = {
   switchOffConflict: (unit) => invoke("switch_off_conflict", { unit }),
   autoPrefs: () => invoke("auto_prefs"),
   setAutoPrefs: (prefs) => invoke("set_auto_prefs", { prefs }),
+  apps: () => invoke("apps"),
+  setAppPolicy: (policy) => invoke("set_app_policy", { policy }),
+  forgetAppUsage: () => invoke("forget_app_usage"),
   saveFile: (name, contents) => invoke("save_file", { name, contents }),
 };

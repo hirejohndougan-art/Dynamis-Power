@@ -54,6 +54,17 @@ pub struct Context {
     pub game_running: bool,
     pub screen_locked: bool,
     pub user_idle: bool,
+    /// Apps with a process right now (names from [`crate::apps`]).
+    pub running_apps: Vec<String>,
+    /// The app in front, when the session agent knows it.
+    pub focused_app: Option<String>,
+}
+
+/// "Use this mode while this app is open."
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AppRule {
+    pub app: String,
+    pub profile: Profile,
 }
 
 /// The workload classes from docs/DESIGN.md.
@@ -108,6 +119,9 @@ pub struct Prefs {
     pub transfer_mb_s: f64,
     pub min_dwell_s: f64,
     pub max_switches_per_hour: usize,
+    /// Per-app modes. The app in front wins; otherwise the first rule whose
+    /// app is open.
+    pub app_rules: Vec<AppRule>,
 }
 
 impl Default for Prefs {
@@ -125,6 +139,7 @@ impl Default for Prefs {
             transfer_mb_s: 1.0,
             min_dwell_s: 60.0,
             max_switches_per_hour: 12,
+            app_rules: Vec::new(),
         }
     }
 }
@@ -160,6 +175,7 @@ pub struct Auto {
     last_switch: Option<f64>,
     last_on_ac: Option<bool>,
     last_workload: Option<Workload>,
+    last_running: Vec<String>,
     recent: VecDeque<f64>,
 }
 
@@ -218,7 +234,14 @@ impl Auto {
         let woke_up = self.last_workload == Some(Workload::Idle) && d.workload != Workload::Idle;
         let call_started =
             d.workload == Workload::Call && self.last_workload != Some(Workload::Call);
-        d.urgent |= power_changed || woke_up || call_started;
+        // Opening an app with its own mode should feel instant, like the
+        // user's own choice. Moving between apps already open does not skip
+        // the smoothing, so clicking around cannot make the mode flap.
+        let rule_started = self
+            .app_rule(ctx)
+            .is_some_and(|r| !self.last_running.contains(&r.app));
+        self.last_running = ctx.running_apps.clone();
+        d.urgent |= power_changed || woke_up || call_started || rule_started;
         self.last_on_ac = Some(ctx.on_ac);
         self.last_workload = Some(d.workload);
 
@@ -305,40 +328,58 @@ impl Auto {
                         (Profile::Balanced, format!("{what} on battery: balanced"))
                     }
                 };
-                let (profile, reason) = match workload {
-                    Workload::Idle => (
-                        Profile::PowerSaver,
-                        "Nobody is using the laptop: saving power".to_string(),
-                    ),
-                    Workload::Call => (
-                        Profile::Balanced,
-                        "On a call: keeping sound and video steady".to_string(),
-                    ),
-                    Workload::Gaming => demanding("Playing a game"),
-                    Workload::SustainedCompute => demanding("Heavy work"),
-                    Workload::Video if on_batt && self.low => (
-                        Profile::PowerSaver,
-                        format!(
-                            "Playing media with the battery below {:.0}%",
-                            p.low_battery_pct
-                        ),
-                    ),
-                    Workload::Video => (
-                        Profile::Balanced,
-                        "Playing media: keeping it smooth".to_string(),
-                    ),
-                    Workload::BackgroundTransfer => {
-                        let (prof, why) = ordinary();
+                let rule = match workload {
+                    Workload::Idle | Workload::Call => None,
+                    _ => self.app_rule(ctx),
+                };
+                let (profile, reason) = if let Some(r) = rule {
+                    if r.profile == Profile::Performance && on_batt && self.low {
                         (
-                            if prof == Profile::PowerSaver && !self.low {
-                                Profile::Balanced
-                            } else {
-                                prof
-                            },
-                            format!("{why}; a transfer is running"),
+                            Profile::PowerSaver,
+                            format!(
+                                "{} is open, but the battery is below {:.0}%",
+                                r.app, p.low_battery_pct
+                            ),
                         )
+                    } else {
+                        (r.profile, format!("{} is open: its chosen mode", r.app))
                     }
-                    Workload::LightInteractive | Workload::BurstyInteractive => ordinary(),
+                } else {
+                    match workload {
+                        Workload::Idle => (
+                            Profile::PowerSaver,
+                            "Nobody is using the laptop: saving power".to_string(),
+                        ),
+                        Workload::Call => (
+                            Profile::Balanced,
+                            "On a call: keeping sound and video steady".to_string(),
+                        ),
+                        Workload::Gaming => demanding("Playing a game"),
+                        Workload::SustainedCompute => demanding("Heavy work"),
+                        Workload::Video if on_batt && self.low => (
+                            Profile::PowerSaver,
+                            format!(
+                                "Playing media with the battery below {:.0}%",
+                                p.low_battery_pct
+                            ),
+                        ),
+                        Workload::Video => (
+                            Profile::Balanced,
+                            "Playing media: keeping it smooth".to_string(),
+                        ),
+                        Workload::BackgroundTransfer => {
+                            let (prof, why) = ordinary();
+                            (
+                                if prof == Profile::PowerSaver && !self.low {
+                                    Profile::Balanced
+                                } else {
+                                    prof
+                                },
+                                format!("{why}; a transfer is running"),
+                            )
+                        }
+                        Workload::LightInteractive | Workload::BurstyInteractive => ordinary(),
+                    }
                 };
                 (profile, reason, false)
             };
@@ -364,6 +405,18 @@ impl Auto {
             reason,
             urgent,
         }
+    }
+
+    /// The per-app rule that applies now, if any: the app in front first,
+    /// then the first rule (in the user's order) whose app is open.
+    fn app_rule(&self, ctx: &Context) -> Option<&AppRule> {
+        let rules = &self.prefs.app_rules;
+        if let Some(f) = &ctx.focused_app {
+            if let Some(r) = rules.iter().find(|r| &r.app == f) {
+                return Some(r);
+            }
+        }
+        rules.iter().find(|r| ctx.running_apps.contains(&r.app))
     }
 
     fn workload(&self, ctx: &Context) -> Workload {

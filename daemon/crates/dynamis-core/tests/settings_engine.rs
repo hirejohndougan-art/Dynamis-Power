@@ -846,6 +846,23 @@ mod app_weights {
     }
 
     #[test]
+    fn one_app_can_be_put_back() {
+        let sb = Sandbox::new();
+        let ff = app_cgroup(&sb, "app-firefox-12.scope");
+        let mut e = sb.engine();
+        assert!(!e.reset_app_weight("firefox", &ff, "never changed").unwrap());
+        e.set_app_weight("firefox", &ff, 400, "in front").unwrap();
+        assert!(e.reset_app_weight("firefox", &ff, "behind").unwrap());
+        assert_eq!(
+            fs::read_to_string(sb.dir.join(format!("root/sys/fs/cgroup{ff}/cpu.weight"))).unwrap(),
+            "100"
+        );
+        // Forgotten once put back: a later restore has nothing to do.
+        assert!(!e.reset_app_weight("firefox", &ff, "again").unwrap());
+        assert_eq!(e.restore_app_weights().unwrap(), 0);
+    }
+
+    #[test]
     fn scans_processes_into_apps() {
         let sb = Sandbox::new();
         let ff = app_cgroup(&sb, "app-firefox-12.scope");

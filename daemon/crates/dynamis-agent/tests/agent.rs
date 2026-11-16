@@ -28,7 +28,13 @@ impl Recorder {
     fn report_session(&self, report: HashMap<String, OwnedVariant>) {
         let flat = report
             .into_iter()
-            .map(|(k, v)| (k, bool::try_from(v).unwrap_or(false)))
+            // Flags as they are; the focused process as "known or not".
+            .map(|(k, v)| {
+                let b = bool::try_from(&v)
+                    .or_else(|_| u32::try_from(&v).map(|pid| pid != 0))
+                    .unwrap_or(false);
+                (k, b)
+            })
             .collect();
         self.0.lock().unwrap().push(flat);
     }
@@ -156,6 +162,7 @@ fn reports_session_changes_and_nothing_else() {
         Command::new(env!("CARGO_BIN_EXE_dynamis-agent"))
             .arg("--report-on-session-bus")
             .env("DBUS_SESSION_BUS_ADDRESS", &address)
+            .env("XDG_RUNTIME_DIR", &dir)
             .spawn()
             .unwrap(),
     );
@@ -165,6 +172,7 @@ fn reports_session_changes_and_nothing_else() {
     assert_eq!(
         r_keys(&reports),
         [
+            "focused_pid",
             "game_running",
             "media_playing",
             "screen_inhibited",
@@ -204,6 +212,23 @@ fn reports_session_changes_and_nothing_else() {
     });
     wait_for("locked", &reports, |r| {
         r["screen_locked"] && r["media_playing"]
+    });
+
+    // The KWin script reports the window in front by process ID only.
+    zbus::block_on(async {
+        client
+            .call_method(
+                Some("net.dynamis.Agent"),
+                "/net/dynamis/Agent",
+                Some("net.dynamis.Agent1"),
+                "FocusChanged",
+                &(4321u32,),
+            )
+            .await
+            .unwrap();
+    });
+    wait_for("focus", &reports, |r| {
+        r["focused_pid"] && r["screen_locked"]
     });
 
     // Unrelated bus activity (a new client) triggers a re-read but no report.

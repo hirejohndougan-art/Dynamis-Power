@@ -150,6 +150,21 @@ fn save_file(name: String, contents: String) -> Result<String, String> {
     Ok(path.display().to_string())
 }
 
+#[tauri::command]
+async fn apps(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.apps().await
+}
+
+#[tauri::command]
+async fn set_app_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), String> {
+    client(&conn).await?.set_app_policy(&policy).await
+}
+
+#[tauri::command]
+async fn forget_app_usage(conn: State<'_, Conn>) -> Result<(), String> {
+    client(&conn).await?.forget_app_usage().await
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Conn::default())
@@ -171,6 +186,9 @@ fn main() {
             switch_off_conflict,
             auto_prefs,
             set_auto_prefs,
+            apps,
+            set_app_policy,
+            forget_app_usage,
             save_file
         ])
         .run(tauri::generate_context!())

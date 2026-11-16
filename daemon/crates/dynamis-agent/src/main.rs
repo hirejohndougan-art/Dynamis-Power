@@ -2,7 +2,7 @@
 //!
 //! Runs as the logged-in person (a systemd user service), never as root. The
 //! root service cannot see inside a desktop session, so this small program
-//! watches the session bus and reports five facts:
+//! watches the session bus and reports these facts:
 //!
 //! | Fact | Source |
 //! | --- | --- |
@@ -11,14 +11,19 @@
 //! | `screen_inhibited` | An app asked the desktop not to dim the screen (KDE PolicyAgent, or GNOME's idle inhibit) |
 //! | `game_running` | A game registered with Feral GameMode |
 //! | `user_idle` | Not reported yet: the screen lock covers walking away |
+//! | `focused_pid` | Process ID of the window in front (KDE Plasma: a tiny KWin script tells the agent; 0 elsewhere) |
 //!
 //! It never polls. It waits for D-Bus signals, re-reads the facts when one
 //! arrives, and reports only when something changed. Every source is
-//! optional: a desktop without one simply reports `false` for that fact.
+//! optional: a desktop without one simply reports `false` (or 0) for that fact.
 //! It sends nothing else: no window titles, no app names, no media titles.
+//! The service turns the process ID into an app name itself, on this
+//! computer, for the Apps screen and per-app modes.
 
 use std::collections::HashMap;
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 use clap::Parser;
 use futures_lite::{Stream, StreamExt};
@@ -28,6 +33,24 @@ use zbus::{Connection, MatchRule, MessageStream, OwnedVariant};
 const SERVICE: &str = "net.dynamis.Power";
 const SERVICE_PATH: &str = "/net/dynamis/Power";
 const SERVICE_IFACE: &str = "net.dynamis.Power1";
+
+/// The agent's own name on the session bus, for the KWin script to call.
+const AGENT_NAME: &str = "net.dynamis.Agent";
+const AGENT_PATH: &str = "/net/dynamis/Agent";
+const AGENT_IFACE: &str = "net.dynamis.Agent1";
+const KWIN_SCRIPT_NAME: &str = "dynamis-focus";
+
+/// Runs inside KWin. Works with Plasma 6 (`windowActivated`) and 5
+/// (`clientActivated`). Sends only the process ID.
+const KWIN_SCRIPT: &str = r#"
+function dynamisReport(w) {
+    callDBus("net.dynamis.Agent", "/net/dynamis/Agent", "net.dynamis.Agent1",
+             "FocusChanged", w && w.pid ? w.pid : 0);
+}
+var dynamisSignal = workspace.windowActivated || workspace.clientActivated;
+dynamisSignal.connect(dynamisReport);
+dynamisReport(workspace.activeWindow || workspace.activeClient);
+"#;
 
 #[derive(Parser)]
 #[command(
@@ -50,6 +73,17 @@ struct Facts {
     screen_locked: bool,
     screen_inhibited: bool,
     game_running: bool,
+    focused_pid: u32,
+}
+
+/// Receives focus changes from the KWin script.
+struct Focus(Arc<AtomicU32>);
+
+#[zbus::interface(name = "net.dynamis.Agent1")]
+impl Focus {
+    fn focus_changed(&self, pid: u32) {
+        self.0.store(pid, Ordering::Relaxed);
+    }
 }
 
 impl Facts {
@@ -60,6 +94,7 @@ impl Facts {
             ("screen_inhibited".into(), self.screen_inhibited.into()),
             ("game_running".into(), self.game_running.into()),
             ("user_idle".into(), false.into()),
+            ("focused_pid".into(), self.focused_pid.into()),
         ])
     }
 }
@@ -77,6 +112,19 @@ fn main() -> ExitCode {
 
 async fn run(args: Args) -> zbus::Result<()> {
     let session = Connection::session().await?;
+    let focus = Arc::new(AtomicU32::new(0));
+    session
+        .object_server()
+        .at(AGENT_PATH, Focus(focus.clone()))
+        .await?;
+    // A second agent in the same session would only duplicate reports.
+    if session.request_name(AGENT_NAME).await.is_ok() {
+        if let Err(e) = load_kwin_script(&session).await {
+            if args.verbose {
+                eprintln!("dynamis-agent: no focus tracking ({e})");
+            }
+        }
+    }
     let report_bus = if args.report_on_session_bus {
         session.clone()
     } else {
@@ -107,6 +155,12 @@ async fn run(args: Args) -> zbus::Result<()> {
             Some("PropertiesChanged"),
             Some("/com/feralinteractive/GameMode"),
         ),
+        // The KWin script calling us: wakes the loop to report the change.
+        MatchRule::builder()
+            .msg_type(Type::MethodCall)
+            .interface(AGENT_IFACE)
+            .member("FocusChanged")
+            .build(),
     ];
     let mut events: std::pin::Pin<Box<dyn Stream<Item = Event> + Send>> =
         Box::pin(futures_lite::stream::pending());
@@ -133,7 +187,10 @@ async fn run(args: Args) -> zbus::Result<()> {
     let mut last: Option<Facts> = None;
     let mut force = true;
     loop {
-        let now = read_facts(&session).await;
+        let now = Facts {
+            focused_pid: focus.load(Ordering::Relaxed),
+            ..read_facts(&session).await
+        };
         if force || last != Some(now) {
             match report(&report_bus, now).await {
                 Ok(()) => {
@@ -196,7 +253,48 @@ async fn read_facts(c: &Connection) -> Facts {
         screen_locked: screen_locked(c).await,
         screen_inhibited: screen_inhibited(c).await,
         game_running: game_running(c).await,
+        focused_pid: 0,
     }
+}
+
+/// Load the focus script into KWin (KDE Plasma). Elsewhere this fails
+/// quietly and `focused_pid` stays 0.
+async fn load_kwin_script(c: &Connection) -> Result<(), String> {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR").ok_or("no XDG_RUNTIME_DIR")?;
+    let path = std::path::Path::new(&dir).join("dynamis-focus.js");
+    std::fs::write(&path, KWIN_SCRIPT).map_err(|e| e.to_string())?;
+    let path = path.to_string_lossy().into_owned();
+    let call = |method: &'static str, body: Vec<String>| async move {
+        c.call_method(
+            Some("org.kde.KWin"),
+            "/Scripting",
+            Some("org.kde.kwin.Scripting"),
+            method,
+            &body,
+        )
+        .await
+        .map_err(|e| e.to_string())
+    };
+    // An earlier agent's copy is replaced, not doubled.
+    let _ = c
+        .call_method(
+            Some("org.kde.KWin"),
+            "/Scripting",
+            Some("org.kde.kwin.Scripting"),
+            "unloadScript",
+            &(KWIN_SCRIPT_NAME,),
+        )
+        .await;
+    c.call_method(
+        Some("org.kde.KWin"),
+        "/Scripting",
+        Some("org.kde.kwin.Scripting"),
+        "loadScript",
+        &(path.as_str(), KWIN_SCRIPT_NAME),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    call("start", Vec::new()).await.map(|_| ())
 }
 
 /// A property read straight from its owner (no caching).

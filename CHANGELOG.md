@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Phase 6: apps.
+  - Per-app battery use (estimates: power above idle, shared by processor time) for today and the last 7 days, kept on this computer only.
+  - Priority for the app in front and slowing background apps on battery, by changing only the app's share of the processor (`cpu.weight` in `user.slice`); off by default, journaled, undone by Restore. Per-app *never slow* and *always slow*.
+  - Per-app modes in auto mode ("use Faster while Blender is open"); opening such an app switches at once. New scenario `tests/scenarios/app-rules.json`.
+  - Session agent: the window in front on KDE Plasma, from a small KWin script; only the process ID is sent.
+  - Service: `Apps`, `SetAppPolicy`, `ForgetAppUsage`; client and app commands; Apps screen; Activity shows share changes.
+  - Systemd unit: the cgroup tree is read-only except `user.slice`.
+  - Decision record 0013.
+
 - App: first-run welcome (what it does, laptop check, other power tools with *Switch off*, choice of auto mode and learning; nothing changes until Start) and a Modes screen with auto mode's preferences.
 - Service: `AutoPrefs`/`SetAutoPrefs` with range checks; `Conflicts`/`SwitchOffConflict` via systemd's D-Bus API, limited to known power tools, behind a new polkit action that asks for an administrator password, and recorded so package removal turns the tool back on.
 

@@ -83,13 +83,48 @@ export interface Conflict {
   state: string;
 }
 
+export interface AppRule {
+  app: string;
+  profile: Profile;
+}
+
 export interface AutoPrefs {
   on_ac: Profile;
   on_battery: Profile;
   boost_on_ac: boolean;
   low_battery_pct: number;
   critical_battery_pct: number;
+  app_rules?: AppRule[];
   [other: string]: unknown;
+}
+
+export interface AppPolicy {
+  v?: number;
+  /** Count energy per app. */
+  track: boolean;
+  /** On battery, give apps not in front a smaller share of the processor. */
+  slow_background: boolean;
+  /** Give the app in front a bigger share. */
+  boost_front: boolean;
+  never_slow: string[];
+  always_slow: string[];
+}
+
+export interface AppUse {
+  app: string;
+  cpu_s: number;
+  /** Estimated watt-hours on battery. */
+  wh: number;
+}
+
+export interface AppsInfo {
+  policy: AppPolicy;
+  rules: AppRule[];
+  front: string | null;
+  running: string[];
+  now: { app: string; cpu_pct: number; watts: number | null; share: number | null }[];
+  today: AppUse[];
+  week: AppUse[];
 }
 
 /** Everything the app can ask of the service. */
@@ -111,6 +146,9 @@ export interface Backend {
   switchOffConflict(unit: string): Promise<void>;
   autoPrefs(): Promise<AutoPrefs>;
   setAutoPrefs(p: AutoPrefs): Promise<void>;
+  apps(): Promise<AppsInfo>;
+  setAppPolicy(p: AppPolicy): Promise<void>;
+  forgetAppUsage(): Promise<void>;
   /** Save an exported file; returns where it went. */
   saveFile(name: string, contents: string): Promise<string>;
 }

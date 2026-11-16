@@ -76,9 +76,11 @@ Some firmware expects either `platform.profile` or `cpu.epp`, not both. Each plu
 
 | ID | What it controls | Interface | Risk |
 | --- | --- | --- | --- |
-| `app.foreground_boost` | Focused app gets more CPU and I/O | `cpu.weight`, `io.weight` | Safe |
-| `app.background_throttle` | Background apps clamped on battery | `cpu.weight`, `cpu.uclamp.max`, `cpu.max` | Usually safe |
-| `app.background_freeze` | Hidden apps paused at low battery | `cgroup.freeze` | Risky (opt-in) |
+| `app.foreground_boost` **(built)** | The app in front gets a bigger share of the CPU | `cpu.weight` | Safe |
+| `app.background_throttle` **(built)** | Apps not in front get a smaller share on battery | `cpu.weight` | Safe |
+| `app.background_freeze` | Hidden apps paused at low battery | `cgroup.freeze` | Not planned ([decision 0013](decisions/0013-app-shares-not-caps.md)) |
+
+These are not setting plugins: they are switches on the Apps screen (`SetAppPolicy`), applied per app group under `user.slice` by the engine's `set_app_weight`, journaled as `app-weight` and undone by restore. `cpu.max`, `cpu.uclamp.max` and `io.weight` are not used.
 
 ## Battery
 

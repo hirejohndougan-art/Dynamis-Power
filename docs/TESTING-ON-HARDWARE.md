@@ -117,6 +117,12 @@ After installing, log out and back in once (this starts the session agent), then
 2. **The gate: does it beat stock Balanced?** On a fully charged battery, with the same brightness and the same light activity (for example a looping video or a fixed set of web pages), run `sudo ./scripts/phase1-test.sh 60` twice: once with `dynamis learn on` and once after `dynamis learn off` (which puts every learned setting back). Compare the average whole-system power in the two reports. Phase 4 passes if the learned settings use measurably less power with no rise in lag.
 3. Send both `phase1-results-….tar.gz` files and the output of `dynamis learned --json`.
 
+### Apps (phase 6) and its gate
+
+1. Open the app's **Apps** screen. After a while on battery, the apps you use should be listed with estimated watt-hours; plugged in, with processor time. The app you are using should be tagged *In front* (KDE Plasma; after logging out and in once so the session agent loads its KWin script).
+2. Check the shares really change: switch on *Give the app in front priority*, then `cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/app.slice/*/cpu.weight` while switching between two apps. The one in front should read 400. *Restore original settings* should put every one back to 100.
+3. **The gate: does the app in front stall less under load?** On battery, start a heavy background job in a terminal app (for example `stress-ng --cpu 2 --timeout 120`), then scroll a long page in the browser in front, once with both switches off and once with both on. Compare `cat /proc/pressure/cpu` before and after each run, and how smooth scrolling felt. Phase 6 passes if the app in front waits measurably less with the switches on.
+
 Report anything odd in a bug report with `sudo dynamis journal --last 100` attached.
 
 **On a laptop that already freezes** (like the project's VivoBook), a freeze during these steps does not prove Dynamis Power caused it. After the reboot, check `sudo dynamis journal`: a `recover` line means a change was in progress at the time; no such line means nothing was being changed.

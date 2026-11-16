@@ -1,0 +1,22 @@
+{
+  "name": "Per-app modes",
+  "about": "An app with its own mode switches at once when opened; the app in front wins over others that are open; a call and an idle machine still come first; low battery turns a performance rule into saving.",
+  "prefs": {
+    "app_rules": [
+      { "app": "blender", "profile": "performance" },
+      { "app": "thunderbird", "profile": "power-saver" }
+    ]
+  },
+  "steps": [
+    { "t": 0,    "set": { "on_ac": true, "battery_pct": 80, "cpu_busy_pct": 10 }, "expect": "balanced" },
+    { "t": 5,    "set": { "running_apps": ["firefox", "blender"] }, "expect": "performance" },
+    { "t": 10,   "set": { "running_apps": ["firefox", "blender", "thunderbird"], "focused_app": "thunderbird" }, "expect": "power-saver" },
+    { "t": 15,   "set": { "focused_app": "firefox" }, "expect": "power-saver" },
+    { "t": 100,  "set": {}, "expect": "performance" },
+    { "t": 110,  "set": { "mic_in_use": true }, "expect": "balanced", "workload": "call" },
+    { "t": 200,  "set": { "mic_in_use": false, "screen_locked": true }, "expect": "power-saver", "workload": "idle" },
+    { "t": 210,  "set": { "screen_locked": false }, "expect": "performance" },
+    { "t": 300,  "set": { "on_ac": false, "battery_pct": 25 }, "expect": "power-saver" },
+    { "t": 400,  "set": { "running_apps": ["firefox"], "focused_app": "firefox" }, "expect": "power-saver" }
+  ]
+}

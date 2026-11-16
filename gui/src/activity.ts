@@ -1,5 +1,6 @@
 // Turning journal entries into plain-language Activity items.
 import type { JournalEntry } from "./backend";
+import { appName } from "./apps";
 import { t, valueName } from "./i18n";
 
 export type Category = "auto" | "mine" | "tests" | "rollbacks" | "problems";
@@ -56,6 +57,12 @@ export function describe(e: JournalEntry): Item | null {
       return item(t("ev_safe_on"), reason, "rollbacks");
     case "safe-mode-off":
       return item(t("ev_safe_off"), "", "mine");
+    case "app-weight": {
+      const app = appName(e.id);
+      const to = Number(e.to), from = Number(e.from);
+      const title = to < from ? t("ev_app_slow", { app }) : to > 100 ? t("ev_app_front", { app }) : t("ev_app_normal", { app });
+      return item(title, reason, reason.startsWith("you chose") ? "mine" : "auto");
+    }
     default:
       return null;
   }

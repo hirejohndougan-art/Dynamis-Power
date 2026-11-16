@@ -536,6 +536,33 @@ impl Engine {
         Ok(true)
     }
 
+    /// Put one app group's weight back to what it was before Dynamis Power
+    /// changed it. Returns whether anything changed (false if it was never
+    /// changed, or the app has closed). Works in safe mode: undoing is always
+    /// allowed.
+    pub fn reset_app_weight(&mut self, app: &str, cgroup: &str, reason: &str) -> Result<bool> {
+        let file = self.dir.join("cgroups.json");
+        let mut touched: Touched = read_json(&file).unwrap_or_default();
+        let Some(original) = touched.weights.remove(cgroup) else {
+            return Ok(false);
+        };
+        write_json(&file, &touched)?;
+        let path = format!("/sys/fs/cgroup{cgroup}/cpu.weight");
+        let Ok(current) = self.root.read_string(&path) else {
+            return Ok(false); // the app closed; its group is gone
+        };
+        if current == original {
+            return Ok(false);
+        }
+        self.log("app-weight", app, Some(&current), Some(&original), reason)?;
+        let w = settings::Write {
+            path,
+            contents: original,
+        };
+        writer::write_all(&self.root, &[w]).map_err(EngineError::Write)?;
+        Ok(true)
+    }
+
     /// Put every app weight changed back. Apps that have since closed are
     /// simply skipped. Returns how many were restored.
     pub fn restore_app_weights(&mut self) -> Result<usize> {

@@ -199,4 +199,27 @@ impl Client {
             .await
             .map_err(explain)
     }
+
+    /// Per-app energy (estimates), open apps, the app in front, the
+    /// slow-down policy and per-app modes.
+    pub async fn apps(&self) -> Result<Value> {
+        self.json("Apps", &()).await
+    }
+
+    /// Change how apps share the CPU. Takes the `policy` object from `apps`.
+    pub async fn set_app_policy(&self, policy: &Value) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetAppPolicy", &(policy.to_string(),))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn forget_app_usage(&self) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("ForgetAppUsage", &())
+            .await
+            .map_err(explain)
+    }
 }

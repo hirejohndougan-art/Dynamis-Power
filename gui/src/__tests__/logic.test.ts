@@ -69,3 +69,36 @@ describe("strings", () => {
     expect(tn("restore_done", 3)).toBe("Restored 3 settings.");
   });
 });
+
+describe("apps", () => {
+  it("names apps for people", async () => {
+    const { appName } = await import("../apps");
+    expect(appName("org.kde.dolphin")).toBe("Dolphin");
+    expect(appName("firefox")).toBe("Firefox");
+    expect(appName("System")).toBe("System");
+  });
+  it("keeps each app in at most one list, and rules unique", async () => {
+    const { shareOf, withShare, withRule } = await import("../apps");
+    const p0 = { track: true, slow_background: false, boost_front: false, never_slow: ["a"], always_slow: [] };
+    const p1 = withShare(p0, "a", "always");
+    expect(p1.never_slow).toEqual([]);
+    expect(shareOf(p1, "a")).toBe("always");
+    expect(shareOf(withShare(p1, "a", "normal"), "a")).toBe("normal");
+    const r = withRule([{ app: "a", profile: "balanced" }], "a", "performance");
+    expect(r).toEqual([{ app: "a", profile: "performance" }]);
+    expect(withRule(r, "a", null)).toEqual([]);
+  });
+  it("shows bars by energy, or by processor time when plugged in", async () => {
+    const { bars } = await import("../apps");
+    const b = bars([{ app: "x", cpu_s: 10, wh: 1 }, { app: "y", cpu_s: 100, wh: 2 }]);
+    expect(b.map((r) => [r.row.app, r.pct, r.byEnergy])).toEqual([["y", 100, true], ["x", 50, true]]);
+    expect(bars([{ app: "x", cpu_s: 10, wh: 0 }, { app: "y", cpu_s: 40, wh: 0 }])[1].pct).toBe(25);
+  });
+  it("describes share changes in Activity", () => {
+    const w = (from: string, to: string, reason: string) => describeEntry(e({ event: "app-weight", id: "org.mozilla.firefox", from, to, reason }));
+    expect(w("100", "25", "in the background on battery")?.title).toBe("Firefox given a smaller share of the processor");
+    expect(w("100", "400", "the app in front gets priority")?.title).toBe("Firefox given priority");
+    expect(w("25", "100", "back to a normal share")?.title).toBe("Firefox back to a normal share");
+    expect(w("100", "25", "you chose to always slow this app")?.category).toBe("mine");
+  });
+});

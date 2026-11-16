@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
+import type { AppPolicy, AppsInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -37,7 +37,46 @@ export function mockBackend(): Backend {
   ];
   let watts = 5.6;
   let conflicts: Conflict[] = [{ unit: "tlp.service", name: "TLP", active: true, state: "enabled" }];
-  let prefs: AutoPrefs = { on_ac: "balanced", on_battery: "balanced", boost_on_ac: true, low_battery_pct: 30, critical_battery_pct: 15 };
+  let prefs: AutoPrefs = { on_ac: "balanced", on_battery: "balanced", boost_on_ac: true, low_battery_pct: 30, critical_battery_pct: 15, app_rules: [] };
+  let appPolicy: AppPolicy = { v: 1, track: true, slow_background: false, boost_front: false, never_slow: [], always_slow: [] };
+  let usage = {
+    today: [
+      { app: "firefox", cpu_s: 1840, wh: 4.1 },
+      { app: "org.kde.dolphin", cpu_s: 120, wh: 0.3 },
+      { app: "thunderbird", cpu_s: 410, wh: 0.9 },
+      { app: "System", cpu_s: 600, wh: 1.2 },
+    ],
+    week: [
+      { app: "firefox", cpu_s: 12800, wh: 27.5 },
+      { app: "System", cpu_s: 4100, wh: 8.0 },
+      { app: "thunderbird", cpu_s: 2900, wh: 6.1 },
+      { app: "org.kde.dolphin", cpu_s: 800, wh: 1.9 },
+      { app: "steam", cpu_s: 3000, wh: 0 },
+    ],
+  };
+  const appsInfo = (): AppsInfo => {
+    const running = ["firefox", "org.kde.dolphin", "thunderbird"];
+    const front = "firefox";
+    const share = (app: string) => {
+      if (appPolicy.never_slow.includes(app)) return null;
+      if (appPolicy.always_slow.includes(app)) return 25;
+      if (appPolicy.boost_front && app === front) return 400;
+      if (appPolicy.slow_background && app !== front) return 25;
+      return null;
+    };
+    return {
+      policy: { ...appPolicy },
+      rules: [...(prefs.app_rules ?? [])],
+      front,
+      running,
+      now: [
+        { app: "firefox", cpu_pct: 12.5, watts: 1.4, share: share("firefox") },
+        { app: "thunderbird", cpu_pct: 1.2, watts: 0.1, share: share("thunderbird") },
+      ],
+      today: appPolicy.track ? [...usage.today].sort((a, b) => b.wh - a.wh) : [],
+      week: appPolicy.track ? usage.week : [],
+    };
+  };
 
   const log = (e: Omit<JournalEntry, "v" | "time">) => journal.push({ v: 1, time: now(), ...e });
   const refuse = () => {
@@ -133,6 +172,7 @@ export function mockBackend(): Backend {
     restore: async () => {
       auto = false;
       learning = false;
+      appPolicy = { ...appPolicy, slow_background: false, boost_front: false, always_slow: [] };
       const done = Object.entries(original)
         .filter(([id, v]) => values[id] !== v)
         .map(([id, v]) => {
@@ -161,6 +201,13 @@ export function mockBackend(): Backend {
       if (p.low_battery_pct < 10 || p.low_battery_pct > 60) throw new Error("low battery level must be between 10 and 60");
       prefs = { ...p };
     },
+    apps: async () => delay(appsInfo()),
+    setAppPolicy: async (p) => {
+      refuse();
+      if (p.never_slow.some((a) => p.always_slow.includes(a))) throw new Error("an app cannot be both never and always slowed");
+      appPolicy = { ...p, v: 1 };
+    },
+    forgetAppUsage: async () => { usage = { today: [], week: [] }; },
     saveFile: async (name, contents) => {
       const url = URL.createObjectURL(new Blob([contents], { type: "text/plain" }));
       const a = document.createElement("a");

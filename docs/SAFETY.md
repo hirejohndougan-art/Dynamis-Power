@@ -99,6 +99,15 @@ Phase 4 (learning) adds:
 | Off means off | Switching learning off ends any test and puts learned settings back |
 | Owner-aware recovery | A pending change is undone after a crash only when the process that made it is gone, so a running test is never undone by mistake |
 
+Phase 6 (apps) adds:
+
+| Rail | How |
+| --- | --- |
+| Shares, never caps | Only an app's `cpu.weight` changes (normal 100, in front 400, slowed 25). A weight decides who goes first when apps compete; no app is ever capped, paused or frozen ([decision 0013](decisions/0013-app-shares-not-caps.md)) |
+| Only user apps | The writer accepts only `cpu.weight` under `/sys/fs/cgroup/user.slice/`; the systemd unit keeps the rest of the cgroup tree read-only. System services and the desktop itself are never touched |
+| Off by default | Counting is on; nothing is slowed or boosted until switched on. Background slowing needs battery power and a known app in front |
+| Same journal, same undo | Every change is journaled and shown in Activity. Restore puts every share back and turns the switches off; a restart of the service puts back anything left over. Safe mode refuses changes |
+
 Other power tools can be switched off from the app's welcome only after an administrator password, only from a fixed list (TLP, auto-cpufreq, Laptop Mode Tools, TuneD, System76 Power, PowerTOP auto-tune, power-profiles-daemon, tuned-ppd), and each one is recorded so removing Dynamis Power turns it back on.
 
 Not built, by decision: the systemd watchdog ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: dropping capabilities to the minimum after the real-hardware test.

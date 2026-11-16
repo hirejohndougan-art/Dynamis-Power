@@ -20,6 +20,7 @@ use dynamis_core::profiles::{self, Profile};
 use dynamis_core::SysRoot;
 use serde::{Deserialize, Serialize};
 
+use crate::apps::AppsState;
 use crate::learn::{Learning, Timing};
 
 /// Version of `profile.json`.
@@ -36,6 +37,9 @@ pub struct SessionReport {
     pub game_running: bool,
     pub screen_locked: bool,
     pub user_idle: bool,
+    /// Process ID of the window in front (0: unknown). Only used to tell
+    /// which app is in front; never stored.
+    pub focused_pid: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -61,6 +65,7 @@ pub struct AutoState {
     last: Option<Step>,
     /// Classifies the workload for learning even while auto mode is off.
     observer: Auto,
+    observed: Option<Workload>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,6 +86,7 @@ pub struct Core {
     next_cookie: u32,
     pub auto: AutoState,
     pub learn: Learning,
+    pub apps: AppsState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -108,6 +114,7 @@ impl Core {
             .ok()
             .and_then(|t| serde_json::from_str::<SavedAuto>(&t).ok());
         let learn = Learning::load(&state_dir, timing);
+        let apps = AppsState::load(&state_dir);
         let auto = AutoState {
             enabled: saved_auto.as_ref().is_some_and(|a| a.enabled),
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
@@ -122,6 +129,7 @@ impl Core {
             next_cookie: 1,
             auto,
             learn,
+            apps,
         }
     }
 
@@ -323,7 +331,19 @@ impl Core {
             60.0,
             "switches an hour",
         )?;
-        for prof in [p.on_ac, p.on_battery] {
+        if p.app_rules.len() > 100 {
+            return Err("at most 100 app modes".into());
+        }
+        if p.app_rules
+            .iter()
+            .any(|r| r.app.is_empty() || r.app.len() > 200)
+        {
+            return Err("an app mode has no app name".into());
+        }
+        for prof in [p.on_ac, p.on_battery]
+            .into_iter()
+            .chain(p.app_rules.iter().map(|r| r.profile))
+        {
             if !self.available.contains(&prof) {
                 return Err(format!(
                     "'{}' is not available on this machine",
@@ -336,6 +356,13 @@ impl Core {
         let enabled = self.auto.enabled;
         // Saving goes through set_auto so the file format stays in one place.
         self.set_auto(enabled, now)
+    }
+
+    /// Change how apps share the CPU (Apps screen).
+    pub fn set_app_policy(&mut self, p: crate::apps::AppPolicy) -> Result<(), String> {
+        let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.apps.set_policy(p, &root, &dir, on_ac)
     }
 
     pub fn report_session(&mut self, owner: &str, report: SessionReport) {
@@ -351,9 +378,15 @@ impl Core {
         }
     }
 
-    /// Whether anything needs regular readings (auto mode or learning).
+    /// Whether anything needs regular readings (auto mode, learning or apps).
     pub fn needs_ticks(&self) -> bool {
-        self.auto.enabled || self.learn.enabled
+        self.auto.enabled || self.learn.enabled || self.apps.needs_ticks()
+    }
+
+    /// Whether processes need reading this tick.
+    fn needs_apps(&self) -> bool {
+        self.apps.needs_ticks()
+            || (self.auto.enabled && !self.auto.rules.prefs.app_rules.is_empty())
     }
 
     /// One reading, shared by auto mode and learning. Returns true if the
@@ -369,12 +402,22 @@ impl Core {
         ctx.game_running = s.game_running;
         ctx.screen_locked = s.screen_locked;
         ctx.user_idle = s.user_idle;
+        let front_pid = s.focused_pid;
+        if self.needs_apps() {
+            let unix = unix_now();
+            self.apps.read(&self.root, unix, ctx.power_w, front_pid);
+            ctx.running_apps = self.apps.meter.running();
+            ctx.focused_app = self.apps.front.clone();
+            self.apps.apply(&self.root, &self.state_dir, ctx.on_ac);
+            self.apps.maybe_save(&self.state_dir, unix, false);
+        }
         let workload = self
             .auto
             .observer
             .step(now, &ctx, &self.available)
             .decision
             .workload;
+        self.auto.observed = Some(workload);
 
         let changed = self.auto.enabled && self.auto_step(now, &ctx);
         if self.learn.enabled {
@@ -434,8 +477,12 @@ impl Core {
             // Several readings per test block.
             return base.min(Duration::from_secs_f64(self.learn.timing.block_s / 6.0));
         }
-        match &self.auto.last {
-            Some(s) if s.decision.workload == Workload::Idle && !self.learn.enabled => base * 4,
+        let workload = match &self.auto.last {
+            Some(s) if self.auto.enabled => Some(s.decision.workload),
+            _ => self.auto.observed,
+        };
+        match workload {
+            Some(Workload::Idle) if !self.learn.enabled => base * 4,
             _ => base,
         }
     }
@@ -448,6 +495,12 @@ impl Core {
         .map_err(|e| e.to_string())?;
         write_atomic(&self.state_dir.join("profile.json"), &text)
     }
+}
+
+pub(crate) fn unix_now() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64())
 }
 
 pub(crate) fn write_atomic(path: &Path, text: &str) -> Result<(), String> {

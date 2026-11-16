@@ -4,7 +4,7 @@ The app must be usable by someone who has never opened a terminal, while still g
 
 The visual mock-ups are kept with the project's design files. This document is the written specification; when the two disagree, update both.
 
-> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes (without per-app rules or "Last until"), Battery, Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
+> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes (without "Last until"), Apps, Battery, Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
 
 ## Principles
 
@@ -50,7 +50,7 @@ Health percentage against design capacity, wear trend, charge limit toggle (only
 
 ## Apps
 
-A ranked list of apps by estimated energy today and this week, clearly marked as estimates. Each app has a menu: *Always throttle on battery*, *Never throttle*, *Use a mode when open*. Misbehaving apps show a warning with one action.
+A ranked list of apps by estimated energy today and this week, clearly marked as estimates. Plugged in, where there are no battery watts to share out, the list ranks by processor time instead. Each app has an *Options* dialog: share of the processor (*Normal*, *Never slow it down*, *Always slow it down*) and *Mode while it is open*. Below the list: *Slow down apps in the background on battery*, *Give the app in front priority*, *Count battery use per app*, and *Forget app history*. Tags on each row say whether it is open or in front, its mode, and whether it is slowed or has priority right now. **(Built.)** Still planned: a warning with one action for misbehaving apps.
 
 ## Activity, logs and export
 

@@ -104,4 +104,20 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Saved."));
   });
+
+  it("shows battery use by app and saves per-app options", async () => {
+    window.location.hash = "#apps";
+    render(<App />);
+    expect(await screen.findByText("About 4.1 Wh")).toBeTruthy();
+    expect(screen.getByText(/In front/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Options: Thunderbird" })));
+    const dialog = screen.getByRole("dialog", { hidden: true });
+    await act(async () => fireEvent.click(within(dialog).getByRole("radio", { name: "Always slow it down", hidden: true })));
+    fireEvent.change(within(dialog).getByRole("combobox", { hidden: true }), { target: { value: "power-saver" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Save", hidden: true })));
+    await waitFor(() => expect(screen.getByText(/Uses Longer battery while open/)).toBeTruthy());
+    expect(screen.getByText(/Slowed down/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Give the app in front priority" })));
+    await waitFor(() => expect(screen.getByText(/Priority/)).toBeTruthy());
+  });
 });

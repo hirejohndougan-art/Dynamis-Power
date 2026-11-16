@@ -50,7 +50,7 @@ dynamis set cpu.epp balance_power --trial 60
 | Component | Runs as | Job | Code |
 | --- | --- | --- | --- |
 | `dynamisd` | root, systemd service | Reads sensors, applies settings, runs both loops, keeps the journal | `daemon/` |
-| `dynamis-agent` **(built)** | each logged-in user | Reports five facts for auto mode: media playing, screen locked, screen-dimming inhibited, game running, idle. Event-driven. Focused app comes in phase 6 | `daemon/crates/dynamis-agent/` |
+| `dynamis-agent` **(built)** | each logged-in user | Reports five facts for auto mode (media playing, screen locked, screen-dimming inhibited, game running, idle) and, on KDE Plasma, the process ID of the window in front (from a small KWin script it loads). Event-driven | `daemon/crates/dynamis-agent/` |
 | `dynamis-sync` **(built for the quirk list)** | unprivileged throwaway user | All network traffic: quirk list now; shared summaries and opt-in uploads later | `daemon/crates/dynamis-sync/` |
 | `dynamis` **(built)** | user (root for changes) | Command line: inventory, status, logs, settings, restore, journal, quirks, safe mode, auto mode | `daemon/crates/dynamis-cli/` |
 | App **(built: Home, Battery, Activity, Advanced)** | user, on demand | Dashboard and controls; talks to `dynamisd` through `dynamis-client` | `gui/`, `daemon/crates/dynamis-client/` |

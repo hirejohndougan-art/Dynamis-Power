@@ -4,17 +4,18 @@ import { useStatus } from "./hooks";
 import { t } from "./i18n";
 import { Activity } from "./screens/Activity";
 import { Advanced } from "./screens/Advanced";
+import { Apps } from "./screens/Apps";
 import { Battery } from "./screens/Battery";
 import { Home } from "./screens/Home";
 import { Modes } from "./screens/Modes";
 import { Welcome, welcomed } from "./screens/Welcome";
 
-type Screen = "home" | "modes" | "battery" | "activity" | "advanced";
+type Screen = "home" | "modes" | "apps" | "battery" | "activity" | "advanced";
 
 /** Screen in the URL hash, e.g. #activity or #advanced:learning. */
 function fromHash(): [Screen, string | undefined] {
   const [s, sub] = window.location.hash.replace("#", "").split(":");
-  return [(["home", "modes", "battery", "activity", "advanced"].includes(s) ? s : "home") as Screen, sub];
+  return [(["home", "modes", "apps", "battery", "activity", "advanced"].includes(s) ? s : "home") as Screen, sub];
 }
 
 export function App() {
@@ -38,6 +39,7 @@ export function App() {
   const nav: [Screen, Parameters<typeof t>[0]][] = [
     ["home", "nav_home"],
     ["modes", "nav_modes"],
+    ["apps", "nav_apps"],
     ["battery", "nav_battery"],
     ["activity", "nav_activity"],
   ];
@@ -76,6 +78,8 @@ export function App() {
           <Home status={status} watts={watts} refresh={refresh} go={go} />
         ) : screen === "modes" ? (
           <Modes status={status} refresh={refresh} />
+        ) : screen === "apps" ? (
+          <Apps status={status} refresh={refresh} />
         ) : screen === "battery" ? (
           <Battery status={status} refresh={refresh} />
         ) : screen === "activity" ? (

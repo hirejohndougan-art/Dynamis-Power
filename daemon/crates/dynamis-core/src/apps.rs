@@ -124,7 +124,7 @@ pub struct Now {
     pub watts: Option<f64>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Meter {
     v: u32,
     /// Day ("2026-11-16", UTC) → app → usage.
@@ -147,12 +147,23 @@ pub struct Meter {
 /// USER_HZ on Linux is 100 on every architecture we run on.
 const TICKS_PER_S: f64 = 100.0;
 
-impl Meter {
-    pub fn new() -> Self {
+impl Default for Meter {
+    fn default() -> Self {
         Meter {
             v: FORMAT_VERSION,
-            ..Default::default()
+            days: BTreeMap::new(),
+            prev: HashMap::new(),
+            prev_time: None,
+            base_w: None,
+            last: Vec::new(),
+            cgroups: BTreeMap::new(),
         }
+    }
+}
+
+impl Meter {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Add one reading. `now` is Unix time; `power_w` is whole-system power
@@ -240,6 +251,12 @@ impl Meter {
                 .then(b.1.cpu_s.total_cmp(&a.1.cpu_s))
         });
         v
+    }
+
+    /// Drop every per-day total (counting was switched off, or the person
+    /// asked to forget). The idle level is kept: it describes the laptop.
+    pub fn forget(&mut self) {
+        self.days.clear();
     }
 
     /// Apps with at least one process right now.

@@ -10,7 +10,7 @@ Other tools define "Power Saver" as a fixed list of values. Here a profile is:
 - **constraints** — limits it must respect, such as maximum stall or temperature;
 - **bounds** — the range each setting may explore;
 - **pins** — settings the user fixed, which are never changed;
-- **app policy** — which apps may be throttled or frozen.
+- **app policy** — which apps may be given a smaller share of the processor (never capped or frozen; see [decision 0013](decisions/0013-app-shares-not-caps.md)).
 
 The values that meet the goal are learned per machine. Illustrative definition (values are placeholders):
 
