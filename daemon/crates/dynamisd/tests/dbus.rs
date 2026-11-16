@@ -398,13 +398,15 @@ fn auto_mode_follows_the_situation() {
 /// the speed limit.
 type Model = fn(bool, bool, f64) -> (f64, f64);
 
-/// Turbo off adds lag; each 10% of speed limit saves a little and adds lag.
+/// Turbo off adds lag; each 10% of speed limit saves a little and adds
+/// clear lag (2 points: well above the 0.5-point limit even when a slow test
+/// machine blurs the switch between test blocks).
 fn plain_laptop(nmi_off: bool, turbo_off: bool, max_perf: f64) -> (f64, f64) {
     let watts = 6.0
         - if nmi_off { 0.4 } else { 0.0 }
         - if turbo_off { 0.8 } else { 0.0 }
         - (100.0 - max_perf) / 20.0 * 0.3;
-    let stall = 0.5 + if turbo_off { 5.0 } else { 0.0 } + (100.0 - max_perf) / 10.0;
+    let stall = 0.5 + if turbo_off { 5.0 } else { 0.0 } + (100.0 - max_perf) / 5.0;
     (watts, stall)
 }
 
