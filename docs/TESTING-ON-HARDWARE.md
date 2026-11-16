@@ -4,6 +4,20 @@ This is the phase 1 test: it checks that Dynamis Power reads a real laptop corre
 
 It takes about 1½ hours, most of it the laptop running normally on battery.
 
+## The quick way: one command
+
+After building (step 1 below), from the `daemon` folder:
+
+```sh
+sudo ./scripts/phase1-test.sh
+```
+
+It runs steps 2 to 6 for you, asks you to unplug the charger when needed, logs for an hour (`sudo ./scripts/phase1-test.sh 120` for two), prints a PASS/FAIL checklist, and saves everything in one `phase1-results-….tar.gz` to attach to a [Hardware report issue](https://github.com/hirejohndougan-art/dynamis-power/issues/new?template=hardware_report.yml). Ctrl+C during the log stops it early and still produces the report.
+
+The log is forced onto the disk after every reading, so if the laptop freezes during the test, the readings up to the freeze survive. Run the script again after rebooting to get a fresh run; the old folder is kept.
+
+The steps below are the same test done by hand.
+
 ## 1. Build
 
 Follow "Building" in [../daemon/README.md](../daemon/README.md). Then, from the `daemon` folder:
@@ -43,7 +57,7 @@ This shows how often the battery reports its power use, which decides how long e
 Still unplugged, start the log and use the laptop normally — browsing, documents, a video:
 
 ```sh
-sudo dynamis log -o power.csv
+sudo dynamis log --sync -o power.csv
 ```
 
 Stop with Ctrl+C when done. Then:

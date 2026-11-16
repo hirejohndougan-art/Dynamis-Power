@@ -76,7 +76,7 @@ sudo ./target/release/dynamis restore                            # put everythin
 
 On a laptop with unexplained freezes (like the project's VivoBook), a freeze during a trial does not prove the setting caused it. Check `dynamis journal` and the system log before drawing conclusions.
 
-For the full phase 1 test on a real laptop, follow [../docs/TESTING-ON-HARDWARE.md](../docs/TESTING-ON-HARDWARE.md).
+For the full phase 1 test on a real laptop, run `sudo ./scripts/phase1-test.sh`, or follow [../docs/TESTING-ON-HARDWARE.md](../docs/TESTING-ON-HARDWARE.md).
 
 Useful options:
 
@@ -87,6 +87,7 @@ Useful options:
 | `log` | `--interval 10` | Seconds between readings |
 | `log` | `--duration 3600` | Stop after an hour |
 | `log` | `--format jsonl` | JSON Lines instead of CSV |
+| `log` | `--sync` | Force each reading to disk, so the log survives a hard freeze |
 | `report` | `--json` | Machine-readable summary |
 | `gauge` | `--duration 300` | Watch the gauge for 5 minutes |
 | `set` | `--trial 60` | Undo after 60 s unless confirmed |

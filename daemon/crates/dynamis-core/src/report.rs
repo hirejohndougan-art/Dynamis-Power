@@ -69,7 +69,12 @@ pub fn from_csv(text: &str) -> Result<Report, ReportError> {
         if header.is_none() {
             header = Some(line.split(',').collect());
         } else {
-            rows.push(line.split(',').collect());
+            let row: Vec<&str> = line.split(',').collect();
+            // A row with the wrong number of fields is a line cut short by a
+            // freeze or power cut. Skip it rather than misread it.
+            if header.as_ref().is_some_and(|h| h.len() == row.len()) {
+                rows.push(row);
+            }
         }
     }
     let header = header
@@ -201,6 +206,13 @@ time,interval_s,on_ac,battery_pct,battery_w,cpu_pkg_w,cpu_avg_mhz,turbo,epp,stal
         assert_eq!(r.log_format, Some(1));
         assert!(r.self_cpu_pct.is_none());
         assert_eq!(r.battery_w.unwrap().mean, 5.0);
+    }
+
+    #[test]
+    fn skips_a_line_cut_short_by_a_freeze() {
+        let torn = format!("{LOG}120,5,fal");
+        let r = from_csv(&torn).unwrap();
+        assert_eq!(r.rows, 4);
     }
 
     #[test]

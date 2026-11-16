@@ -70,6 +70,11 @@ enum Command {
         /// Output format.
         #[arg(long, value_enum, default_value_t = Format::Csv)]
         format: Format,
+        /// Force each reading onto the disk as it is written, so the log
+        /// survives a hard freeze or power cut (costs one small disk write per
+        /// reading).
+        #[arg(long)]
+        sync: bool,
     },
     /// Summarise a CSV log recorded with `dynamis log`.
     Report {
@@ -154,7 +159,8 @@ fn main() {
             duration,
             output,
             format,
-        } => cmd_log(&root, interval, duration, output, format),
+            sync,
+        } => cmd_log(&root, interval, duration, output, format, sync),
         Command::Report { file, json } => cmd_report(&root, &file, json),
         Command::Gauge { duration, json } => cmd_gauge(&root, duration, json),
         Command::HardwareReport => cmd_hardware_report(&root),
@@ -382,10 +388,19 @@ fn cmd_log(
     duration: Option<f64>,
     output: Option<PathBuf>,
     format: Format,
+    sync: bool,
 ) -> io::Result<()> {
     let interval = interval.clamp(0.5, 3600.0);
+    // A second handle to the same file, used only to force data to disk.
+    let mut disk: Option<File> = None;
     let mut out: Box<dyn Write> = match &output {
-        Some(p) => Box::new(BufWriter::new(File::create(p)?)),
+        Some(p) => {
+            let f = File::create(p)?;
+            if sync {
+                disk = Some(f.try_clone()?);
+            }
+            Box::new(BufWriter::new(f))
+        }
         None => Box::new(io::stdout().lock()),
     };
     if let Format::Csv = format {
@@ -416,8 +431,13 @@ fn cmd_log(
                 writeln!(out)?;
             }
         }
-        // Flush every row so nothing is lost if the logger is stopped.
+        // Flush every row so nothing is lost if the logger is stopped. With
+        // --sync, also wait until it is on the disk itself, not just in the
+        // kernel's cache, so a hard freeze loses at most the current reading.
         out.flush()?;
+        if let Some(f) = &disk {
+            f.sync_data()?;
+        }
         prev = cur;
         if duration.is_some_and(|d| sensors::now_secs() - start >= d) {
             return Ok(());

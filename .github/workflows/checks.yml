@@ -45,7 +45,7 @@ jobs:
       - name: CLI runs against the fixture
         run: cargo run -q -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
       - name: Install scripts pass shellcheck
-        run: shellcheck dist/install.sh dist/uninstall.sh
+        run: shellcheck dist/install.sh dist/uninstall.sh scripts/phase1-test.sh
       - name: CLI changes and restores a copy of the fixture
         run: |
           cp -a ../tests/fixtures/sysfs/synthetic-laptop "$RUNNER_TEMP/fx"
