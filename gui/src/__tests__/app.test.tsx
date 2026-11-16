@@ -6,7 +6,10 @@ beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); this.dispatchEvent(new Event("close")); };
 });
-beforeEach(() => { window.location.hash = ""; });
+beforeEach(() => {
+  window.location.hash = "";
+  localStorage.setItem("dynamis.welcomed", "1");
+});
 
 describe("the app with the stand-in backend", () => {
   it("shows the battery estimate and the current mode", async () => {
@@ -68,5 +71,37 @@ describe("the app with the stand-in backend", () => {
     await act(async () => window.dispatchEvent(new HashChangeEvent("hashchange")));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Safe mode is on/), { timeout: 7000 });
     expect((screen.getByRole("radio", { name: /Faster/ }) as HTMLButtonElement).disabled).toBe(true);
+    // Leave the shared stand-in backend as we found it.
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Switch safe mode off" })));
   }, 10000);
+
+  it("welcomes a first-time user and changes nothing until Start", async () => {
+    localStorage.removeItem("dynamis.welcomed");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Welcome to Dynamis Power" })).toBeTruthy();
+    expect(screen.getByText("Nothing changes until you press Start.")).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    expect(screen.getByRole("heading", { name: "Checking this laptop" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/Synthetic Laptop 14/)).toBeTruthy());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    const off = await screen.findByRole("button", { name: "Switch off: TLP" });
+    await act(async () => fireEvent.click(off));
+    await waitFor(() => expect(screen.getByText("No other power tools found. Good.")).toBeTruthy());
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    const learn = screen.getByRole("switch", { name: "Learn" });
+    await act(async () => fireEvent.click(learn));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start" })));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Home" })).toBeTruthy());
+    expect(localStorage.getItem("dynamis.welcomed")).toBe("1");
+    expect(screen.getByRole("switch", { name: "Learn" }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("saves auto mode preferences and explains a refusal", async () => {
+    window.location.hash = "#modes";
+    render(<App />);
+    const battery = (await screen.findByLabelText("On battery")) as HTMLSelectElement;
+    await act(async () => fireEvent.change(battery, { target: { value: "power-saver" } }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Saved."));
+  });
 });

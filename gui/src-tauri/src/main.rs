@@ -99,6 +99,26 @@ async fn forget(conn: State<'_, Conn>, setting: String) -> Result<bool, String> 
     client(&conn).await?.forget(&setting).await
 }
 
+#[tauri::command]
+async fn conflicts(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.conflicts().await
+}
+
+#[tauri::command]
+async fn switch_off_conflict(conn: State<'_, Conn>, unit: String) -> Result<(), String> {
+    client(&conn).await?.switch_off_conflict(&unit).await
+}
+
+#[tauri::command]
+async fn auto_prefs(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.auto_prefs().await
+}
+
+#[tauri::command]
+async fn set_auto_prefs(conn: State<'_, Conn>, prefs: Value) -> Result<(), String> {
+    client(&conn).await?.set_auto_prefs(&prefs).await
+}
+
 /// Save an exported log into the person's Downloads folder (or home folder
 /// if there is none). Returns the full path, to show to them.
 #[tauri::command]
@@ -147,6 +167,10 @@ fn main() {
             set_setting,
             set_safe_mode,
             forget,
+            conflicts,
+            switch_off_conflict,
+            auto_prefs,
+            set_auto_prefs,
             save_file
         ])
         .run(tauri::generate_context!())

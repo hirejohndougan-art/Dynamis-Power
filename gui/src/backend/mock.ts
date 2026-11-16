@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { Backend, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
+import type { AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -36,6 +36,8 @@ export function mockBackend(): Backend {
     { setting: "kernel.nmi_watchdog", value: "off", baseline: "on", verdict: "keep", reason: "saves 0.39 W (about 6%)", effect: { mean: -0.39, ci_low: -0.45, ci_high: -0.33, confidence: 1 }, stall: { mean: 0 }, time: t0 - 3600 },
   ];
   let watts = 5.6;
+  let conflicts: Conflict[] = [{ unit: "tlp.service", name: "TLP", active: true, state: "enabled" }];
+  let prefs: AutoPrefs = { on_ac: "balanced", on_battery: "balanced", boost_on_ac: true, low_battery_pct: 30, critical_battery_pct: 15 };
 
   const log = (e: Omit<JournalEntry, "v" | "time">) => journal.push({ v: 1, time: now(), ...e });
   const refuse = () => {
@@ -151,6 +153,13 @@ export function mockBackend(): Backend {
       for (let i = records.length - 1; i >= 0; i--) if (records[i].setting === id) records.splice(i, 1);
       if (original[id] !== undefined) values[id] = original[id];
       return had;
+    },
+    conflicts: async () => delay([...conflicts]),
+    switchOffConflict: async (unit) => { conflicts = conflicts.filter((c) => c.unit !== unit); },
+    autoPrefs: async () => delay({ ...prefs }),
+    setAutoPrefs: async (p) => {
+      if (p.low_battery_pct < 10 || p.low_battery_pct > 60) throw new Error("low battery level must be between 10 and 60");
+      prefs = { ...p };
     },
     saveFile: async (name, contents) => {
       const url = URL.createObjectURL(new Blob([contents], { type: "text/plain" }));

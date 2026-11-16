@@ -76,6 +76,22 @@ export interface Learned {
   display: Status["display"];
 }
 
+export interface Conflict {
+  unit: string;
+  name: string;
+  active: boolean;
+  state: string;
+}
+
+export interface AutoPrefs {
+  on_ac: Profile;
+  on_battery: Profile;
+  boost_on_ac: boolean;
+  low_battery_pct: number;
+  critical_battery_pct: number;
+  [other: string]: unknown;
+}
+
 /** Everything the app can ask of the service. */
 export interface Backend {
   status(): Promise<Status>;
@@ -91,6 +107,10 @@ export interface Backend {
   setSetting(setting: string, value: string, allowRisky: boolean): Promise<void>;
   setSafeMode(on: boolean): Promise<string>;
   forget(setting: string): Promise<boolean>;
+  conflicts(): Promise<Conflict[]>;
+  switchOffConflict(unit: string): Promise<void>;
+  autoPrefs(): Promise<AutoPrefs>;
+  setAutoPrefs(p: AutoPrefs): Promise<void>;
   /** Save an exported file; returns where it went. */
   saveFile(name: string, contents: string): Promise<string>;
 }

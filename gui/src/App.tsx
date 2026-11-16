@@ -6,18 +6,21 @@ import { Activity } from "./screens/Activity";
 import { Advanced } from "./screens/Advanced";
 import { Battery } from "./screens/Battery";
 import { Home } from "./screens/Home";
+import { Modes } from "./screens/Modes";
+import { Welcome, welcomed } from "./screens/Welcome";
 
-type Screen = "home" | "battery" | "activity" | "advanced";
+type Screen = "home" | "modes" | "battery" | "activity" | "advanced";
 
 /** Screen in the URL hash, e.g. #activity or #advanced:learning. */
 function fromHash(): [Screen, string | undefined] {
   const [s, sub] = window.location.hash.replace("#", "").split(":");
-  return [(["home", "battery", "activity", "advanced"].includes(s) ? s : "home") as Screen, sub];
+  return [(["home", "modes", "battery", "activity", "advanced"].includes(s) ? s : "home") as Screen, sub];
 }
 
 export function App() {
   const [[screen, sub], setRoute] = useState(fromHash);
   const { status, error, refresh, watts } = useStatus();
+  const [showWelcome, setShowWelcome] = useState(() => !welcomed());
 
   useEffect(() => {
     const on = () => setRoute(fromHash());
@@ -34,9 +37,14 @@ export function App() {
   };
   const nav: [Screen, Parameters<typeof t>[0]][] = [
     ["home", "nav_home"],
+    ["modes", "nav_modes"],
     ["battery", "nav_battery"],
     ["activity", "nav_activity"],
   ];
+
+  if (showWelcome && status) {
+    return <Welcome status={status} onDone={() => { setShowWelcome(false); refresh(); }} />;
+  }
 
   return (
     <div className="shell">
@@ -66,6 +74,8 @@ export function App() {
           <p className="muted" role="status">{t("loading")}</p>
         ) : screen === "home" ? (
           <Home status={status} watts={watts} refresh={refresh} go={go} />
+        ) : screen === "modes" ? (
+          <Modes status={status} refresh={refresh} />
         ) : screen === "battery" ? (
           <Battery status={status} refresh={refresh} />
         ) : screen === "activity" ? (

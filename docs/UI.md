@@ -4,7 +4,7 @@ The app must be usable by someone who has never opened a terminal, while still g
 
 The visual mock-ups are kept with the project's design files. This document is the written specification; when the two disagree, update both.
 
-> **Built so far** (see [../gui/README.md](../gui/README.md)): Home, Battery, Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
+> **Built so far** (see [../gui/README.md](../gui/README.md)): the first-run welcome, Home, Modes (without per-app rules or "Last until"), Battery, Activity (with Logs and Export), and the Settings, Learning and Safety tabs of Advanced. The mode control has three steps, one per standard profile. Everything else on this page is the plan.
 
 ## Principles
 

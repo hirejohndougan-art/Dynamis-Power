@@ -140,6 +140,11 @@ pre.preview { max-height: 200px; overflow: auto; background: var(--surface-2); p
 input[type="text"], input[type="search"], input[type="number"], select { min-height: 38px; border: 1px solid var(--border-strong); background: var(--surface); border-radius: 8px; padding: 0 10px; }
 input[type="range"] { accent-color: var(--accent); width: 100%; }
 
+/* First-run welcome */
+.welcome { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.welcome-card { width: min(620px, 100%); gap: 16px; }
+.welcome-card h1:focus { outline: none; }
+
 /* Narrow windows */
 @media (max-width: 720px) {
   .shell { flex-direction: column; }

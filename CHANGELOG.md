@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- App: first-run welcome (what it does, laptop check, other power tools with *Switch off*, choice of auto mode and learning; nothing changes until Start) and a Modes screen with auto mode's preferences.
+- Service: `AutoPrefs`/`SetAutoPrefs` with range checks; `Conflicts`/`SwitchOffConflict` via systemd's D-Bus API, limited to known power tools, behind a new polkit action that asks for an administrator password, and recorded so package removal turns the tool back on.
+
 - Packages: `dynamis-power-service` (service, command, agent, downloader; built by `daemon/packaging/build-deb.sh`) and `dynamis-power` (the app, which depends on it). Removing restores every original setting and turns power-profiles-daemon back on; purging deletes the journal. Lintian-clean of errors; CI builds both.
 
 - The desktop app (Tauri + React), started ahead of phase 8:

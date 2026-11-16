@@ -99,4 +99,6 @@ Phase 4 (learning) adds:
 | Off means off | Switching learning off ends any test and puts learned settings back |
 | Owner-aware recovery | A pending change is undone after a crash only when the process that made it is gone, so a running test is never undone by mistake |
 
+Other power tools can be switched off from the app's welcome only after an administrator password, only from a fixed list (TLP, auto-cpufreq, Laptop Mode Tools, TuneD, System76 Power, PowerTOP auto-tune, power-profiles-daemon, tuned-ppd), and each one is recorded so removing Dynamis Power turns it back on.
+
 Not built, by decision: the systemd watchdog ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: dropping capabilities to the minimum after the real-hardware test.

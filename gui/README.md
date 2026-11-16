@@ -6,12 +6,14 @@ The Dynamis Power app: Tauri 2 + React + TypeScript. It talks to the Dynamis Pow
 
 | Screen | Contents |
 | --- | --- |
+| Welcome | First run only, four steps: what it does; a check of this laptop; other power tools found (TLP, auto-cpufreq, TuneD, …) with *Switch off*, which asks for an administrator password and is undone when Dynamis Power is removed; and the choice of auto mode and learning. Nothing changes until *Start* |
 | Home | Battery time left, the power mode (Longer battery / Balanced / Faster) and *Choose automatically*, live power use with a chart, the learning card, the last change with Undo, *Restore original settings*, and a safety strip for safe mode or a test in progress |
+| Modes | The three modes with *Use this*; auto mode's preferences: mode when plugged in and on battery, the low-battery level, full speed for heavy work when plugged in |
 | Battery | Health, capacity, charge cycles, charge limit (where the battery supports one), and what the screen costs |
 | Activity | Plain-language history with filters (automatic, mine, tests, rollbacks, problems) and Undo; a Logs tab with the full journal and search; **Export logs** with sections, time range, JSON or text, *Remove personal details*, a preview and *Copy summary* |
 | Advanced | Settings (plain values, risk badges, status, Change and Reset, technical IDs behind *Details*, an extra confirmation for risky settings), Learning (every test, Forget, forget everything), Safety (safe mode, what is not allowed on this laptop, Restore) |
 
-Not yet (see [../docs/UI.md](../docs/UI.md)): Modes and rules, Apps (phase 6), Sharing (phase 8), the first-run welcome, and the Profiles, Sensors, System and Developer tabs of Advanced. The design's five-step slider is three modes today, matching the service's three profiles.
+Not yet (see [../docs/UI.md](../docs/UI.md)): per-app rules and Apps (phase 6), "Last until" (phase 7), Sharing (phase 8), and the Profiles, Sensors, System and Developer tabs of Advanced. The design's five-step slider is three modes today, matching the service's three profiles.
 
 ## Layout
 
@@ -20,7 +22,7 @@ gui/
   src/
     backend/        types.ts (what the service sends), tauri.ts (real), mock.ts (stand-in for browser and tests)
     i18n/           en.ts (every string the app shows), index.ts (t, tn, plain value names)
-    screens/        Home, Battery, Activity, Advanced
+    screens/        Welcome, Home, Modes, Battery, Activity, Advanced
     activity.ts     journal entries → plain-language items (pure, tested)
     exporter.ts     export files and the privacy filter (pure, tested)
     components.tsx  Switch, Dialog, Sparkline, Logo

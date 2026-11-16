@@ -16,5 +16,9 @@ export const tauriBackend: Backend = {
   setSetting: (setting, value, allowRisky) => invoke("set_setting", { setting, value, allowRisky }),
   setSafeMode: (on) => invoke("set_safe_mode", { on }),
   forget: (setting) => invoke("forget", { setting }),
+  conflicts: () => invoke("conflicts"),
+  switchOffConflict: (unit) => invoke("switch_off_conflict", { unit }),
+  autoPrefs: () => invoke("auto_prefs"),
+  setAutoPrefs: (prefs) => invoke("set_auto_prefs", { prefs }),
   saveFile: (name, contents) => invoke("save_file", { name, contents }),
 };
