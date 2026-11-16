@@ -1,0 +1,18 @@
+[package]
+name = "dynamis-cli"
+description = "Command line for Dynamis Power"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "dynamis"
+path = "src/main.rs"
+
+[dependencies]
+dynamis-core = { path = "../dynamis-core" }
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true

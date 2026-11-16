@@ -28,6 +28,10 @@ Dynamis Power is a small privileged daemon, a per-user session agent, and thin f
                           shared summaries; uploads results only when the user opts in.
 ```
 
+## Current state
+
+Phase 1 code lives in `daemon/crates/`: `dynamis-core` (read-only sensors, inventory, log format) and `dynamis-cli` (the `dynamis` command). Everything below marked *planned* does not exist yet.
+
 ## Components
 
 | Component | Runs as | Job | Code |

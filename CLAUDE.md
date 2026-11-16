@@ -6,7 +6,9 @@ The project owner is a developer experienced in Electron and React who is newer 
 
 ## Status
 
-Planning and scaffolding. Phase 1 (measurement logger and hardware inventory) has not started. See `ROADMAP.md`.
+Phase 1 in progress: read-only sensors, hardware inventory and the `dynamis` CLI (`inventory`, `status`, `log`) are in `daemon/`. Next: measure the overhead budget, a power report, and testing on real laptops. See `ROADMAP.md` and `daemon/README.md`.
+
+Build and check: `cd daemon && cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test`.
 
 ## Stack
 

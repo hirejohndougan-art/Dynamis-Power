@@ -20,6 +20,7 @@ Start here. Each document has one job, so you can read only what you need.
 | [UI.md](UI.md) | The app's screens, Advanced area, logs and export |
 | [MEASUREMENT.md](MEASUREMENT.md) | How power and responsiveness are measured, and why it's hard |
 | [SHARING.md](SHARING.md) | The results format and the submission service |
+| [../daemon/README.md](../daemon/README.md) | Building, running and extending the Rust code |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | How to contribute |
 | [GLOSSARY.md](GLOSSARY.md) | Terms used throughout the project |
 

@@ -1,0 +1,9 @@
+processor	: 0
+model name	: Example CPU N1000 @ 1.10GHz
+cpu cores	: 2
+flags		: fpu sse sse2 hwp hwp_epp
+
+processor	: 1
+model name	: Example CPU N1000 @ 1.10GHz
+cpu cores	: 2
+flags		: fpu sse sse2 hwp hwp_epp

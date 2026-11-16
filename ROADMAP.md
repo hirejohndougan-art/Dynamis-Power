@@ -4,7 +4,7 @@ Dynamis Power is built in eight phases. Each phase is usable on its own and ends
 
 | Phase | Builds | Gate: done when |
 | --- | --- | --- |
-| 1. Measure | Logger, hardware inventory, power report | Readings are trustworthy and the daemon stays within its overhead budget |
+| 1. Measure **(in progress)** | Logger, hardware inventory, power report | Readings are trustworthy and the daemon stays within its overhead budget |
 | 2. Profiles | Setting plugins, standard D-Bus profiles, change journal, quirk list, clean uninstall | The desktop power slider works and every change reverts |
 | 3. Auto-switch | Session agent, context rules, workload detection | The right profile is chosen in scripted scenarios |
 | 4. Calibrate | Per-setting tests, display power model | Beats stock "Balanced" on battery |
