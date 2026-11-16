@@ -83,7 +83,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [x] Learning: quiet means steady power for a minute, with the processor limit scaled by cores (0020)
 - [x] TLP import: read `tlp.conf` and `tlp.d`, preview line by line, apply after a yes (0017)
 - [x] `wifi.power_save` through nl80211; unit allows `AF_NETLINK` without `PrivateNetwork`, still no IP sockets; quirk for RTL8821CE and similar (0018)
-- [ ] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)
+- [x] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)
 - [x] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
 - [x] Desktops: hide battery features without a battery; the welcome says which features apply (0023)
 - [ ] GNOME extension in the package, with help switching it on (0024)
@@ -128,7 +128,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] Charge start threshold (`battery.charge_start`)
 - [ ] Vendor charge controls where the standard file is missing (ThinkPad, ASUS, Dell, Huawei, LG, Samsung, Sony, System76 and others), each probed, never guessed
 - [x] "Charge fully once" (TLP's `fullcharge`): Battery screen and panel menu
-- [ ] Battery recalibration on request (TLP's `recalibrate`: needs running from the battery while plugged in; see the follow-up on `charge_behaviour`)
+- [x] Battery recalibration on request (TLP's `recalibrate`: needs running from the battery while plugged in; see the follow-up on `charge_behaviour`)
 
 **System**
 

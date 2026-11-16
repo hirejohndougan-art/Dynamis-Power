@@ -95,7 +95,7 @@ These are not setting plugins: they are switches on the Apps screen (`SetAppPoli
 | --- | --- | --- | --- |
 | `battery.charge_limit` | Stop charging at a set level | `/sys/class/power_supply/BAT*/charge_control_end_threshold` | Safe where supported |
 | `battery.charge_start` | Start charging only below a level | `/sys/class/power_supply/BAT*/charge_control_start_threshold` | Safe where supported |
-| `battery.charge_behaviour` | Run from battery while plugged in, for measurement | `/sys/class/power_supply/BAT*/charge_behaviour` | Usually safe, with floor and temperature limits |
+| `battery.charge_behaviour` | Run from battery while plugged in: built for **battery recalibration** only ([decision 0019](decisions/0019-running-from-battery-while-plugged-in.md)), not a setting plugin. Engine `set_charge_behaviour` (`auto` or `force-discharge`, only values the file lists), used by `dynamisd/src/recal.rs`; always back to `auto` at the end, on any stop and at the next service start. Learning while plugged in is not built | `/sys/class/power_supply/BAT*/charge_behaviour` | Usually safe, with a 15% floor and temperature limit |
 
 ## Implemented plugins
 

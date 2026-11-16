@@ -172,6 +172,7 @@ impl Core {
         self.kept.clear(&dir)?;
         self.devices.clear(&dir);
         self.brightness.clear(&dir);
+        self.stop_recalibration("everything was restored");
         self.fullcharge.drop_it(&dir, "everything was restored");
         if self.apps.policy.changes_shares() {
             let dir = self.state_dir.clone();

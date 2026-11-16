@@ -751,6 +751,82 @@ impl Engine {
         writer::write_all(&self.root, &writes).map_err(EngineError::Write)
     }
 
+    // --- Running from the battery while plugged in (decision 0019) -------
+
+    /// Set the battery's charge behaviour: `force-discharge` (run from the
+    /// battery although plugged in, for recalibration) or `auto` (normal).
+    /// Only through the standard `charge_behaviour` file, only to a value it
+    /// lists. `force-discharge` is refused in safe mode and only logged in
+    /// dry run; going back to `auto` always works. Returns whether it
+    /// changed.
+    pub fn set_charge_behaviour(&mut self, value: &str, reason: &str) -> Result<bool> {
+        if !matches!(value, "auto" | "force-discharge") {
+            return Err(EngineError::Invalid(format!(
+                "{value} is not auto or force-discharge"
+            )));
+        }
+        let forcing = value == "force-discharge";
+        if forcing {
+            if let Some(why) = self.safe_mode() {
+                return Err(EngineError::SafeMode(why));
+            }
+        }
+        let ps = crate::sensors::power::read(&self.root);
+        let bat = ps
+            .batteries
+            .iter()
+            .find(|b| b.charge_behaviour_supported)
+            .ok_or_else(|| {
+                EngineError::Unsupported(
+                    "this battery cannot run the laptop while plugged in".into(),
+                )
+            })?;
+        if !crate::sensors::power::valid_name(&bat.name) {
+            return Err(EngineError::Invalid(format!(
+                "odd battery name {}",
+                bat.name
+            )));
+        }
+        let path = format!("/sys/class/power_supply/{}/charge_behaviour", bat.name);
+        let text = self
+            .root
+            .read_string(&path)
+            .map_err(|e| EngineError::Unsupported(format!("{path}: {e}")))?;
+        let (active, choices) = crate::fs::parse_bracketed(&text);
+        let current = active.or_else(|| (choices.len() == 1).then(|| choices[0].clone()));
+        if current.as_deref() == Some(value) {
+            return Ok(false);
+        }
+        if choices.len() > 1 && !choices.iter().any(|c| c == value) {
+            return Err(EngineError::Unsupported(format!(
+                "this battery does not offer {value}"
+            )));
+        }
+        if forcing && self.dry_run() {
+            self.log(
+                "would",
+                "battery.charge_behaviour",
+                current.as_deref(),
+                Some(value),
+                reason,
+            )?;
+            return Ok(false);
+        }
+        self.log(
+            "charge-behaviour",
+            "battery.charge_behaviour",
+            current.as_deref(),
+            Some(value),
+            reason,
+        )?;
+        let w = settings::Write {
+            path,
+            contents: value.into(),
+        };
+        writer::write_all(&self.root, &[w]).map_err(EngineError::Write)?;
+        Ok(true)
+    }
+
     // --- Screen brightness per mode --------------------------------------
 
     /// Set the screen's brightness to `pct` percent (5–100), for the

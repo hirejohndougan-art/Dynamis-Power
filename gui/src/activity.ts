@@ -53,6 +53,8 @@ export function describe(e: JournalEntry): Item | null {
       const dev = e.label || e.id.replace(/^(usb|pci):/, "");
       return item(t(e.to === "auto" ? "ev_dev_sleep" : "ev_dev_awake", { dev }), reason, reason.startsWith("on battery") ? "auto" : "mine");
     }
+    case "charge-behaviour":
+      return item(t(e.to === "force-discharge" ? "ev_bat_run_down" : "ev_bat_normal"), reason, reason.includes("you stopped") ? "mine" : "auto");
     case "import":
       return item(t("ev_import"), reason, "mine");
     case "brightness":

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { backend, type Predict, type Sensors, type Status } from "../backend";
-import { Switch } from "../components";
+import { Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { clock, t } from "../i18n";
 import { powerSplit } from "../power";
@@ -108,6 +108,7 @@ export function Battery(props: { status: Status; refresh: () => void; go?: (scre
           </>
         )}
       </section>
+      <Recalibrate status={props.status} run={run} />
       <PowerUse status={props.status} go={props.go} />
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
@@ -250,6 +251,84 @@ function PowerUse(props: { status: Status; go?: (screen: string) => void }) {
           </button>
         </div>
       )}
+    </section>
+  );
+}
+
+/** Battery recalibration (decision 0019): only where the battery can run
+ * the laptop while plugged in. */
+function Recalibrate(props: { status: Status; run: (a: () => Promise<string | void>) => void }) {
+  const info = useLoad(() => backend.recalibration(), []);
+  const [asking, setAsking] = useState(false);
+  const r = info.data;
+  useEffect(() => {
+    if (!r?.phase) return;
+    const id = window.setInterval(info.reload, 3000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r?.phase]);
+  if (!r?.supported) return null;
+  const p = props.status.power;
+  const ready = p.on_ac && (p.battery_pct ?? 0) > r.min_start_pct && !props.status.safe_mode;
+  const act = (a: () => Promise<void>) =>
+    props.run(async () => {
+      await a();
+      info.reload();
+    });
+  return (
+    <section className="card" aria-labelledby="recal-heading">
+      <h2 id="recal-heading">{t("recal_heading")}</h2>
+      <p className="muted">{t("recal_desc", { floor: r.floor_pct })}</p>
+      {r.phase ? (
+        <div className="notice notice-info" role="status">
+          <span>
+            {r.phase === "running_down"
+              ? t("recal_down", { pct: r.battery_pct ?? "?", floor: r.floor_pct })
+              : t("recal_charging", { pct: r.battery_pct ?? "?" })}
+          </span>
+          <button type="button" className="btn btn-small" onClick={() => act(() => backend.stopRecalibration())}>
+            {t("recal_stop")}
+          </button>
+        </div>
+      ) : (
+        <>
+          {r.ended === "done" &&
+            (r.full_before_wh != null && r.full_after_wh != null ? (
+              <p>{t("recal_done", { before: r.full_before_wh.toFixed(1), after: r.full_after_wh.toFixed(1) })}</p>
+            ) : (
+              <p>{t("recal_done_plain")}</p>
+            ))}
+          {r.ended && r.ended !== "done" && <p className="notice">{t("recal_ended", { why: r.ended })}</p>}
+          <div className="row">
+            <button type="button" className="btn" disabled={!ready} onClick={() => setAsking(true)}>
+              {t("recal_start")}
+            </button>
+            {!ready && <span className="muted small">{t("recal_needs", { pct: r.min_start_pct })}</span>}
+          </div>
+        </>
+      )}
+      <Dialog
+        open={asking}
+        onClose={() => setAsking(false)}
+        title={t("recal_confirm_title")}
+        actions={
+          <>
+            <button type="button" className="btn" onClick={() => setAsking(false)}>{t("cancel")}</button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setAsking(false);
+                act(() => backend.startRecalibration());
+              }}
+            >
+              {t("recal_confirm")}
+            </button>
+          </>
+        }
+      >
+        <p>{t("recal_confirm_desc", { floor: r.floor_pct })}</p>
+      </Dialog>
     </section>
   );
 }

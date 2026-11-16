@@ -137,6 +137,27 @@ impl Client {
             .map_err(explain)
     }
 
+    /// Battery recalibration: supported, phase, last result.
+    pub async fn recalibration(&self) -> Result<Value> {
+        self.json("Recalibration", &()).await
+    }
+
+    pub async fn start_recalibration(&self) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("StartRecalibration", &())
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn stop_recalibration(&self) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("StopRecalibration", &())
+            .await
+            .map_err(explain)
+    }
+
     /// What importing TLP's configuration would change, line by line.
     pub async fn tlp_import(&self) -> Result<Value> {
         self.json("TlpImport", &()).await

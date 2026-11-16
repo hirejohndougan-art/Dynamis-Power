@@ -256,6 +256,10 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** Battery recalibration: run down to 15% while plugged in, then charge fully. */
+  recalibration(): Promise<RecalInfo>;
+  startRecalibration(): Promise<void>;
+  stopRecalibration(): Promise<void>;
   /** What importing TLP's configuration would change, line by line. */
   tlpImport(): Promise<TlpImport>;
   /** Apply the preview's lines at these positions. */
@@ -325,6 +329,18 @@ export type Unclean = {
   in_safe_mode: number;
   /** Settings changed shortly before the freezes that led to safe mode. */
   suspects: Labelled[];
+};
+
+export type RecalInfo = {
+  supported: boolean;
+  phase: "running_down" | "charging" | null;
+  battery_pct: number | null;
+  floor_pct: number;
+  min_start_pct: number;
+  /** How it last ended: "done" or why it stopped. */
+  ended: string | null;
+  full_before_wh: number | null;
+  full_after_wh: number | null;
 };
 
 export type TlpLine = {

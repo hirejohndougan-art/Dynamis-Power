@@ -25,6 +25,7 @@ mod learn;
 mod learnnow;
 mod outside;
 mod predict;
+mod recal;
 mod sleeptest;
 
 use std::path::PathBuf;

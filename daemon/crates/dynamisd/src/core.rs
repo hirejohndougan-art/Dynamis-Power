@@ -104,6 +104,8 @@ pub struct Core {
     pub sleeptest: crate::sleeptest::SleepTest,
     /// The screen brightness chosen for each mode.
     pub brightness: crate::brightness::BrightnessState,
+    /// Battery recalibration on request.
+    pub recal: crate::recal::Recal,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -138,6 +140,7 @@ impl Core {
         let fullcharge = crate::fullcharge::FullCharge::load(&state_dir);
         let sleeptest = crate::sleeptest::SleepTest::load(&state_dir, 60.0);
         let brightness = crate::brightness::BrightnessState::load(&state_dir);
+        let recal = crate::recal::Recal::load(&root, &state_dir);
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
@@ -170,6 +173,7 @@ impl Core {
             fullcharge,
             sleeptest,
             brightness,
+            recal,
         };
         // Nothing is set for the mode in force at start, so restarting the
         // service leaves the screen alone.
@@ -440,6 +444,7 @@ impl Core {
         self.outside
             .quiet_until(unix_now() + crate::outside::AFTER_WAKE_S);
         self.stop_learn_session("the laptop went to sleep");
+        self.stop_recalibration("the laptop went to sleep");
         self.stop_experiment_for("the laptop slept");
         if let Err(e) = self.apply_active("woke from sleep") {
             eprintln!("dynamisd: {e}");
@@ -476,6 +481,28 @@ impl Core {
         self.devices.set_policy(p, &root, &dir, want)
     }
 
+    /// Start battery recalibration (after an explicit yes in the app).
+    pub fn start_recalibration(&mut self) -> Result<(), String> {
+        let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.recal.start(&root, &dir, unix_now(), on_ac)
+    }
+
+    /// Stop it: the battery back to normal, a lifted limit put back.
+    pub fn stop_recalibration(&mut self, why: &str) {
+        if !self.recal.is_active() {
+            return;
+        }
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        let charging = self.recal.wants_full_charge();
+        self.recal.stop(&root, &dir, why);
+        if charging && self.fullcharge.is_active() {
+            let _ = self
+                .fullcharge
+                .stop(&root, &dir, &format!("recalibration ended: {why}"));
+        }
+    }
+
     pub fn set_brightness_prefs(
         &mut self,
         p: crate::brightness::BrightnessPrefs,
@@ -506,6 +533,7 @@ impl Core {
             || self.predict.needs_ticks()
             || self.devices.needs_ticks()
             || self.fullcharge.is_active()
+            || self.recal.is_active()
             || self.sleeptest.running()
     }
 
@@ -539,6 +567,26 @@ impl Core {
         for id in self.outside.check(&root, &dir, unix) {
             if let Err(e) = self.kept.drop_setting(&id, &dir) {
                 eprintln!("dynamisd: {e}");
+            }
+        }
+        if self.recal.is_active() {
+            let safe = open_engine(&root, &dir)
+                .ok()
+                .and_then(|e| e.safe_mode())
+                .is_some();
+            let was_charging = self.recal.wants_full_charge();
+            if self
+                .recal
+                .tick(&root, &dir, unix, ctx.on_ac, ctx.max_temp_c, safe)
+                && crate::fullcharge::FullCharge::supported(&root)
+            {
+                // The charging part: lift a charge limit until full.
+                if let Err(e) = self.fullcharge.start(&root, &dir, unix, ctx.on_ac) {
+                    eprintln!("dynamisd: recalibration: {e}");
+                }
+            }
+            if was_charging && !self.recal.is_active() && self.fullcharge.is_active() {
+                let _ = self.fullcharge.stop(&root, &dir, "recalibration ended");
             }
         }
         self.fullcharge.tick(&root, &dir, unix, ctx.on_ac);

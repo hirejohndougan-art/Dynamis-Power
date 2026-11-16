@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, SleepTestInfo, LearnSession } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, SleepTestInfo, LearnSession } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -232,6 +232,10 @@ export function mockBackend(): Backend {
       sleepStep();
     }, SLEEP_MS);
   };
+  // Battery recalibration, played out quickly.
+  const RECAL_MS = 4000;
+  let recal: RecalInfo = { supported: true, phase: null, battery_pct: 79, floor_pct: 15, min_start_pct: 25, ended: null, full_before_wh: null, full_after_wh: null };
+  let recalTimer: ReturnType<typeof setTimeout> | undefined;
   let fullCharge: string | null = null;
   let fullChargeEnded: string | null = null;
   let devicePolicy: DevicePolicy = { usb: false, pci: false, never: [] };
@@ -514,6 +518,24 @@ export function mockBackend(): Backend {
         }
       }
       devicePolicy = p;
+    },
+    recalibration: async () => delay({ ...recal, battery_pct: recal.phase === "running_down" ? 41 : recal.phase === "charging" ? 63 : 79 }),
+    startRecalibration: async () => {
+      refuse();
+      if (!(prefs.power_source === "mains")) throw new Error("Plug the charger in first: the battery runs down while plugged in, then charges fully.");
+      recal = { ...recal, phase: "running_down", ended: null, full_before_wh: null, full_after_wh: null };
+      log({ event: "charge-behaviour", id: "battery.charge_behaviour", label: "Battery", from: "auto", to: "force-discharge", reason: "recalibration: running the battery down" });
+      clearTimeout(recalTimer);
+      recalTimer = setTimeout(() => {
+        recal = { ...recal, phase: "charging" };
+        log({ event: "charge-behaviour", id: "battery.charge_behaviour", label: "Battery", from: "force-discharge", to: "auto", reason: "recalibration: charging fully" });
+        recalTimer = setTimeout(() => { recal = { ...recal, phase: null, ended: "done", full_before_wh: 38.0, full_after_wh: 36.4 }; }, RECAL_MS);
+      }, RECAL_MS);
+    },
+    stopRecalibration: async () => {
+      clearTimeout(recalTimer);
+      if (recal.phase) log({ event: "charge-behaviour", id: "battery.charge_behaviour", label: "Battery", from: "force-discharge", to: "auto", reason: "recalibration ended: you stopped it" });
+      recal = { ...recal, phase: null, ended: "you stopped it" };
     },
     tlpImport: async () =>
       delay({

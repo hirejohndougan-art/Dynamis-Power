@@ -145,6 +145,12 @@ On the VivoBook (and any laptop where Modes used to show only Balanced):
 2. `dynamis settings` should list `wifi.power_save` with the same state (or say the driver does not report it, or that a quirk keeps it off on this chip).
 3. `sudo dynamis set wifi.power_save off`, then `iw dev <name> get power_save` should say off; `sudo dynamis restore` puts it back. Note if the connection drops or web pages get slow with it on.
 
+### Battery recalibration (only where offered)
+
+1. `cat /sys/class/power_supply/BAT0/charge_behaviour`: if it lists `force-discharge`, the Battery screen offers *Recalibrate…*.
+2. With the charger plugged in and more than 25% charge, start it. The percentage should fall while plugged in. Unplug the charger: it should stop at once, and the file should show `[auto]` again.
+3. Run it to the end once (a few hours): note what the app says the battery holds before and after, and whether the percentage behaves better afterwards.
+
 ### Learn now
 
 1. Charge to at least 60%, unplug, and in the app press *Learning → Start learning now* (leave the light workload ticked). Leave the laptop alone.

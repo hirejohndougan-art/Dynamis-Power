@@ -387,4 +387,22 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Import 3 values" })));
     expect(await screen.findByText(/Imported 3 values/)).toBeTruthy();
   });
+  it("recalibrates the battery while plugged in, and stops at once", async () => {
+    const before = await backend.autoPrefs();
+    await backend.setAutoPrefs({ ...before, power_source: "mains" });
+    try {
+      window.location.hash = "#battery";
+      render(<App />);
+      const card = await screen.findByRole("region", { name: "Recalibrate the battery" });
+      await waitFor(() => expect(within(card).getByRole("button", { name: "Recalibrate…" }).hasAttribute("disabled")).toBe(false));
+      await act(async () => fireEvent.click(within(card).getByRole("button", { name: "Recalibrate…" })));
+      const dialog = screen.getByRole("dialog", { hidden: true });
+      await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Start", hidden: true })));
+      expect(await within(card).findByText(/Running the battery down while plugged in/)).toBeTruthy();
+      await act(async () => fireEvent.click(within(card).getByRole("button", { name: "Stop" })));
+      expect(await within(card).findByText(/Stopped: you stopped it/)).toBeTruthy();
+    } finally {
+      await backend.setAutoPrefs(before);
+    }
+  });
 });

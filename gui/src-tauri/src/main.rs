@@ -191,6 +191,21 @@ async fn set_device_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), S
 }
 
 #[tauri::command]
+async fn recalibration(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.recalibration().await
+}
+
+#[tauri::command]
+async fn start_recalibration(conn: State<'_, Conn>) -> Result<(), String> {
+    client(&conn).await?.start_recalibration().await
+}
+
+#[tauri::command]
+async fn stop_recalibration(conn: State<'_, Conn>) -> Result<(), String> {
+    client(&conn).await?.stop_recalibration().await
+}
+
+#[tauri::command]
 async fn tlp_import(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.tlp_import().await
 }
@@ -325,6 +340,9 @@ fn main() {
             set_brightness_prefs,
             tlp_import,
             apply_tlp_import,
+            recalibration,
+            start_recalibration,
+            stop_recalibration,
             learn_session,
             start_learn_session,
             stop_learn_session,

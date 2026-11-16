@@ -162,6 +162,15 @@ fn read_battery(root: &SysRoot, name: &str, base: &str) -> Battery {
     }
 }
 
+/// A power supply name the kernel could have made (`BAT0`, `CMB1`): no
+/// slashes or dots.
+pub fn valid_name(n: &str) -> bool {
+    !n.is_empty()
+        && n.len() <= 32
+        && n.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 fn round3(v: f64) -> f64 {
     (v * 1000.0).round() / 1000.0
 }

@@ -698,6 +698,40 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// Battery recalibration: whether it can run here, its phase, and the
+    /// last result (JSON).
+    fn recalibration(&self) -> String {
+        let c = self.0.lock();
+        c.recal.json(&c.root).to_string()
+    }
+
+    /// Start battery recalibration: with the charger plugged in, the
+    /// battery runs the laptop down to 15%, then charges fully.
+    async fn start_recalibration(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .start_recalibration()
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        Ok(())
+    }
+
+    async fn stop_recalibration(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0.lock().stop_recalibration("you stopped it");
+        self.0.ticker.poke();
+        Ok(())
+    }
+
     /// What importing TLP's configuration would change, line by line
     /// (JSON): `{"found": bool, "lines": [...]}`.
     fn tlp_import(&self) -> String {
