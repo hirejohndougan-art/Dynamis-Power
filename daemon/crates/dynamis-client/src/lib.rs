@@ -340,6 +340,43 @@ impl Client {
             .map_err(explain)
     }
 
+    /// Call `on_change` each time the service signals a change (mode, auto
+    /// mode, learning, anything shown in `Status`), until the connection
+    /// ends. Lets the app refresh at once instead of waiting for its next
+    /// look.
+    pub async fn watch(&self, mut on_change: impl FnMut()) -> Result<()> {
+        use futures_lite::StreamExt;
+        let rule = zbus::MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .interface("org.freedesktop.DBus.Properties")
+            .member("PropertiesChanged")
+            .sender(NAME)
+            .build()
+            .map_err(explain)?;
+        let mut stream = zbus::MessageStream::for_match_rule(rule, &self.conn, None)
+            .await
+            .map_err(explain)?;
+        while let Some(m) = stream.next().await {
+            m.map_err(explain)?;
+            on_change();
+        }
+        Ok(())
+    }
+
+    /// Yes or no to the suggestion in `Status`.
+    pub async fn answer_suggestion(&self, id: &str, yes: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("AnswerSuggestion", &(id, yes))
+            .await
+            .map_err(explain)
+    }
+
+    /// The last sleeps: what woke the laptop and the battery used.
+    pub async fn sleeps(&self) -> Result<Value> {
+        self.json("Sleeps", &()).await
+    }
+
     /// Radios and the rules that switch them off.
     pub async fn radios(&self) -> Result<Value> {
         self.json("Radios", &()).await

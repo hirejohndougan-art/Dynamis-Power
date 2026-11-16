@@ -22,7 +22,7 @@ function fromHash(): [Screen, string | undefined] {
 
 export function App() {
   const [[screen, sub], setRoute] = useState(fromHash);
-  const { status, error, refresh, watts } = useStatus();
+  const { status, error, refresh, watts, temps } = useStatus();
   const [showWelcome, setShowWelcome] = useState(() => !welcomed());
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function App() {
         ) : !status ? (
           <p className="muted" role="status">{t("loading")}</p>
         ) : screen === "home" || (screen === "battery" && !status.power.has_battery) ? (
-          <Home status={status} watts={watts} refresh={refresh} go={go} />
+          <Home status={status} watts={watts} temps={temps} refresh={refresh} go={go} />
         ) : screen === "modes" ? (
           <Modes status={status} refresh={refresh} />
         ) : screen === "apps" ? (

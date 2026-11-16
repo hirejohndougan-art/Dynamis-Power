@@ -57,6 +57,10 @@ pub struct BrightnessState {
     /// The mode at the last look. Behind a lock because the mode is applied
     /// from `&Core`.
     last: Mutex<Option<Profile>>,
+    /// Each brightness the service set: (count, percent). The session
+    /// agent reads it to tell the desktop (KDE keeps its own brightness
+    /// and would otherwise show, and later restore, the old one).
+    said: Mutex<(u64, Option<u8>)>,
 }
 
 impl BrightnessState {
@@ -71,6 +75,7 @@ impl BrightnessState {
         BrightnessState {
             prefs,
             last: Mutex::new(None),
+            said: Mutex::new((0, None)),
         }
     }
 
@@ -88,12 +93,16 @@ impl BrightnessState {
         }
         *last = Some(active);
         if let Some(&pct) = self.prefs.levels.get(&active) {
-            set(
+            let ok = set(
                 root,
                 dir,
                 pct,
                 &format!("your brightness for {}", name(active)),
             );
+            drop(last);
+            if ok {
+                self.said_now(pct);
+            }
         }
     }
 
@@ -117,12 +126,14 @@ impl BrightnessState {
         self.prefs = p;
         if changed_now {
             if let Some(&pct) = self.prefs.levels.get(&active) {
-                set(
+                if set(
                     root,
                     dir,
                     pct,
                     &format!("you chose it for {}", name(active)),
-                );
+                ) {
+                    self.said_now(pct);
+                }
             }
         }
         Ok(())
@@ -134,13 +145,22 @@ impl BrightnessState {
         let _ = std::fs::remove_file(dir.join(FILE));
     }
 
+    fn said_now(&self, pct: u8) {
+        let mut s = self.said.lock().unwrap_or_else(|e| e.into_inner());
+        *s = (s.0 + 1, Some(pct));
+    }
+
     pub fn json(&self, root: &SysRoot) -> Value {
         let b = dynamis_core::sensors::backlight::read(root);
+        let (seq, pct) = *self.said.lock().unwrap_or_else(|e| e.into_inner());
         json!({
             "supported": b.is_some(),
             "now_pct": b.map(|b| b.percent),
             "min_pct": MIN_PCT,
             "levels": self.prefs.levels,
+            // The last brightness the service set, counted, for the agent.
+            "set_seq": seq,
+            "set_pct": pct,
         })
     }
 }
@@ -153,11 +173,18 @@ fn name(p: Profile) -> &'static str {
     }
 }
 
-fn set(root: &SysRoot, dir: &Path, pct: u8, reason: &str) {
+/// Set it through the engine; true if it was set.
+fn set(root: &SysRoot, dir: &Path, pct: u8, reason: &str) -> bool {
     match open_engine(root, dir).map(|mut e| e.set_brightness(f64::from(pct), reason)) {
-        Ok(Ok(_)) => {}
-        Ok(Err(e)) => eprintln!("dynamisd: brightness: {e}"),
-        Err(e) => eprintln!("dynamisd: brightness: {e}"),
+        Ok(Ok(_)) => true,
+        Ok(Err(e)) => {
+            eprintln!("dynamisd: brightness: {e}");
+            false
+        }
+        Err(e) => {
+            eprintln!("dynamisd: brightness: {e}");
+            false
+        }
     }
 }
 

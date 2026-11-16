@@ -27,9 +27,13 @@
 //! setting) turns it off; that choice is kept in
 //! `~/.config/dynamis-power/agent.json`.
 //!
+//! It also passes the brightness the service set for a mode on to KDE
+//! Plasma, which keeps its own (see `brightness.rs`).
+//!
 //! Only one agent runs per session: a second copy (for example started both
 //! by systemd and by the desktop's autostart) sees the first and exits.
 
+mod brightness;
 mod strings;
 mod tray;
 
@@ -304,6 +308,8 @@ async fn run(args: Args) -> zbus::Result<()> {
 
     let mut last: Option<Facts> = None;
     let mut force = true;
+    let mut bright = brightness::Follower::default();
+    bright.check(&report_bus, &session, args.verbose).await;
     loop {
         let now = Facts {
             focused_pid: focus.load(Ordering::Relaxed),
@@ -331,6 +337,7 @@ async fn run(args: Args) -> zbus::Result<()> {
             }
             Some(Event::ServiceChanged) => {
                 force = false;
+                bright.check(&report_bus, &session, args.verbose).await;
                 if let Some(t) = TRAY.get() {
                     tray::refresh(&session, &t.shared).await;
                 }

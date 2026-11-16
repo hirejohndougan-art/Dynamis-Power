@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../App";
 import { backend } from "../backend";
 import { demoControls } from "../backend/mock";
@@ -29,7 +29,9 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.getByRole("radio", { name: /Faster/ }).getAttribute("aria-checked")).toBe("true"));
     await waitFor(() => expect(screen.getByText("CPU speed preference: leaning to speed → full speed")).toBeTruthy());
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Undo" })));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/CPU speed preference is back to its original value/));
+    await waitFor(() =>
+      expect(screen.getAllByRole("status").some((e) => /CPU speed preference is back to its original value/.test(e.textContent ?? ""))).toBe(true),
+    );
   });
 
   it("asks before restoring original settings", async () => {
@@ -443,5 +445,28 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(within(card).getByRole("switch", { name: "Turn Bluetooth off on battery" }).getAttribute("aria-checked")).toBe("true"));
     expect(within(card).getByRole("switch", { name: "Turn Wi-Fi off while a network cable is plugged in" })).toBeTruthy();
     await backend.setRadioPolicy({ off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [] });
+  });
+  it("offers a habit as a rule and adds it only after a yes", async () => {
+    window.location.hash = "#home";
+    render(<App />);
+    expect(await screen.findByText(/You picked Longer battery around .* on 3 different days/)).toBeTruthy();
+    expect((await backend.autoPrefs()).time_rules ?? []).toHaveLength(0);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Yes, do that" })));
+    await waitFor(() => expect(screen.queryByText(/You picked Longer battery around/)).toBeNull());
+    const rules = (await backend.autoPrefs()).time_rules ?? [];
+    expect(rules).toEqual([{ from_hour: 21, to_hour: 23, profile: "power-saver" }]);
+    cleanup();
+    window.location.hash = "#modes";
+    render(<App />);
+    expect(await screen.findByText(/: Longer battery$/)).toBeTruthy();
+    await backend.setAutoPrefs({ ...(await backend.autoPrefs()), time_rules: [] });
+  });
+  it("shows what woke the laptop and the battery sleep used", async () => {
+    window.location.hash = "#battery";
+    render(<App />);
+    const card = await screen.findByRole("region", { name: "While asleep" }, { timeout: 3000 });
+    await waitFor(() => expect(within(card).getAllByText(/Woken by opening the lid/).length).toBeGreaterThan(0));
+    expect(within(card).getByText(/Woken by a USB device/)).toBeTruthy();
+    expect(within(card).getByText(/more than usual for sleep/)).toBeTruthy();
   });
 });

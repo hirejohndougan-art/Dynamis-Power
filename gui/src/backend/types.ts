@@ -43,6 +43,10 @@ export interface Status {
   unclean?: Unclean;
   /** "Charge fully once". */
   full_charge?: { supported: boolean; active: boolean; restore_to: string | null; ended: string | null };
+  /** A rule offered from the modes picked by hand; nothing changes before a yes. */
+  suggestion?: Suggestion | null;
+  /** The laptop runs hotter at light use than it used to (dust, dried paste). */
+  hotter?: { by_c: number; since: string } | null;
   /** "It feels slow" is in force until this time. */
   relief?: number | null;
   learning_strict?: boolean;
@@ -159,6 +163,30 @@ export interface AppRule {
   profile: Profile;
 }
 
+export type Suggestion =
+  | { kind: "app"; id: string; app: string; profile: Profile; count: number }
+  | { kind: "time"; id: string; from_hour: number; to_hour: number; profile: Profile; days: number };
+
+/** A mode for part of the day (hours on a 24-hour clock; `to` may be past midnight). */
+export interface TimeRule {
+  from_hour: number;
+  to_hour: number;
+  profile: Profile;
+}
+
+/** One sleep: what woke the laptop and the battery it used. Times are Unix seconds. */
+export interface SleepRecord {
+  from: number;
+  to: number;
+  woke_by: { name: string; kind: WakeKind }[];
+  battery_before: number | null;
+  battery_after: number | null;
+  on_ac: boolean;
+  pct_per_hour: number | null;
+}
+
+export type WakeKind = "lid" | "power_button" | "charger" | "battery" | "clock" | "usb" | "network" | "keyboard" | "other";
+
 export interface AutoPrefs {
   on_ac: Profile;
   on_battery: Profile;
@@ -166,6 +194,8 @@ export interface AutoPrefs {
   low_battery_pct: number;
   critical_battery_pct: number;
   app_rules?: AppRule[];
+  /** A mode for part of the day. */
+  time_rules?: TimeRule[];
   /** What to believe about the charger (for chargers that report wrongly). */
   power_source?: "detect" | "mains" | "battery";
   /** The mode to start with; null is the mode last used. */
@@ -200,6 +230,8 @@ export interface AppsInfo {
   now: { app: string; cpu_pct: number; watts: number | null; share: number | null }[];
   today: AppUse[];
   week: AppUse[];
+  /** Apps whose average power while running on battery changed by a quarter or more since last month. */
+  trends?: { app: string; last_w: number; this_w: number; change_pct: number }[];
 }
 
 export interface ProfileSettings {
@@ -269,6 +301,10 @@ export interface Backend {
   /** "It feels slow": undo what costs speed for the rest of the day. */
   feelsSlow(lasting: boolean): Promise<FeelsSlowResult>;
   endRelief(): Promise<void>;
+  /** Yes or no to `Status.suggestion`. Yes adds the rule and switches automatic choice on. */
+  answerSuggestion(id: string, yes: boolean): Promise<void>;
+  /** The last sleeps, newest first. */
+  sleeps(): Promise<{ sleeps: SleepRecord[] }>;
   /** Battery recalibration: run down to 15% while plugged in, then charge fully. */
   recalibration(): Promise<RecalInfo>;
   startRecalibration(): Promise<void>;

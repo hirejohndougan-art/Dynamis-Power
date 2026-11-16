@@ -60,6 +60,27 @@ pub struct Context {
     pub running_apps: Vec<String>,
     /// The app in front, when the session agent knows it.
     pub focused_app: Option<String>,
+    /// The local hour (0-23), for time rules.
+    pub local_hour: Option<u8>,
+}
+
+/// "Use this mode for ordinary use from `from_hour` to `to_hour`" (local
+/// hours, 0-23; `to_hour` not included; may wrap past midnight).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TimeRule {
+    pub from_hour: u8,
+    pub to_hour: u8,
+    pub profile: Profile,
+}
+
+impl TimeRule {
+    pub fn matches(&self, hour: u8) -> bool {
+        if self.from_hour <= self.to_hour {
+            (self.from_hour..self.to_hour).contains(&hour)
+        } else {
+            hour >= self.from_hour || hour < self.to_hour
+        }
+    }
 }
 
 /// "Use this mode while this app is open."
@@ -124,6 +145,9 @@ pub struct Prefs {
     /// Per-app modes. The app in front wins; otherwise the first rule whose
     /// app is open.
     pub app_rules: Vec<AppRule>,
+    /// "Use this mode for ordinary use at these hours" (local time), from
+    /// habits the person agreed to. The first that matches wins.
+    pub time_rules: Vec<TimeRule>,
     /// What to believe about the charger: `detect` (what it reports),
     /// `mains` or `battery` (for chargers that report wrongly; TLP's
     /// `TLP_PS_IGNORE`). Applies to everything, not only auto mode.
@@ -168,6 +192,7 @@ impl Default for Prefs {
             min_dwell_s: 60.0,
             max_switches_per_hour: 12,
             app_rules: Vec::new(),
+            time_rules: Vec::new(),
             power_source: PowerSource::Detect,
             startup_mode: None,
         }
@@ -201,6 +226,11 @@ pub struct Auto {
     busy: bool,
     low: bool,
     hot: bool,
+    /// On battery and heating up fast enough to be hot within a few
+    /// minutes: move to a cooler mode early, before the firmware throttles.
+    warming: bool,
+    /// Temperatures over about the last two minutes (time, °C).
+    temps: VecDeque<(f64, f64)>,
     current: Option<Profile>,
     last_switch: Option<f64>,
     last_on_ac: Option<bool>,
@@ -229,7 +259,31 @@ impl Auto {
         self.last_switch = Some(now);
     }
 
+    /// Whether the temperature is climbing fast enough to reach the "hot"
+    /// level within three minutes (on battery, and already within 20 °C of
+    /// it), from the readings of about the last two minutes.
+    fn heat_trend(&mut self, now: f64, temp: Option<f64>, on_ac: bool) -> bool {
+        let Some(t) = temp else {
+            self.temps.clear();
+            return false;
+        };
+        self.temps.push_back((now, t));
+        while self.temps.front().is_some_and(|(at, _)| now - at > 120.0) {
+            self.temps.pop_front();
+        }
+        let Some(&(t0, c0)) = self.temps.front() else {
+            return false;
+        };
+        let span = now - t0;
+        if on_ac || self.temps.len() < 3 || span < 30.0 || t < self.prefs.hot_c - 20.0 {
+            return false;
+        }
+        let slope = (t - c0) / span;
+        slope > 0.0 && t + slope * 180.0 >= self.prefs.hot_c
+    }
+
     pub fn step(&mut self, now: f64, ctx: &Context, available: &[Profile]) -> Step {
+        self.warming = self.heat_trend(now, ctx.max_temp_c, ctx.on_ac);
         let p = &self.prefs;
 
         // Hysteresis for heavy work, low battery and heat.
@@ -336,6 +390,17 @@ impl Auto {
                             Profile::PowerSaver,
                             format!("Battery below {:.0}%: saving battery", p.low_battery_pct),
                         )
+                    } else if let Some(r) = ctx
+                        .local_hour
+                        .and_then(|h| p.time_rules.iter().find(|r| r.matches(h)))
+                    {
+                        (
+                            r.profile,
+                            format!(
+                                "Your usual mode from {}:00 to {}:00",
+                                r.from_hour, r.to_hour
+                            ),
+                        )
                     } else if ctx.on_ac {
                         (p.on_ac, "Plugged in".to_string())
                     } else {
@@ -420,6 +485,19 @@ impl Auto {
                 Profile::Balanced,
                 format!("{reason} — but running hot, so balanced"),
             )
+        } else if self.warming && profile == Profile::Performance {
+            (
+                Profile::Balanced,
+                format!("{reason} — but heating up fast, so balanced early"),
+            )
+        } else if self.warming
+            && profile == Profile::Balanced
+            && available.contains(&Profile::PowerSaver)
+        {
+            (
+                Profile::PowerSaver,
+                format!("{reason} — but heating up fast on battery, so a cooler mode early"),
+            )
         } else {
             (profile, reason)
         };
@@ -475,5 +553,46 @@ impl Auto {
         } else {
             Workload::LightInteractive
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn heating_up_fast_on_battery_moves_to_a_cooler_mode_early() {
+        let all = [Profile::PowerSaver, Profile::Balanced, Profile::Performance];
+        let hot = Prefs::default().hot_c;
+        let ctx = |t: f64, on_ac: bool| Context {
+            on_ac,
+            battery_pct: Some(80.0),
+            max_temp_c: Some(t),
+            ..Context::default()
+        };
+        // Steady and cool: no change.
+        let mut a = Auto::new(Prefs::default());
+        for i in 0..5 {
+            a.step(i as f64 * 15.0, &ctx(hot - 30.0, false), &all);
+        }
+        assert!(!a.warming);
+        // Climbing 6 °C a minute from 15 °C below "hot": early.
+        let mut a = Auto::new(Prefs::default());
+        let mut last = None;
+        for i in 0..5 {
+            let t = hot - 15.0 + i as f64 * 1.5;
+            last = Some(a.step(i as f64 * 15.0, &ctx(t, false), &all));
+        }
+        assert!(a.warming);
+        let d = last.unwrap().decision;
+        assert_ne!(d.profile, Profile::Performance);
+        assert!(d.reason.contains("heating up fast"), "{}", d.reason);
+        // Plugged in: not this rule.
+        let mut a = Auto::new(Prefs::default());
+        for i in 0..5 {
+            let t = hot - 15.0 + i as f64 * 1.5;
+            a.step(i as f64 * 15.0, &ctx(t, true), &all);
+        }
+        assert!(!a.warming);
     }
 }

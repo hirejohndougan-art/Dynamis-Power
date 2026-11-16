@@ -795,6 +795,31 @@ impl DynamisPower {
         Ok(r.to_string())
     }
 
+    /// Yes or no to the suggestion in `Status` (`suggestion.id`). Yes adds
+    /// the rule and switches automatic choice on.
+    async fn answer_suggestion(
+        &self,
+        id: String,
+        yes: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .answer_suggestion(&id, yes)
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        notify_auto(conn, &self.0).await;
+        Ok(())
+    }
+
+    /// The last sleeps: what woke the laptop, and battery used per hour
+    /// asleep (JSON).
+    fn sleeps(&self) -> String {
+        self.0.lock().sleeps.json().to_string()
+    }
+
     /// Radios and the rules that switch them off (JSON).
     fn radios(&self) -> String {
         let c = self.0.lock();
@@ -842,6 +867,8 @@ impl DynamisPower {
             .lock()
             .set_brightness_prefs(p)
             .map_err(fdo::Error::InvalidArgs)?;
+        // The session agent may need to tell the desktop.
+        notify_auto(conn, &self.0).await;
         Ok(())
     }
 

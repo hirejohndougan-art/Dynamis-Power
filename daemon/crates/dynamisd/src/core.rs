@@ -56,7 +56,7 @@ struct SavedAuto {
 #[derive(Default)]
 pub struct AutoState {
     pub enabled: bool,
-    rules: Auto,
+    pub(crate) rules: Auto,
     pub(crate) sampler: Sampler,
     session: SessionReport,
     pub(crate) session_owner: Option<String>,
@@ -108,6 +108,13 @@ pub struct Core {
     pub recal: crate::recal::Recal,
     /// "It feels slow", for the rest of the day.
     pub relief: crate::relief::Relief,
+    /// Modes picked by hand, for suggestions.
+    pub habits: crate::habits::Habits,
+    /// Temperature at light use, month by month ("runs hotter").
+    pub heat: dynamis_core::heat::HeatHistory,
+    heat_unsaved: usize,
+    /// What woke the laptop, and each sleep's battery cost.
+    pub sleeps: crate::sleeps::SleepLog,
     /// Radios switched off by rule.
     pub radios: crate::radios::RadiosState,
     /// Parts of the system the app needs that are missing (`systemd`,
@@ -192,6 +199,13 @@ impl Core {
             relief,
             missing_parts: Vec::new(),
             radios: crate::radios::RadiosState::load(&state_dir_for_radios),
+            sleeps: crate::sleeps::SleepLog::load(&state_dir_for_radios),
+            heat: fs::read_to_string(state_dir_for_radios.join("heat-history.json"))
+                .ok()
+                .and_then(|t| serde_json::from_str(&t).ok())
+                .unwrap_or_default(),
+            heat_unsaved: 0,
+            habits: crate::habits::Habits::load(&state_dir_for_radios),
         };
         let on = core.relief.active(unix_now());
         core.learn.relief = on;
@@ -262,6 +276,20 @@ impl Core {
             let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
             self.auto.paused_on_ac = Some(on_ac);
         }
+        // Remember the choice and its situation, for suggestions.
+        let now = unix_now();
+        let dir = self.state_dir.clone();
+        let app = self.apps.front.clone();
+        self.habits.note(
+            &dir,
+            crate::habits::Choice {
+                time: now,
+                profile: p,
+                app,
+                hour: dynamis_core::clock::local_hour(now),
+                day: dynamis_core::clock::local_day(now),
+            },
+        );
         Ok(before.1.into_keys().collect())
     }
 
@@ -434,6 +462,13 @@ impl Core {
             60.0,
             "switches an hour",
         )?;
+        if p.time_rules.len() > 24
+            || p.time_rules
+                .iter()
+                .any(|r| r.from_hour > 23 || r.to_hour > 23 || r.from_hour == r.to_hour)
+        {
+            return Err("each time of day needs a start and end hour (0-23) that differ".into());
+        }
         if p.app_rules.len() > 100 {
             return Err("at most 100 app modes".into());
         }
@@ -477,6 +512,8 @@ impl Core {
         self.sleeptest.on_resume(&root, &dir, unix_now());
         self.outside
             .quiet_until(unix_now() + crate::outside::AFTER_WAKE_S);
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.sleeps.woke(&root, &dir, unix_now());
         self.stop_learn_session("the laptop went to sleep");
         self.stop_recalibration("the laptop went to sleep");
         self.stop_experiment_for("the laptop slept");
@@ -590,6 +627,21 @@ impl Core {
         }
     }
 
+    /// Yes or no to the suggestion with this id. Yes adds the rule and
+    /// switches automatic choice on.
+    pub fn answer_suggestion(&mut self, id: &str, yes: bool) -> Result<(), String> {
+        let dir = self.state_dir.clone();
+        let prefs = self.auto.rules.prefs.clone();
+        if let Some(p) = self.habits.answer(&dir, &prefs, id, yes)? {
+            let now = unix_now();
+            self.set_auto_prefs(p, now)?;
+            if !self.auto.enabled {
+                self.set_auto(true, now)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn set_radio_policy(&mut self, p: crate::radios::RadioPolicy) -> Result<(), String> {
         let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
@@ -653,6 +705,7 @@ impl Core {
         ctx.screen_locked = s.screen_locked;
         ctx.user_idle = s.user_idle;
         let front_pid = s.focused_pid;
+        ctx.local_hour = dynamis_core::clock::local_hour(unix_now());
         // Prediction first: "Last until" can change what is allowed.
         let unix = unix_now();
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
@@ -727,6 +780,21 @@ impl Core {
             .decision
             .workload;
         self.auto.observed = Some(workload);
+        // "Runs hotter than it used to": the temperature at light use.
+        if matches!(workload, Workload::Idle | Workload::LightInteractive)
+            && ctx.cpu_busy_pct < 20.0
+        {
+            if let Some(t) = ctx.max_temp_c {
+                self.heat.add(unix_now(), t);
+                self.heat_unsaved += 1;
+                if self.heat_unsaved >= 30 {
+                    self.heat_unsaved = 0;
+                    if let Ok(t) = serde_json::to_string(&self.heat) {
+                        let _ = write_atomic(&self.state_dir.join("heat-history.json"), &t);
+                    }
+                }
+            }
+        }
 
         let changed = (self.auto.enabled && self.auto_step(now, &ctx)) || target_changed;
         // Devices follow the charger, the mode and plugging.

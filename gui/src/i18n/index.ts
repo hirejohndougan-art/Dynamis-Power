@@ -1,6 +1,7 @@
 // The translation layer. Use t("key", { name: value }) for every string a
 // person reads. tn("key", n, vars) picks key_one or key_other.
 import { en, type Key } from "./en";
+export type { Key };
 
 type Catalog = { [K in Key]?: string };
 const catalogs: Record<string, Catalog> = { en };
@@ -37,6 +38,11 @@ export function clock(unix: number): string {
   const d = new Date(unix * 1000);
   const sameDay = d.toDateString() === new Date().toDateString();
   return d.toLocaleString(undefined, sameDay ? { timeStyle: "short" } : { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+
+/** An hour of the day in the person's clock style: "9 PM" or "21". */
+export function hourName(h: number): string {
+  return new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: "numeric" });
 }
 
 export function formatTime(unix: number): string {

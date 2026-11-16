@@ -241,6 +241,16 @@ async fn end_relief(conn: State<'_, Conn>) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn answer_suggestion(conn: State<'_, Conn>, id: String, yes: bool) -> Result<(), String> {
+    client(&conn).await?.answer_suggestion(&id, yes).await
+}
+
+#[tauri::command]
+async fn sleeps(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.sleeps().await
+}
+
+#[tauri::command]
 async fn recalibration(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.recalibration().await
 }
@@ -365,9 +375,31 @@ async fn set_kept(conn: State<'_, Conn>, setting: String, keep: bool) -> Result<
     client(&conn).await?.set_kept(&setting, keep).await
 }
 
+/// Pass the service's change signals to the window as `dynamis-changed`,
+/// so it refreshes at once. Reconnects if the service restarts. Only runs
+/// while the app is open: the app costs nothing when closed.
+fn forward_changes(app: tauri::AppHandle) {
+    use tauri::Emitter;
+    std::thread::spawn(move || loop {
+        let app = app.clone();
+        let _ = tauri::async_runtime::block_on(async move {
+            let c = dynamis_client::Client::connect().await?;
+            c.watch(|| {
+                let _ = app.emit("dynamis-changed", ());
+            })
+            .await
+        });
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    });
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Conn::default())
+        .setup(|app| {
+            forward_changes(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             status,
             journal,
@@ -399,6 +431,8 @@ fn main() {
             set_radio_policy,
             feels_slow,
             end_relief,
+            answer_suggestion,
+            sleeps,
             recalibration,
             start_recalibration,
             stop_recalibration,

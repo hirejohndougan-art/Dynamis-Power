@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { backend, type Predict, type Sensors, type Status } from "../backend";
+import { backend, type Predict, type Sensors, type SleepRecord, type Status } from "../backend";
 import { Choice, Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
-import { clock, t } from "../i18n";
+import { clock, duration, t, type Key } from "../i18n";
 import { powerSplit } from "../power";
 
 export function Battery(props: { status: Status; refresh: () => void; go?: (screen: string) => void }) {
@@ -121,6 +121,7 @@ export function Battery(props: { status: Status; refresh: () => void; go?: (scre
         )}
       </section>
       <Recalibrate status={props.status} run={run} />
+      <Sleeps />
       <PowerUse status={props.status} go={props.go} />
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
@@ -269,6 +270,48 @@ function PowerUse(props: { status: Status; go?: (screen: string) => void }) {
 
 /** Battery recalibration (decision 0019): only where the battery can run
  * the laptop while plugged in. */
+/** Battery used per hour asleep above which sleep is not doing its job. */
+const HIGH_SLEEP_PCT = 2.5;
+
+/** The last sleeps: battery used and what woke the laptop. */
+function Sleeps() {
+  const info = useLoad(() => backend.sleeps(), []);
+  const list = (info.data?.sleeps ?? []).slice(0, 7);
+  return (
+    <section className="card" aria-labelledby="sleeps-heading">
+      <h2 id="sleeps-heading">{t("sleeps_heading")}</h2>
+      <p className="muted">{t("sleeps_desc")}</p>
+      {info.data && list.length === 0 && <p className="muted small">{t("sleeps_none")}</p>}
+      {list.length > 0 && (
+        <ul className="stack plain-list">
+          {list.map((s) => (
+            <SleepRow key={s.from} s={s} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SleepRow({ s }: { s: SleepRecord }) {
+  const used = s.on_ac ? t("sleeps_plugged") : s.pct_per_hour != null ? t("sleeps_used", { pct: s.pct_per_hour.toFixed(1) }) : null;
+  const kinds = [...new Set(s.woke_by.map((w) => w.kind))];
+  const woke = kinds.length
+    ? t("sleeps_woke", { what: kinds.map((k) => t(`wake_${k}` as Key)).join(", ") })
+    : t("sleeps_woke_unknown");
+  const high = !s.on_ac && (s.pct_per_hour ?? 0) > HIGH_SLEEP_PCT;
+  return (
+    <li>
+      <div>
+        <strong>{t("sleeps_row", { date: clock(s.from), hours: duration((s.to - s.from) / 3600) })}</strong>
+        {used && <span className="muted"> · {used}</span>}
+      </div>
+      <div className="muted small">{woke}</div>
+      {high && <div className="small">{t("sleeps_high")}</div>}
+    </li>
+  );
+}
+
 function Recalibrate(props: { status: Status; run: (a: () => Promise<string | void>) => void }) {
   const info = useLoad(() => backend.recalibration(), []);
   const [asking, setAsking] = useState(false);

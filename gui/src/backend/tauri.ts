@@ -1,5 +1,6 @@
 // The real backend: Tauri commands in src-tauri, which call the service over D-Bus.
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { Backend } from "./types";
 
 export const tauriBackend: Backend = {
@@ -33,6 +34,8 @@ export const tauriBackend: Backend = {
   setRadioPolicy: (policy) => invoke("set_radio_policy", { policy }),
   feelsSlow: (lasting) => invoke("feels_slow", { lasting }),
   endRelief: () => invoke("end_relief"),
+  answerSuggestion: (id, yes) => invoke("answer_suggestion", { id, yes }),
+  sleeps: () => invoke("sleeps"),
   recalibration: () => invoke("recalibration"),
   startRecalibration: () => invoke("start_recalibration"),
   stopRecalibration: () => invoke("stop_recalibration"),
@@ -60,3 +63,9 @@ export const tauriBackend: Backend = {
   setDryRun: (on) => invoke("set_dry_run", { on }),
   saveFile: (name, contents) => invoke("save_file", { name, contents }),
 };
+
+/** The service signalled a change: tell the screens to read again at once
+ * (see `useStatus`). Only set up inside the Tauri app. */
+export function forwardChanges(): void {
+  void listen("dynamis-changed", () => window.dispatchEvent(new Event("dynamis:changed")));
+}

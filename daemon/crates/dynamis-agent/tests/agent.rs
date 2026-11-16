@@ -1,6 +1,7 @@
 //! The agent against fake desktop services on a private bus: a media player,
 //! a screen locker, and a stand-in for the Dynamis Power service that records
-//! what it is told. Skipped when `dbus-daemon` is not installed.
+//! what it is told, and KDE's screen brightness service. Skipped when
+//! `dbus-daemon` is not installed.
 
 use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
@@ -12,6 +13,8 @@ use zbus::object_server::SignalEmitter;
 use zbus::{Connection, OwnedVariant};
 
 type Reports = Arc<Mutex<Vec<HashMap<String, bool>>>>;
+/// Raw brightness values KDE was asked to set.
+type Told = Arc<Mutex<Vec<(i32, u32)>>>;
 
 struct Guard(Child);
 impl Drop for Guard {
@@ -21,10 +24,24 @@ impl Drop for Guard {
     }
 }
 
-struct Recorder(Reports);
+struct Recorder(Reports, (u64, Option<u8>));
 
 #[zbus::interface(name = "net.dynamis.Power1")]
 impl Recorder {
+    fn brightness(&self) -> String {
+        serde_json::json!({"set_seq": self.1.0, "set_pct": self.1.1}).to_string()
+    }
+    /// Test helper: the service set the brightness for a mode.
+    async fn test_set_brightness(&mut self, pct: u8, #[zbus(signal_emitter)] e: SignalEmitter<'_>) {
+        self.1 = (self.1 .0 + 1, Some(pct));
+        let _ = zbus::fdo::Properties::properties_changed(
+            &e,
+            zbus::names::InterfaceName::from_static_str_unchecked("net.dynamis.Power1"),
+            HashMap::new(),
+            std::borrow::Cow::Borrowed(&[]),
+        )
+        .await;
+    }
     fn report_session(&self, report: HashMap<String, OwnedVariant>) {
         let flat = report
             .into_iter()
@@ -74,14 +91,42 @@ impl Locker {
     async fn active_changed(e: &SignalEmitter<'_>, on: bool) -> zbus::Result<()>;
 }
 
+/// KDE Plasma 6's brightness service: one built-in display.
+struct KdeBrightness;
+
+#[zbus::interface(name = "org.kde.ScreenBrightness")]
+impl KdeBrightness {
+    #[zbus(property, name = "DisplaysDBusNames")]
+    fn displays(&self) -> Vec<String> {
+        vec!["display0".into()]
+    }
+}
+
+struct KdeDisplay(Told);
+
+#[zbus::interface(name = "org.kde.ScreenBrightness.Display")]
+impl KdeDisplay {
+    #[zbus(property, name = "IsInternal")]
+    fn is_internal(&self) -> bool {
+        true
+    }
+    #[zbus(property, name = "MaxBrightness")]
+    fn max_brightness(&self) -> i32 {
+        1000
+    }
+    fn set_brightness(&self, value: i32, flags: u32) {
+        self.0.lock().unwrap().push((value, flags));
+    }
+}
+
 /// Run fake services on their own thread so they keep answering while the
 /// test thread waits.
-fn spawn_fakes(address: String, reports: Reports) {
+fn spawn_fakes(address: String, reports: Reports, told: Told) {
     std::thread::spawn(move || {
         zbus::block_on(async move {
             let _rec = zbus::connection::Builder::address(address.as_str())
                 .name("net.dynamis.Power")
-                .serve_at("/net/dynamis/Power", Recorder(reports))
+                .serve_at("/net/dynamis/Power", Recorder(reports, (0, None)))
                 .build()
                 .await
                 .unwrap();
@@ -93,6 +138,13 @@ fn spawn_fakes(address: String, reports: Reports) {
                         status: "Paused".into(),
                     },
                 )
+                .build()
+                .await
+                .unwrap();
+            let _kde = zbus::connection::Builder::address(address.as_str())
+                .name("org.kde.ScreenBrightness")
+                .serve_at("/org/kde/ScreenBrightness", KdeBrightness)
+                .serve_at("/org/kde/ScreenBrightness/display0", KdeDisplay(told))
                 .build()
                 .await
                 .unwrap();
@@ -155,7 +207,8 @@ fn reports_session_changes_and_nothing_else() {
     }
 
     let reports: Reports = Arc::default();
-    spawn_fakes(address.clone(), reports.clone());
+    let told: Told = Arc::default();
+    spawn_fakes(address.clone(), reports.clone(), told.clone());
     sleep(Duration::from_millis(300));
 
     let _agent = Guard(
@@ -230,6 +283,30 @@ fn reports_session_changes_and_nothing_else() {
     wait_for("focus", &reports, |r| {
         r["focused_pid"] && r["screen_locked"]
     });
+
+    // The service set a brightness for a mode: KDE is told the same, with no
+    // on-screen indicator.
+    zbus::block_on(async {
+        client
+            .call_method(
+                Some("net.dynamis.Power"),
+                "/net/dynamis/Power",
+                Some("net.dynamis.Power1"),
+                "TestSetBrightness",
+                &(40u8,),
+            )
+            .await
+            .unwrap();
+    });
+    let start = Instant::now();
+    while told.lock().unwrap().is_empty() {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "KDE was not told"
+        );
+        sleep(Duration::from_millis(20));
+    }
+    assert_eq!(*told.lock().unwrap(), [(400, 1)]);
 
     // Unrelated bus activity (a new client) triggers a re-read but no report.
     let before = reports.lock().unwrap().len();

@@ -22,6 +22,8 @@ export function useStatus(intervalMs = 5000) {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [watts, setWatts] = useState<number[]>([]);
+  // The hottest temperature at each power reading, for the chart's second line.
+  const [temps, setTemps] = useState<number[]>([]);
   const timer = useRef<number | undefined>(undefined);
 
   const refresh = useCallback(async () => {
@@ -31,6 +33,7 @@ export function useStatus(intervalMs = 5000) {
       setError(null);
       if (s.power.watts != null && !s.power.on_ac) {
         setWatts((w) => [...w.slice(-359), s.power.watts as number]);
+        setTemps((t) => [...t.slice(-359), s.power.temp_c ?? t[t.length - 1] ?? NaN]);
       }
     } catch (e) {
       setError(String((e as Error)?.message ?? e));
@@ -54,7 +57,7 @@ export function useStatus(intervalMs = 5000) {
     };
   }, [refresh, intervalMs]);
 
-  return { status, error, refresh, watts };
+  return { status, error, refresh, watts, temps };
 }
 
 /** Run an action, show its result or error briefly. */

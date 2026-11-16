@@ -12,7 +12,8 @@
 //! so: CPU time is the biggest part of what an app costs, but not all of it
 //! (the screen, Wi-Fi and the GPU are not counted per app).
 //!
-//! Totals are kept per day for a week, on this computer only.
+//! Totals are kept per day for a week, and per month for three months (for
+//! "uses more power than last month"), on this computer only.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -22,6 +23,13 @@ use crate::fs::SysRoot;
 
 const FORMAT_VERSION: u32 = 1;
 const KEEP_DAYS: usize = 8;
+const KEEP_MONTHS: usize = 3;
+/// Readings further apart than this are a gap, not counted.
+const MAX_GAP_S: f64 = 900.0;
+/// Hours on battery an app must have run in each month to compare them.
+const TREND_MIN_S: f64 = 2.0 * 3600.0;
+/// The change that counts as a trend.
+const TREND_PCT: f64 = 25.0;
 pub const SYSTEM: &str = "System";
 
 /// One process's identity and CPU time.
@@ -125,6 +133,19 @@ pub struct Usage {
     pub cpu_s: f64,
     /// Estimated energy on battery, watt-hours.
     pub wh: f64,
+    /// Seconds the app was running while on battery (for average watts).
+    #[serde(default)]
+    pub bat_s: f64,
+}
+
+/// An app that costs more (or less) than last month while running on
+/// battery.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Trend {
+    pub app: String,
+    pub last_w: f64,
+    pub this_w: f64,
+    pub change_pct: f64,
 }
 
 /// One reading's result.
@@ -141,6 +162,9 @@ pub struct Meter {
     v: u32,
     /// Day ("2026-11-16", UTC) → app → usage.
     days: BTreeMap<String, BTreeMap<String, Usage>>,
+    /// Month ("2026-11") → app → usage. Added later: older files have none.
+    #[serde(default)]
+    months: BTreeMap<String, BTreeMap<String, Usage>>,
     #[serde(skip)]
     prev: HashMap<u32, u64>,
     #[serde(skip)]
@@ -164,6 +188,7 @@ impl Default for Meter {
         Meter {
             v: FORMAT_VERSION,
             days: BTreeMap::new(),
+            months: BTreeMap::new(),
             prev: HashMap::new(),
             prev_time: None,
             base_w: None,
@@ -184,7 +209,12 @@ impl Meter {
         if let Some(w) = power_w {
             self.base_w = Some(self.base_w.map_or(w, |b| b.min(w)));
         }
-        let dt = self.prev_time.map(|t| now - t).filter(|d| *d > 0.0);
+        // A long gap (sleep, a pause in readings) is not counted: the CPU
+        // time in it is unknown, and the power reading is from now.
+        let dt = self
+            .prev_time
+            .map(|t| now - t)
+            .filter(|d| *d > 0.0 && *d <= MAX_GAP_S);
         let mut per_app: BTreeMap<String, u64> = BTreeMap::new();
         let mut cgroups: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut next = HashMap::with_capacity(procs.len());
@@ -213,6 +243,31 @@ impl Meter {
         let total: u64 = per_app.values().sum();
         let spare_w = power_w.zip(self.base_w).map(|(w, b)| (w - b).max(0.0));
         let day = day_of(now);
+        let month = self
+            .months
+            .entry(day.get(..7).unwrap_or_default().to_string())
+            .or_default();
+        // Time running on battery, for average watts per app.
+        if spare_w.is_some() {
+            for app in cgroups_running(&self.cgroups, &per_app) {
+                month.entry(app).or_default().bat_s += dt;
+            }
+        }
+        for (app, t) in per_app.iter().filter(|(_, t)| **t > 0) {
+            let m = month.entry(app.clone()).or_default();
+            m.cpu_s += *t as f64 / TICKS_PER_S;
+            if let Some(s) = spare_w {
+                if total > 0 {
+                    m.wh += s * *t as f64 / total as f64 * dt / 3600.0;
+                }
+            }
+        }
+        while self.months.len() > KEEP_MONTHS {
+            let oldest = self.months.keys().next().cloned();
+            if let Some(k) = oldest {
+                self.months.remove(&k);
+            }
+        }
         let bucket = self.days.entry(day).or_default();
         self.last = per_app
             .iter()
@@ -269,12 +324,61 @@ impl Meter {
     /// asked to forget). The idle level is kept: it describes the laptop.
     pub fn forget(&mut self) {
         self.days.clear();
+        self.months.clear();
+    }
+
+    /// Apps whose average power while running on battery changed by a
+    /// quarter or more since last month, biggest rise first. Both months
+    /// need two hours of the app on battery.
+    pub fn trends(&self, now: f64) -> Vec<Trend> {
+        let this_key = day_of(now).get(..7).unwrap_or_default().to_string();
+        let Some(this) = self.months.get(&this_key) else {
+            return Vec::new();
+        };
+        let Some((_, last)) = self.months.range(..this_key.clone()).next_back() else {
+            return Vec::new();
+        };
+        let avg = |u: &Usage| (u.bat_s >= TREND_MIN_S).then(|| u.wh * 3600.0 / u.bat_s);
+        let mut out: Vec<Trend> = this
+            .iter()
+            .filter(|(app, _)| app.as_str() != SYSTEM)
+            .filter_map(|(app, u)| {
+                let this_w = avg(u)?;
+                let last_w = avg(last.get(app)?)?;
+                if last_w <= 0.05 {
+                    return None;
+                }
+                let change_pct = (this_w / last_w - 1.0) * 100.0;
+                (change_pct.abs() >= TREND_PCT).then(|| Trend {
+                    app: app.clone(),
+                    last_w,
+                    this_w,
+                    change_pct,
+                })
+            })
+            .collect();
+        out.sort_by(|a, b| b.change_pct.total_cmp(&a.change_pct));
+        out
     }
 
     /// Apps with at least one process right now.
     pub fn running(&self) -> Vec<String> {
         self.cgroups.keys().cloned().collect()
     }
+}
+
+/// Apps with a process in this reading (seen in cgroups) or CPU time.
+fn cgroups_running(
+    cgroups: &BTreeMap<String, Vec<String>>,
+    per_app: &BTreeMap<String, u64>,
+) -> Vec<String> {
+    let mut v: Vec<String> = cgroups.keys().cloned().collect();
+    for (app, t) in per_app {
+        if *t > 0 && !v.contains(app) {
+            v.push(app.clone());
+        }
+    }
+    v
 }
 
 /// "YYYY-MM-DD" in UTC, without a date library.
@@ -386,5 +490,39 @@ mod tests {
         }
         assert_eq!(m.days.len(), KEEP_DAYS);
         assert_eq!(m.totals(7, 11.0 * 86400.0 + 10.0)[0].1.cpu_s, 7.0);
+    }
+
+    #[test]
+    fn an_app_costing_more_than_last_month_is_a_trend() {
+        let mut m = Meter::new();
+        // A month of 30 days, then the next. Each "day": 3 hours on battery
+        // at 10 W, with the app taking all the spare CPU; the idle level is
+        // 5 W (seen first), so the app is given 5 W, then 8 W next month.
+        let run = |m: &mut Meter, start: f64, watts: f64, ticks: &mut u64| {
+            m.add(&[p(1, "firefox", *ticks)], start, Some(5.0), 1);
+            for i in 1..=36 {
+                *ticks += 30_000;
+                m.add(
+                    &[p(1, "firefox", *ticks)],
+                    start + i as f64 * 300.0,
+                    Some(watts),
+                    1,
+                );
+            }
+        };
+        let mut ticks = 0;
+        let oct = 1_759_276_800.0; // 2025-10-01
+        let nov = 1_761_955_200.0; // 2025-11-01
+        run(&mut m, oct, 10.0, &mut ticks);
+        assert!(m.trends(oct + 3.0 * 3600.0).is_empty(), "no earlier month");
+        run(&mut m, nov, 13.0, &mut ticks);
+        let t = m.trends(nov + 3.0 * 3600.0);
+        assert_eq!(t.len(), 1, "{t:?}");
+        assert_eq!(t[0].app, "firefox");
+        assert!((t[0].last_w - 5.0).abs() < 0.2, "{t:?}");
+        assert!((t[0].this_w - 8.0).abs() < 0.2, "{t:?}");
+        assert!(t[0].change_pct > 50.0);
+        m.forget();
+        assert!(m.trends(nov + 3.0 * 3600.0).is_empty());
     }
 }

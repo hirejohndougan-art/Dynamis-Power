@@ -6,6 +6,17 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- From the Power Daemon design:
+  - **Temperature line** on the Home chart (dashed, own scale).
+  - **Heating up fast:** on battery, auto mode steps down a mode when the temperature climbs quickly, before the firmware throttles. Only modes, never fans or trip points.
+  - **Runs hotter than it used to:** the temperature at light use is kept month by month (`heat-history.json`); Home says so when it has risen 5 °C or more (`hotter` in `Status`).
+  - **Modes by time of day:** Modes → "By time of day" (`time_rules` in the auto preferences).
+  - **Offers from your own choices:** the same mode picked by hand three times with the same app, or around the same hour on three days, is offered as a rule on Home. Nothing changes without a yes; a no is remembered (`suggestion` in `Status`, `AnswerSuggestion`, `choices.json`).
+  - **While asleep** on Battery: battery used per hour of each sleep and what woke the laptop (lid, a USB device, the network…), from the kernel's wake-up counts (`Sleeps`, `sleeps.json`).
+  - **App power trend:** Apps says when an app uses a quarter more (or less) power than last month while running on battery. Per-app totals now also keep three months; gaps of more than 15 minutes between readings are no longer counted.
+  - **KDE brightness:** the session agent passes the brightness set for a mode on to Plasma, so its slider matches and it does not put the old value back (to confirm on hardware).
+  - **The app refreshes at once** when the service signals a change, instead of at its next look.
+
 - Hard disk power level (TLP list): `storage.disk_apm` sets a spinning disk's APM level (128, 192, 254 or off) with ATA commands as `hdparm -B` does; experimental, so it needs a yes, and never below 128. Spin-down time is not offered because it cannot be read back for Restore. TLP's `DISK_APM_LEVEL` maps to it.
 
 - Docking (TLP list): radios can be switched off while the laptop is in its dock and back on when it leaves (Devices → Radios). TLP's `DEVICES_TO_DISABLE_*` lines point there when imported.

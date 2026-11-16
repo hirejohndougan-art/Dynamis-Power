@@ -222,3 +222,13 @@ fieldset.choice { border: 0; padding: 0; margin-inline: 0; min-width: 0; }
 .use-desc { display: block; }
 .use-w { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .bar-tall { height: 10px; }
+
+/* Second line on the power chart (temperature), on its own scale */
+.chart { position: relative; }
+.chart-line-2 { fill: none; stroke: var(--meter-low); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.chart-y2 { position: absolute; right: -4px; top: 0; bottom: 22px; width: 0; }
+.chart-y2 span { position: absolute; right: 0; transform: translate(100%, -50%); font-size: 11px; color: var(--meter-low); white-space: nowrap; padding-left: 4px; }
+.chart-legend { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.chart-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--accent-strong); }
+.chart-key-2 { border-top: 2px dashed var(--meter-low); margin-left: 10px; }
+.plain-list { list-style: none; margin: 0; padding: 0; }

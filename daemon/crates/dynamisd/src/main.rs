@@ -20,6 +20,7 @@ mod core;
 mod crash;
 mod devices;
 mod fullcharge;
+mod habits;
 mod kept;
 mod learn;
 mod learnnow;
@@ -28,6 +29,7 @@ mod predict;
 mod radios;
 mod recal;
 mod relief;
+mod sleeps;
 mod sleeptest;
 
 use std::path::PathBuf;
@@ -319,6 +321,9 @@ fn spawn_resume_watch(conn: zbus::Connection, svc: Service) {
                     continue;
                 };
                 if going {
+                    let mut c = svc.core.lock().unwrap_or_else(|p| p.into_inner());
+                    let root = c.root.clone();
+                    c.sleeps.going(&root, crate::core::unix_now());
                     continue;
                 }
                 eprintln!("dynamisd: woke from sleep; applying settings again");

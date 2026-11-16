@@ -76,7 +76,14 @@ function niceStep(max: number) {
 /** Power use over time, with grid lines: watts up the side (from zero, so
  * the height is honest) and minutes along the bottom. `values` are readings
  * `stepS` seconds apart, oldest first. */
-export function PowerChart(props: { values: number[]; stepS: number; label: string; empty?: string }) {
+export function PowerChart(props: {
+  values: number[];
+  stepS: number;
+  label: string;
+  empty?: string;
+  /** A second line on its own scale (temperature), labelled on the right. */
+  second?: { values: number[]; unit: string; label: string };
+}) {
   const v = props.values;
   const max = Math.max(1, ...v) * 1.1;
   const step = niceStep(max);
@@ -95,6 +102,16 @@ export function PowerChart(props: { values: number[]; stepS: number; label: stri
   const ticks: number[] = [];
   for (let m = every; m < spanMin - every * 0.3; m += every) ticks.push(m);
   const unit = step < 1 ? 1 : 0;
+  // The second line: its own range, rounded out to 5 units with room.
+  const sv = props.second?.values.slice(-v.length) ?? [];
+  const sOk = sv.filter((c) => !Number.isNaN(c));
+  const sLo = sOk.length ? Math.floor((Math.min(...sOk) - 5) / 5) * 5 : 0;
+  const sHi = sOk.length ? Math.ceil((Math.max(...sOk) + 5) / 5) * 5 : 1;
+  const sy = (c: number) => H - ((c - sLo) / (sHi - sLo)) * H;
+  const spts = sv
+    .map((c, i) => (Number.isNaN(c) ? null : `${x(i + (v.length - sv.length)).toFixed(1)},${sy(c).toFixed(1)}`))
+    .filter((p): p is string => p !== null)
+    .join(" ");
   return (
     <div className="chart">
       <div className="chart-y" aria-hidden="true">
@@ -125,9 +142,21 @@ export function PowerChart(props: { values: number[]; stepS: number; label: stri
               <polyline className="chart-line" points={pts} vectorEffect="non-scaling-stroke" />
             </>
           )}
+          {v.length > 1 && sOk.length > 1 && <polyline className="chart-line-2" points={spts} vectorEffect="non-scaling-stroke" />}
         </svg>
         {v.length < 2 && props.empty && <div className="chart-empty">{props.empty}</div>}
       </div>
+      {v.length > 1 && sOk.length > 1 && props.second && (
+        <div className="chart-legend small muted" aria-hidden="true">
+          <span className="chart-key chart-key-1" /> {t("chart_power")} <span className="chart-key chart-key-2" /> {props.second.label}
+        </div>
+      )}
+      {v.length > 1 && sOk.length > 1 && props.second && (
+        <div className="chart-y2" aria-hidden="true">
+          <span style={{ top: "0%" }}>{`${sHi}${props.second.unit}`}</span>
+          <span style={{ top: "100%" }}>{`${sLo}${props.second.unit}`}</span>
+        </div>
+      )}
       <div className="chart-x" aria-hidden="true">
         {v.length > 1 && <span style={{ left: "0%" }}>{t("chart_ago", { m: Math.max(1, Math.round(spanMin)) })}</span>}
         {ticks

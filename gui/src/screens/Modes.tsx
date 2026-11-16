@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { backend, type AutoPrefs, type BrightnessPrefs, type Profile, type Status } from "../backend";
+import { backend, type AutoPrefs, type BrightnessPrefs, type Profile, type Status, type TimeRule } from "../backend";
 import { Choice, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
-import { profileName, t } from "../i18n";
+import { hourName, profileName, t } from "../i18n";
 import { brightnessMinutes } from "../power";
 
 type Levels = BrightnessPrefs["levels"];
@@ -98,6 +98,65 @@ function ModeBrightness(props: { profile: Profile; status: Status; bright: Retur
       )}
       <p className="muted small" aria-live="polite">{estimate}</p>
     </div>
+  );
+}
+
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+/** Modes for parts of the day; saved with the other automatic choices. */
+function TimeRules(props: { rules: TimeRule[]; profiles: Profile[]; onChange: (r: TimeRule[]) => void }) {
+  const [from, setFrom] = useState(21);
+  const [to, setTo] = useState(23);
+  const [mode, setMode] = useState<Profile>("power-saver");
+  const hourSelect = (label: string, value: number, onChange: (h: number) => void) => (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+        {HOURS.map((h) => (
+          <option key={h} value={h}>{hourName(h)}</option>
+        ))}
+      </select>
+    </label>
+  );
+  return (
+    <fieldset className="field">
+      <legend className="field-label">{t("time_rules_heading")}</legend>
+      <p className="muted small">{t("time_rules_desc")}</p>
+      {props.rules.length === 0 ? (
+        <p className="muted small">{t("time_rules_none")}</p>
+      ) : (
+        <ul className="stack plain-list">
+          {props.rules.map((r, i) => (
+            <li key={`${r.from_hour}-${r.to_hour}-${r.profile}`} className="row spread">
+              <span>{t("time_rule", { from: hourName(r.from_hour), to: hourName(r.to_hour), mode: profileName(r.profile) })}</span>
+              <button type="button" className="btn btn-small" onClick={() => props.onChange(props.rules.filter((_, j) => j !== i))}>
+                {t("time_rule_remove")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        {hourSelect(t("time_rule_from"), from, setFrom)}
+        {hourSelect(t("time_rule_to"), to, setTo)}
+        <label className="field">
+          <span className="field-label">{t("time_rule_mode")}</span>
+          <select value={mode} onChange={(e) => setMode(e.target.value as Profile)}>
+            {props.profiles.map((p) => (
+              <option key={p} value={p}>{profileName(p)}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn"
+          disabled={from === to}
+          onClick={() => props.onChange([...props.rules, { from_hour: from, to_hour: to, profile: mode }])}
+        >
+          {t("time_rule_add")}
+        </button>
+      </div>
+    </fieldset>
   );
 }
 
@@ -224,6 +283,7 @@ export function Modes(props: { status: Status; refresh: () => void }) {
               options={[["last", t("modes_startup_last")] as ["last", string], ...s.profiles.map((p): [Profile, string] => [p, profileName(p)])]}
               onChange={(v) => set("startup_mode", v === "last" ? null : (v as Profile))}
             />
+            <TimeRules rules={prefs.time_rules ?? []} profiles={s.profiles} onChange={(r) => set("time_rules", r)} />
             <div>
               <button type="button" className="btn btn-primary" onClick={() => run(() => backend.setAutoPrefs(prefs).then(() => t("modes_saved")))}>
                 {t("modes_save")}

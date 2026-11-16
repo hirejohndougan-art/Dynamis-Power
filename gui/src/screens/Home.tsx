@@ -2,7 +2,7 @@ import { useState } from "react";
 import { backend, type FeelsSlowResult, type Profile, type Status } from "../backend";
 import { Dialog, PowerChart, ProgressBar, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
-import { clock, duration, formatTime, profileName, t, tn } from "../i18n";
+import { clock, duration, formatTime, hourName, profileName, t, tn } from "../i18n";
 import { describe } from "../activity";
 
 function Estimate({ s }: { s: Status }) {
@@ -102,7 +102,7 @@ function UncleanNotice({ s }: { s: Status }) {
 
 /** Power use now, with a chart of the last half hour (readings the app has
  * seen since it was opened, every 5 seconds). */
-function PowerCard(props: { s: Status; watts: number[] }) {
+function PowerCard(props: { s: Status; watts: number[]; temps?: number[] }) {
   const { s, watts } = props;
   const now = s.power.on_ac ? null : s.power.watts;
   const avg = watts.length ? watts.reduce((a, b) => a + b, 0) / watts.length : null;
@@ -120,6 +120,11 @@ function PowerCard(props: { s: Status; watts: number[] }) {
       <PowerChart
         values={s.power.on_ac ? [] : watts}
         stepS={5}
+        second={
+          !s.power.on_ac && props.temps && props.temps.some((c) => !Number.isNaN(c))
+            ? { values: props.temps, unit: "°C", label: t("draw_temp_line") }
+            : undefined
+        }
         label={
           watts.length > 1
             ? t("draw_chart_label", { m: minutes, min: Math.min(...watts).toFixed(1), max: Math.max(...watts).toFixed(1), now: (now ?? watts[watts.length - 1]).toFixed(1) })
@@ -131,7 +136,7 @@ function PowerCard(props: { s: Status; watts: number[] }) {
   );
 }
 
-export function Home(props: { status: Status; watts: number[]; refresh: () => void; go: (screen: string) => void }) {
+export function Home(props: { status: Status; watts: number[]; temps?: number[]; refresh: () => void; go: (screen: string) => void }) {
   const s = props.status;
   const journal = useLoad(() => backend.journal(30), [s.profile, s.learning.tests]);
   const { run, toast } = useAction(() => {
@@ -191,6 +196,12 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
           </button>
         </div>
       )}
+      <SuggestionNotice s={s} run={run} />
+      {s.hotter && (
+        <p className="notice notice-info" role="status">
+          {t("hotter", { by: Math.round(s.hotter.by_c), since: monthName(s.hotter.since) })}
+        </p>
+      )}
       {s.pending?.trial && <div className="notice notice-info">{t("trial_running", { label: s.pending.label })}</div>}
       {(s.kept?.held_back ?? []).length > 0 && (
         <div className="notice">
@@ -203,7 +214,7 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
         </div>
       )}
 
-      <PowerCard s={s} watts={props.watts} />
+      <PowerCard s={s} watts={props.watts} temps={props.temps} />
 
       <section className="card" aria-label={t("battery_title")}>
         <Estimate s={s} />
@@ -391,6 +402,41 @@ function FeelsSlow(props: { status: Status; run: (a: () => Promise<string | void
       )}
     </>
   );
+}
+
+/** A rule offered from the modes picked by hand. Nothing changes before a yes. */
+function SuggestionNotice(props: { s: Status; run: (a: () => Promise<string | void>) => void }) {
+  const g = props.s.suggestion;
+  if (!g || props.s.safe_mode) return null;
+  const mode = profileName(g.profile);
+  const text =
+    g.kind === "app"
+      ? t("suggest_app", { mode, count: g.count, app: g.app })
+      : t("suggest_time", { mode, from: hourName(g.from_hour), to: hourName(g.to_hour), days: g.days });
+  return (
+    <div className="notice notice-info" role="status">
+      <span>{text}</span>
+      <div className="row">
+        <button
+          type="button"
+          className="btn btn-small btn-primary"
+          onClick={() => props.run(async () => { await backend.answerSuggestion(g.id, true); return t("suggest_done"); })}
+        >
+          {t("suggest_yes")}
+        </button>
+        <button type="button" className="btn btn-small" onClick={() => props.run(() => backend.answerSuggestion(g.id, false))}>
+          {t("suggest_no")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** "2026-03" as "March 2026". */
+function monthName(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  if (!y || !m) return key;
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
 function slowSummary(r: FeelsSlowResult): string {

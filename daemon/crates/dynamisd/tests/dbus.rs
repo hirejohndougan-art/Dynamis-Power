@@ -2232,3 +2232,81 @@ fn it_feels_slow_undoes_what_costs_speed_today() {
         assert!(!env.dir.join("state/relief.json").exists());
     });
 }
+
+#[test]
+fn a_habit_becomes_a_rule_only_after_a_yes() {
+    let Some(env) = Env::new("habits") else {
+        return;
+    };
+    // Longer battery picked by hand around 3:00 on three days.
+    let state = env.dir.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    let choices: Vec<_> = (1..=3)
+        .map(|d| {
+            serde_json::json!({"time": d as f64 * 86400.0, "profile": "power-saver",
+                "app": null, "hour": 3, "day": d})
+        })
+        .collect();
+    std::fs::write(
+        state.join("choices.json"),
+        serde_json::json!({"v": 1, "choices": choices}).to_string(),
+    )
+    .unwrap();
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let s = c.status().await.unwrap();
+        let sug = &s["suggestion"];
+        assert_eq!(sug["kind"], "time", "{s}");
+        assert_eq!(sug["from_hour"], 3);
+        assert_eq!(sug["profile"], "power-saver");
+        assert_eq!(s["auto"]["on"], false, "nothing applied before a yes");
+        assert!(c.answer_suggestion("time:9:balanced", true).await.is_err());
+        c.answer_suggestion(sug["id"].as_str().unwrap(), true)
+            .await
+            .unwrap();
+        let s = c.status().await.unwrap();
+        assert!(s["suggestion"].is_null(), "{s}");
+        assert_eq!(s["auto"]["on"], true);
+        let p = c.auto_prefs().await.unwrap();
+        assert_eq!(p["time_rules"][0]["from_hour"], 3, "{p}");
+        assert_eq!(p["time_rules"][0]["profile"], "power-saver");
+    });
+}
+
+#[test]
+fn the_app_hears_about_changes_at_once() {
+    let Some(env) = Env::new("watch") else {
+        return;
+    };
+    let _d = Guard(env.daemon_with("state", &[]));
+    let heard = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+    });
+    let (address, h) = (env.address.clone(), heard.clone());
+    std::thread::spawn(move || {
+        zbus::block_on(async move {
+            let c = dynamis_client::Client::connect_to(&address).await.unwrap();
+            let _ = c
+                .watch(|| {
+                    h.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                })
+                .await;
+        })
+    });
+    // Give the watcher time to subscribe, then change something.
+    std::thread::sleep(Duration::from_millis(500));
+    zbus::block_on(async {
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        c.set_profile("power-saver").await.unwrap();
+    });
+    wait_for(|| heard.load(std::sync::atomic::Ordering::SeqCst) > 0);
+}

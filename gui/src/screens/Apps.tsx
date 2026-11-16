@@ -86,6 +86,17 @@ export function Apps(props: { status: Status; refresh: () => void }) {
                 })}
               </ul>
             )}
+            {a.policy.track &&
+              (a.trends ?? []).map((tr) => (
+                <p key={tr.app} className="notice notice-info small">
+                  {t(tr.change_pct > 0 ? "apps_trend_more" : "apps_trend_less", {
+                    app: appName(tr.app),
+                    pct: Math.round(Math.abs(tr.change_pct)),
+                    from: tr.last_w.toFixed(1),
+                    to: tr.this_w.toFixed(1),
+                  })}
+                </p>
+              ))}
           </section>
 
           <section className="card" aria-labelledby="sharing-heading">

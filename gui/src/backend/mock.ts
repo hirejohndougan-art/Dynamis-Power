@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession, Suggestion, SleepRecord } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -53,6 +53,7 @@ export function mockBackend(): Backend {
       { app: "thunderbird", cpu_s: 410, wh: 0.9 },
       { app: "System", cpu_s: 600, wh: 1.2 },
     ],
+    trends: [{ app: "firefox", last_w: 1.4, this_w: 2.0, change_pct: 42.9 }],
     week: [
       { app: "firefox", cpu_s: 12800, wh: 27.5 },
       { app: "System", cpu_s: 4100, wh: 8.0 },
@@ -150,6 +151,7 @@ export function mockBackend(): Backend {
       ],
       today: appPolicy.track ? [...usage.today].sort((a, b) => b.wh - a.wh) : [],
       week: appPolicy.track ? usage.week : [],
+      trends: appPolicy.track ? usage.trends : [],
     };
   };
 
@@ -233,6 +235,19 @@ export function mockBackend(): Backend {
     }, SLEEP_MS);
   };
   let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [], off_when_docked: [] };
+  // A habit noticed from modes picked by hand.
+  let suggestion: Suggestion | null = { kind: "time", id: "time:21:power-saver", from_hour: 21, to_hour: 23, profile: "power-saver", days: 3 };
+  // The last nights asleep.
+  const night = (daysAgo: number, from: number, hours: number, before: number, after: number, woke: SleepRecord["woke_by"]): SleepRecord => {
+    const d = new Date(); d.setHours(from, 0, 0, 0);
+    const start = d.getTime() / 1000 - daysAgo * 86400;
+    return { from: start, to: start + hours * 3600, woke_by: woke, battery_before: before, battery_after: after, on_ac: false, pct_per_hour: Math.round(((before - after) / hours) * 10) / 10 };
+  };
+  const sleepLog: SleepRecord[] = [
+    night(0, 0, 7.5, 86, 82, [{ name: "PNP0C0D:00", kind: "lid" }]),
+    night(1, 23, 8, 91, 69, [{ name: "0000:00:14.0", kind: "usb" }]),
+    night(2, 1, 6, 74, 71, [{ name: "PNP0C0D:00", kind: "lid" }]),
+  ];
   // "It feels slow".
   let relief: number | null = null;
   let learningStrict = false;
@@ -352,6 +367,8 @@ export function mockBackend(): Backend {
       },
       safe_mode: safeMode,
       relief: relief && relief > now() ? relief : null,
+      suggestion,
+      hotter: null,
       learning_strict: learningStrict,
       unclean,
       full_charge: { supported: true, active: fullCharge !== null, restore_to: fullCharge, ended: fullChargeEnded },
@@ -542,6 +559,17 @@ export function mockBackend(): Backend {
       return { mode_was: was, mode_now: profile === "power-saver" ? "balanced" : profile, learned: kept().filter((r) => r.setting === "cpu.max_perf_pct").map((r) => r.setting), apps_slowed: appPolicy.slow_background, until: relief, lasting };
     },
     endRelief: async () => { relief = null; },
+    answerSuggestion: async (id, yes) => {
+      refuse();
+      if (!suggestion || suggestion.id !== id) throw new Error("that suggestion is no longer open");
+      if (yes) {
+        if (suggestion.kind === "time") prefs = { ...prefs, time_rules: [...(prefs.time_rules ?? []), { from_hour: suggestion.from_hour, to_hour: suggestion.to_hour, profile: suggestion.profile }] };
+        else prefs = { ...prefs, app_rules: [...(prefs.app_rules ?? []), { app: suggestion.app, profile: suggestion.profile }] };
+        auto = true;
+      }
+      suggestion = null;
+    },
+    sleeps: async () => delay({ sleeps: sleepLog }),
     recalibration: async () => delay({ ...recal, battery_pct: recal.phase === "running_down" ? 41 : recal.phase === "charging" ? 63 : 79 }),
     startRecalibration: async () => {
       refuse();
@@ -589,7 +617,7 @@ export function mockBackend(): Backend {
       const pName = { "power-saver": "Longer battery", balanced: "Balanced", performance: "Faster" }[profile];
       if (changed && now != null) setBrightness(now, `you chose it for ${pName}`);
     },
-    forgetAppUsage: async () => { usage = { today: [], week: [] }; },
+    forgetAppUsage: async () => { usage = { today: [], week: [], trends: [] }; },
     predict: async () => delay(predictInfo()),
     setTarget: async (until) => {
       refuse();

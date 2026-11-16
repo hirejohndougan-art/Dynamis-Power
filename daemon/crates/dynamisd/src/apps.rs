@@ -348,6 +348,13 @@ impl AppsState {
             "now": now,
             "today": totals(1),
             "week": totals(7),
+            // Apps costing more (or less) than last month on battery.
+            "trends": self
+                .meter
+                .trends(now_unix)
+                .into_iter()
+                .filter(|t| !dynamis_core::apps::is_own(&t.app))
+                .collect::<Vec<_>>(),
         })
     }
 }

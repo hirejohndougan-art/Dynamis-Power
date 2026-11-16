@@ -98,6 +98,10 @@ impl Core {
             "relief": self.relief.until.filter(|u| *u > crate::core::unix_now()),
             "learning_strict": self.learn.strict,
             "missing_parts": self.missing_parts,
+            // Notably hotter at light use than in an earlier month.
+            "hotter": self.heat.hotter(),
+            // A rule offered from the person's own choices.
+            "suggestion": self.habits.json(&self.auto.rules.prefs),
             "missing_modes": profiles::missing(&self.root).into_iter().map(|(p, why)| json!({"profile": p.as_str(), "why": why})).collect::<Vec<_>>(),
             "pending": engine.as_ref().and_then(|e| e.pending()).map(|p| json!({
                 "id": p.id, "label": label(&p.id), "to": p.to, "trial": p.trial_deadline.is_some(),

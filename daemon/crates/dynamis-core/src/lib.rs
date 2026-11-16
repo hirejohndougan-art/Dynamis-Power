@@ -23,6 +23,7 @@ pub mod engine;
 pub mod fs;
 pub mod gauge;
 pub mod health;
+pub mod heat;
 pub mod hibernate;
 pub mod inventory;
 pub mod logfmt;
@@ -38,6 +39,7 @@ pub mod settings;
 pub mod tlpimport;
 pub mod tools;
 pub mod tune;
+pub mod wakeups;
 pub mod wifi;
 mod writer;
 
