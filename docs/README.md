@@ -8,6 +8,7 @@ Start here. Each document has one job, so you can read only what you need.
 | --- | --- |
 | [../README.md](../README.md) | What Dynamis Power is and does |
 | [SAFETY.md](SAFETY.md) | How the app keeps your laptop safe |
+| [EVERYDAY-ISSUES.md](EVERYDAY-ISSUES.md) | Problems people may hit, and the plan for each |
 | [../PRIVACY.md](../PRIVACY.md) | What is shared, and only if you choose to |
 
 ## For developers

@@ -41,6 +41,42 @@ Found on the VivoBook E410MA: Longer battery and Faster are hidden, so the mode 
 - [x] Engine tests on a copy of the synthetic laptop without a speed preference ([decision 0016](docs/decisions/0016-mode-levers-without-epp.md))
 - [ ] Try it on the VivoBook
 
+## To do: everyday problems
+
+The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES.md) (section numbers below).
+
+- [ ] "Something stopped working": undo the last hour's changes, ask which device misbehaved, block the matching settings (§1)
+- [ ] Watch the kernel log on every reading; undo and block a change only when trouble follows it within ten minutes (§1)
+- [ ] Learning says exactly why it is waiting, with the main reason over the last day and what to do (§2)
+- [ ] Measure how often the battery updates its power reading; make test blocks at least four update periods long (§2)
+- [ ] Compute power from the change in energy where a battery reports no power; say so where it reports neither (§2)
+- [ ] "It feels slow": show what is in effect, undo speed-related changes for the day, optionally make learning stricter and auto mode prefer Balanced (§3)
+- [ ] Panel tooltip shows auto mode's last reason; Activity groups auto switches per hour (§3)
+- [ ] A learned change undone by hand twice is blocked on this laptop (§3)
+- [ ] Notice settings changed behind Dynamis Power's back, name the likely tool, and stop managing a contested setting after two outside changes in a day (§4)
+- [ ] Detect GNOME without AppIndicator and explain how to show the panel icon (§5)
+- [ ] Record kernel and firmware versions with each result; re-check learned settings first after an update; drop settings whose control vanished (§6)
+- [ ] Quirk list entries with kernel and firmware version ranges (§6)
+- [ ] Keep settings chosen by hand (charge limit and start, Advanced "Keep after restart"): re-apply at startup and after sleep, never in safe mode or right after an unclean shutdown (§7)
+- [ ] Notice when firmware ignores the charge limit, and say so (§7)
+- [ ] After an unclean shutdown, say what was happening (sleep, wake, driver error, a recent change); if freezes continue in safe mode, say Dynamis Power is unlikely to be the cause (§8)
+- [ ] Fedora RPM and Arch PKGBUILD, built by CI (§9)
+- [ ] Clear message when systemd or polkit is missing (§9)
+- [ ] "Report a problem": one file with everything useful, privacy filter on, and a pre-filled issue page (§10)
+
+**Follow-up (needs research, real hardware or a decision first):**
+
+- [ ] Learning on busy, slow laptops: judge "quiet" by stable power rather than processor use? Threshold on 2-core chips
+- [ ] Battery power update rates and noise across makers
+- [ ] Testing while plugged in by running from the battery: which laptops support it safely (decision record)
+- [ ] Each vendor tool (asusctl, supergfxctl, System76 Power, Slimbook, TUXEDO, laptop-mode-tools, `powertop --auto-tune`): conflict or coexist; confirm thermald is compatible
+- [ ] GNOME: extension on extensions.gnome.org or in the package only; any way to know the window in front without one
+- [ ] Which laptops reset or ignore the charge limit
+- [ ] Should a freeze long after the last change count towards safe mode?
+- [ ] Does the stall measure catch what people feel as "slow"?
+- [ ] Desktops, two-GPU laptops, image-based systems, Flatpak: one decision record each
+- [ ] Wi-Fi power saving without giving the service network access (separate helper or narrow exception)
+
 ## To do: fully replace TLP
 
 Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed with no loss. Each item becomes a setting plugin (probe, read, apply, revert, risk tier; see docs/SETTINGS.md) that profiles can set and learning can test, or a service behaviour. Items marked *(in SETTINGS)* already have a reserved ID there.
