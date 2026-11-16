@@ -137,6 +137,22 @@ impl Client {
             .map_err(explain)
     }
 
+    /// What importing TLP's configuration would change, line by line.
+    pub async fn tlp_import(&self) -> Result<Value> {
+        self.json("TlpImport", &()).await
+    }
+
+    /// Apply the preview's lines at these positions.
+    pub async fn apply_tlp_import(&self, lines: &[u32]) -> Result<Value> {
+        let text: String = self
+            .own()
+            .await?
+            .call("ApplyTlpImport", &(lines.to_vec(),))
+            .await
+            .map_err(explain)?;
+        serde_json::from_str(&text).map_err(|e| e.to_string())
+    }
+
     /// "Learn now": phase, progress and results.
     pub async fn learn_session(&self) -> Result<Value> {
         self.json("LearnSession", &()).await

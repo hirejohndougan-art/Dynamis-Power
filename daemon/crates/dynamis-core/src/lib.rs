@@ -31,6 +31,7 @@ pub mod report;
 pub mod selfstat;
 pub mod sensors;
 pub mod settings;
+pub mod tlpimport;
 pub mod tools;
 pub mod tune;
 mod writer;

@@ -191,6 +191,16 @@ async fn set_device_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), S
 }
 
 #[tauri::command]
+async fn tlp_import(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.tlp_import().await
+}
+
+#[tauri::command]
+async fn apply_tlp_import(conn: State<'_, Conn>, lines: Vec<u32>) -> Result<Value, String> {
+    client(&conn).await?.apply_tlp_import(&lines).await
+}
+
+#[tauri::command]
 async fn learn_session(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.learn_session().await
 }
@@ -313,6 +323,8 @@ fn main() {
             set_device_policy,
             brightness,
             set_brightness_prefs,
+            tlp_import,
+            apply_tlp_import,
             learn_session,
             start_learn_session,
             stop_learn_session,

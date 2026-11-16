@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Import from TLP (Advanced → System; decision 0017): reads `/etc/tlp.d/*.conf` and `/etc/tlp.conf` (text only), shows each value as Dynamis Power would use it with a checkbox, and the lines it does not import with why. Same value plugged in and on battery: a setting kept after restarts. Different: the battery value in Longer battery and the plugged-in value in Faster for settings a mode sets, else the battery value. Risky settings, values this laptop does not offer, and settings blocked here are not imported. `TlpImport`, `ApplyTlpImport`; journaled as `import`.
+
 - Computers without a battery (decision 0023): the Battery screen leaves the menu, Modes asks only for the mode for ordinary use, Learning says it cannot measure there yet and hides Learn now and the sleep test, the welcome says what works, and letting idle devices sleep (when switched on) applies on mains there, since such a computer is never on battery.
 
 - Other power tools (decision 0022): while Asus Linux (asusd) runs, the firmware power mode, charge limit and charge start are left to it; while supergfxctl runs, the second graphics chip is. The engine refuses them with "left to …" (not counted as a failure when a mode is applied), Advanced shows "Left to … which is running", and the Battery screen says who sets the charge limit. TUXEDO Control Center and Slimbook Battery join the tools Dynamis Power offers to switch off.

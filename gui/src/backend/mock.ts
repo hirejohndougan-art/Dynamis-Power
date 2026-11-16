@@ -515,6 +515,25 @@ export function mockBackend(): Backend {
       }
       devicePolicy = p;
     },
+    tlpImport: async () =>
+      delay({
+        found: true,
+        lines: [
+          { tlp: 'NMI_WATCHDOG="0"', setting: "kernel.nmi_watchdog", label: "Watchdog wakeups", value: "off", target: "setting", skipped: null, note: null },
+          { tlp: 'CPU_ENERGY_PERF_POLICY_ON_BAT="power"', setting: "cpu.epp", label: "CPU speed preference", value: "power", target: "power-saver", skipped: null, note: null },
+          { tlp: 'CPU_ENERGY_PERF_POLICY_ON_AC="balance_performance"', setting: "cpu.epp", label: "CPU speed preference", value: "balance_performance", target: "performance", skipped: null, note: null },
+          { tlp: 'SOUND_POWER_SAVE_ON_AC="0"  SOUND_POWER_SAVE_ON_BAT="1"', setting: "audio.power_save", label: "Sound card power saving", value: "1", target: "setting", skipped: null, note: "Dynamis Power uses one value for this setting; the battery value is used" },
+          { tlp: 'MEM_SLEEP_ON_BAT="deep"', setting: "system.mem_sleep", label: "Sleep type", value: null, target: null, skipped: "risky: set it in Advanced, where it asks for a yes", note: null },
+          { tlp: 'USB_AUTOSUSPEND="1"', setting: null, label: null, value: null, target: null, skipped: "use Devices → Let idle USB devices sleep", note: null },
+          { tlp: 'WIFI_PWR_ON_BAT="on"', setting: null, label: null, value: null, target: null, skipped: "Dynamis Power has no setting for this yet", note: null },
+        ],
+      }),
+    applyTlpImport: async (lines) => {
+      refuse();
+      log({ event: "import", id: "tlp", label: "TLP", reason: `${lines.length} values imported from TLP's configuration` });
+      if (lines.includes(0)) setValue("kernel.nmi_watchdog", "off", "set in the app");
+      return { applied: lines.length, failed: [] };
+    },
     brightness: async () => delay({ supported: true, now_pct: brightnessPct, min_pct: 5, levels: { ...brightLevels } }),
     setBrightnessPrefs: async (b) => {
       refuse();

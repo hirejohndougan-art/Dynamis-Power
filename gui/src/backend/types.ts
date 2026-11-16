@@ -256,6 +256,10 @@ export interface Backend {
   apps(): Promise<AppsInfo>;
   setAppPolicy(p: AppPolicy): Promise<void>;
   forgetAppUsage(): Promise<void>;
+  /** What importing TLP's configuration would change, line by line. */
+  tlpImport(): Promise<TlpImport>;
+  /** Apply the preview's lines at these positions. */
+  applyTlpImport(lines: number[]): Promise<{ applied: number; failed: { tlp: string; error: string }[] }>;
   /** "Learn now": a session that runs every test back to back while the
    * laptop is left alone. */
   learnSession(): Promise<LearnSession>;
@@ -322,6 +326,20 @@ export type Unclean = {
   /** Settings changed shortly before the freezes that led to safe mode. */
   suspects: Labelled[];
 };
+
+export type TlpLine = {
+  /** The TLP line(s) it comes from. */
+  tlp: string;
+  setting: string | null;
+  label: string | null;
+  value: string | null;
+  /** Where it goes: a setting kept after restarts, or one mode's choice. */
+  target: "setting" | "power-saver" | "performance" | null;
+  /** Why it is not imported. */
+  skipped: string | null;
+  note: string | null;
+};
+export type TlpImport = { found: boolean; lines: TlpLine[] };
 
 export type BrightnessPrefs = {
   /** Percent for each mode; a mode left out is left alone. */

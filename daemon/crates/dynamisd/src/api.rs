@@ -355,3 +355,83 @@ impl Core {
         e.set_dry_run(on).map_err(|e| e.to_string())
     }
 }
+
+// --- Importing a TLP configuration (decision 0017) -------------------------
+
+impl Core {
+    fn tlp_plan(&self) -> Option<Vec<dynamis_core::tlpimport::Line>> {
+        use dynamis_core::tlpimport;
+        let conf = tlpimport::read(&self.root)?;
+        let engine = open_engine(&self.root, &self.state_dir).ok();
+        let blocked = engine.as_ref().map(|e| e.blocked()).unwrap_or_default();
+        let refused = |id: &str, v: &str| {
+            engine
+                .as_ref()
+                .and_then(|e| e.quirks().blocking(id, v).map(|q| q.reason.clone()))
+        };
+        Some(tlpimport::plan(&self.root, &conf, &blocked, refused))
+    }
+
+    /// What importing TLP's configuration would change, line by line (for
+    /// the app's preview). `found` is false when there is no TLP
+    /// configuration here.
+    pub fn tlp_import_json(&self) -> Value {
+        match self.tlp_plan() {
+            None => json!({"found": false, "lines": []}),
+            Some(lines) => json!({"found": true, "lines": lines}),
+        }
+    }
+
+    /// Apply the preview's lines at these positions (the ones the person
+    /// left ticked). Settings are kept after restarts; mode values go into
+    /// the person's choices for that mode. Returns how many were applied
+    /// and what failed.
+    pub fn apply_tlp_import(&mut self, pick: &[usize]) -> Result<Value, String> {
+        let lines = self.tlp_plan().ok_or("no TLP configuration was found")?;
+        let mut applied = 0;
+        let mut failed: Vec<Value> = Vec::new();
+        let mut overrides = self.profile_overrides.clone();
+        let mut mode_changes = 0;
+        for &i in pick {
+            let Some(l) = lines.get(i) else { continue };
+            let (Some(id), Some(v), Some(target)) = (l.setting, l.value.as_deref(), l.target)
+            else {
+                continue;
+            };
+            match target.profile() {
+                None => {
+                    let r = self
+                        .set_setting(id, v, false)
+                        .and_then(|_| self.set_kept(id, true));
+                    match r {
+                        Ok(()) => applied += 1,
+                        Err(e) => failed.push(json!({"tlp": l.tlp, "error": e})),
+                    }
+                }
+                Some(p) => {
+                    overrides
+                        .profiles
+                        .entry(p)
+                        .or_default()
+                        .insert(id.to_string(), v.to_string());
+                    mode_changes += 1;
+                }
+            }
+        }
+        if mode_changes > 0 {
+            match self.set_profile_overrides(overrides) {
+                Ok(()) => applied += mode_changes,
+                Err(e) => failed.push(json!({"tlp": "modes", "error": e})),
+            }
+        }
+        // Mark it in the journal so Activity shows where these came from.
+        if let Ok(e) = open_engine(&self.root, &self.state_dir) {
+            let _ = e.note(
+                "import",
+                "tlp",
+                &format!("{applied} values imported from TLP's configuration"),
+            );
+        }
+        Ok(json!({"applied": applied, "failed": failed}))
+    }
+}

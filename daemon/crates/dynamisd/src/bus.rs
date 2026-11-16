@@ -698,6 +698,31 @@ impl DynamisPower {
         Ok(())
     }
 
+    /// What importing TLP's configuration would change, line by line
+    /// (JSON): `{"found": bool, "lines": [...]}`.
+    fn tlp_import(&self) -> String {
+        self.0.lock().tlp_import_json().to_string()
+    }
+
+    /// Apply the preview's lines at these positions. Returns
+    /// `{"applied": n, "failed": [...]}` (JSON).
+    async fn apply_tlp_import(
+        &self,
+        lines: Vec<u32>,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<String> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let pick: Vec<usize> = lines.into_iter().map(|i| i as usize).collect();
+        let r = self
+            .0
+            .lock()
+            .apply_tlp_import(&pick)
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        Ok(r.to_string())
+    }
+
     /// The screen brightness chosen for each mode, whether this screen's
     /// brightness can be set, and its level now (JSON).
     fn brightness(&self) -> String {

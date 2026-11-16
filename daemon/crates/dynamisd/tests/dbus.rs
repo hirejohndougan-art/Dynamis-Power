@@ -2073,3 +2073,99 @@ fn learn_now_runs_every_test_back_to_back() {
     stop.store(true, Ordering::Relaxed);
     plant.join().unwrap();
 }
+
+/// Importing TLP's configuration: a preview line by line, then only the
+/// ticked lines are applied (decision 0017).
+#[test]
+fn a_tlp_configuration_is_imported_after_a_preview() {
+    let Some(env) = Env::new("tlpimport") else {
+        return;
+    };
+    let etc = env.dir.join("root/etc");
+    fs::create_dir_all(etc.join("tlp.d")).unwrap();
+    fs::write(etc.join("tlp.d/10-old.conf"), "NMI_WATCHDOG=1\n").unwrap();
+    fs::write(
+        etc.join("tlp.conf"),
+        "# mine\nTLP_ENABLE=1\nNMI_WATCHDOG=0\n\
+         CPU_ENERGY_PERF_POLICY_ON_AC=balance_performance\n\
+         CPU_ENERGY_PERF_POLICY_ON_BAT=power\n\
+         CPU_BOOST_ON_AC=1\nCPU_BOOST_ON_BAT=0\n\
+         MEM_SLEEP_ON_BAT=deep\nWIFI_PWR_ON_BAT=on\nUSB_AUTOSUSPEND=1\n",
+    )
+    .unwrap();
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let p = c.tlp_import().await.unwrap();
+        assert_eq!(p["found"], true, "{p}");
+        let lines = p["lines"].as_array().unwrap();
+        let find = |pred: &dyn Fn(&serde_json::Value) -> bool| {
+            lines
+                .iter()
+                .position(pred)
+                .unwrap_or_else(|| panic!("missing line in {p}"))
+        };
+        // tlp.conf wins over the drop-in.
+        let nmi = find(&|l| l["setting"] == "kernel.nmi_watchdog");
+        assert_eq!(lines[nmi]["value"], "off");
+        assert_eq!(lines[nmi]["target"], "setting");
+        // Different on mains and battery, and a mode sets it: per mode.
+        let saver = find(&|l| l["setting"] == "cpu.epp" && l["target"] == "power-saver");
+        assert_eq!(lines[saver]["value"], "power");
+        let faster = find(&|l| l["setting"] == "cpu.epp" && l["target"] == "performance");
+        assert_eq!(lines[faster]["value"], "balance_performance");
+        // Different, but no mode sets it here: the battery value, with a note.
+        let turbo = find(&|l| l["setting"] == "cpu.turbo");
+        assert_eq!(lines[turbo]["value"], "off");
+        assert!(lines[turbo]["note"].is_string());
+        // Not imported, each with a reason.
+        let risky = find(&|l| l["setting"] == "system.mem_sleep");
+        assert!(lines[risky]["skipped"].as_str().unwrap().contains("risky"));
+        let wifi = find(&|l| l["tlp"].as_str().unwrap().starts_with("WIFI_PWR_ON_BAT"));
+        assert!(lines[wifi]["skipped"].is_string());
+        let usb = find(&|l| l["tlp"].as_str().unwrap().starts_with("USB_AUTOSUSPEND"));
+        assert!(lines[usb]["skipped"].as_str().unwrap().contains("Devices"));
+
+        // The person unticks turbo and applies the rest.
+        let r = c
+            .apply_tlp_import(&[nmi as u32, saver as u32, faster as u32, risky as u32])
+            .await
+            .unwrap();
+        assert_eq!(r["applied"], 3, "{r}");
+        assert_eq!(
+            fs::read_to_string(env.dir.join("root/proc/sys/kernel/nmi_watchdog"))
+                .unwrap()
+                .trim(),
+            "0"
+        );
+        assert_eq!(
+            fs::read_to_string(
+                env.dir
+                    .join("root/sys/devices/system/cpu/intel_pstate/no_turbo")
+            )
+            .unwrap()
+            .trim(),
+            "0",
+            "unticked lines are left alone"
+        );
+        let profiles: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(env.dir.join("state/profiles.json")).unwrap())
+                .unwrap();
+        assert_eq!(profiles["profiles"]["power-saver"]["cpu.epp"], "power");
+        let s = c.status().await.unwrap();
+        assert!(
+            s["kept"]["settings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|k| k["id"] == "kernel.nmi_watchdog"),
+            "{s}"
+        );
+        let j = fs::read_to_string(env.dir.join("state/journal.jsonl")).unwrap();
+        assert!(j.contains("\"event\":\"import\""));
+    });
+}

@@ -376,4 +376,15 @@ describe("the app with the stand-in backend", () => {
       spy.mockRestore();
     }
   });
+  it("imports a TLP configuration after a preview", async () => {
+    window.location.hash = "#advanced:system";
+    render(<App />);
+    const list = await screen.findByRole("list", { name: "Values to import" });
+    expect(within(list).getAllByRole("checkbox")).toHaveLength(4);
+    expect(screen.getByText(/use Devices → Let idle USB devices sleep/)).toBeTruthy();
+    // Untick the sound card line.
+    await act(async () => fireEvent.click(within(list).getAllByRole("checkbox")[3]));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Import 3 values" })));
+    expect(await screen.findByText(/Imported 3 values/)).toBeTruthy();
+  });
 });

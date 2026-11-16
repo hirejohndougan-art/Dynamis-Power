@@ -1126,6 +1126,12 @@ impl Engine {
         }
     }
 
+    /// A journal line that records something without changing anything
+    /// (such as "values imported from TLP"), for Activity.
+    pub fn note(&self, event: &str, id: &str, reason: &str) -> Result<()> {
+        self.log(event, id, None, None, reason)
+    }
+
     fn log(
         &self,
         event: &str,

@@ -81,7 +81,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 **To build, from those decisions:**
 
 - [x] Learning: quiet means steady power for a minute, with the processor limit scaled by cores (0020)
-- [ ] TLP import: read `tlp.conf` and `tlp.d`, preview line by line, apply after a yes (0017)
+- [x] TLP import: read `tlp.conf` and `tlp.d`, preview line by line, apply after a yes (0017)
 - [ ] `wifi.power_save` through nl80211; unit allows `AF_NETLINK` without `PrivateNetwork`, still no IP sockets; quirk for RTL8821CE and similar (0018)
 - [ ] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)
 - [x] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
@@ -140,7 +140,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] Ignore a charger that reports wrongly (TLP's `TLP_PS_IGNORE`): Advanced → System
 - [ ] A mode to use at boot before auto mode decides (TLP's `TLP_DEFAULT_MODE`; today the last chosen mode is used)
 - [x] A full diagnostic report like `tlp-stat`: `dynamis stat`, `Diagnostics()`, and in the app's Export
-- [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export), as decided in [0017](docs/decisions/0017-importing-a-tlp-configuration.md)
+- [x] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export), as decided in [0017](docs/decisions/0017-importing-a-tlp-configuration.md)
 
 **Done when:** on the test laptops, with TLP removed, `tlp-stat` run once with TLP reinstalled shows nothing TLP would set that Dynamis Power does not, and battery life is at least as long as with a hand-tuned TLP.
 

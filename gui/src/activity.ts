@@ -53,6 +53,8 @@ export function describe(e: JournalEntry): Item | null {
       const dev = e.label || e.id.replace(/^(usb|pci):/, "");
       return item(t(e.to === "auto" ? "ev_dev_sleep" : "ev_dev_awake", { dev }), reason, reason.startsWith("on battery") ? "auto" : "mine");
     }
+    case "import":
+      return item(t("ev_import"), reason, "mine");
     case "brightness":
       return item(t("ev_brightness", { from: e.from ?? "", to: e.to ?? "" }), reason, reason.startsWith("you chose") ? "mine" : "auto");
     case "outside": {

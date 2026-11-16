@@ -216,6 +216,83 @@ function PowerSourceChoice() {
   );
 }
 
+/** Import TLP's configuration (decision 0017): a preview line by line, each
+ * ticked by default; only what stays ticked is applied. */
+function TlpImportBox() {
+  const preview = useLoad(() => backend.tlpImport(), []);
+  const [unticked, setUnticked] = useState<Set<number>>(new Set());
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const p = preview.data;
+  if (!p) return <p className="muted">{preview.error ?? t("loading")}</p>;
+  if (!p.found) return <p className="muted">{t("tlpi_none")}</p>;
+  const lines = p.lines.map((l, i) => ({ l, i }));
+  const can = lines.filter(({ l }) => l.target && l.value != null);
+  const skipped = lines.filter(({ l }) => !l.target);
+  const where = (target: string | null) =>
+    target === "power-saver" ? t("tlpi_to_mode", { mode: profileName("power-saver") }) : target === "performance" ? t("tlpi_to_mode", { mode: profileName("performance") }) : t("tlpi_to_setting");
+  const toggle = (i: number) =>
+    setUnticked((u) => {
+      const n = new Set(u);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  const apply = async () => {
+    setError(null);
+    try {
+      const r = await backend.applyTlpImport(can.filter(({ i }) => !unticked.has(i)).map(({ i }) => i));
+      setResult(r.failed.length ? t("tlpi_done_some", { n: r.applied, failed: r.failed.map((f) => `${f.tlp}: ${f.error}`).join("; ") }) : t("tlpi_done", { n: r.applied }));
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e));
+    }
+  };
+  return (
+    <div className="stack">
+      <p className="muted">{t("tlpi_intro")}</p>
+      {can.length > 0 && (
+        <ul className="entries" aria-label={t("tlpi_list")}>
+          {can.map(({ l, i }) => (
+            <li key={i} className="entry">
+              <label className="check" style={{ alignItems: "flex-start" }}>
+                <input type="checkbox" checked={!unticked.has(i)} onChange={() => toggle(i)} />
+                <span className="stack" style={{ gap: 2 }}>
+                  <span>
+                    {l.label}: {valueName(l.setting ?? "", l.value)} <span className="muted small">· {where(l.target)}</span>
+                  </span>
+                  <code className="small muted">{l.tlp}</code>
+                  {l.note && <span className="small muted">{l.note}</span>}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      {skipped.length > 0 && (
+        <>
+          <p className="small"><strong>{t("tlpi_skipped")}</strong></p>
+          <ul className="small muted" aria-label={t("tlpi_skipped")}>
+            {skipped.map(({ l, i }) => (
+              <li key={i}>
+                <code>{l.tlp}</code>: {l.skipped}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {can.length > 0 && !result && (
+        <div>
+          <button type="button" className="btn btn-primary" disabled={can.every(({ i }) => unticked.has(i))} onClick={apply}>
+            {t("tlpi_apply", { n: can.filter(({ i }) => !unticked.has(i)).length })}
+          </button>
+        </div>
+      )}
+      {result && <p className="notice notice-info" role="status">{result}</p>}
+      {error && <p className="notice" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 export function SystemTab() {
   const info = useLoad(() => backend.system(), []);
   const conflicts = useLoad(() => backend.conflicts(), []);
@@ -243,6 +320,8 @@ export function SystemTab() {
       <p className="muted small">{t("system_budget")}</p>
       <h3>{t("ps_heading")}</h3>
       <PowerSourceChoice />
+      <h3>{t("tlpi_heading")}</h3>
+      <TlpImportBox />
       <h3>{t("system_conflicts")}</h3>
       <Conflicts list={conflicts.data} reload={conflicts.reload} />
       <h3>{t("system_desktop")}</h3>
