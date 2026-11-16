@@ -117,6 +117,11 @@ After installing, log out and back in once (this starts the session agent), then
 2. **The gate: does it beat stock Balanced?** On a fully charged battery, with the same brightness and the same light activity (for example a looping video or a fixed set of web pages), run `sudo ./scripts/phase1-test.sh 60` twice: once with `dynamis learn on` and once after `dynamis learn off` (which puts every learned setting back). Compare the average whole-system power in the two reports. Phase 4 passes if the learned settings use measurably less power with no rise in lag.
 3. Send both `phase1-results-….tar.gz` files and the output of `dynamis learned --json`.
 
+### Tuning together (phase 5) and its gate
+
+1. Leave learning on. Once every setting has been tested on its own, `dynamis learn` shows tests of `cpu.turbo` and `cpu.max_perf_pct` again, one step at a time. `dynamis learned` lists each result with what it was tested together with.
+2. **The gate: does it beat a hand-tuned TLP setup?** Install TLP on the same laptop (with Dynamis Power stopped), tune its battery settings by hand for the best power you can get without the laptop feeling slow, and run `sudo ./scripts/phase1-test.sh 60` with the same brightness and the same light activity. Then stop TLP, start Dynamis Power with what it learned, and run it again. Phase 5 passes if Dynamis Power uses no more power, with no rise in lag. Send both result files.
+
 ### Apps (phase 6) and its gate
 
 1. Open the app's **Apps** screen. After a while on battery, the apps you use should be listed with estimated watt-hours; plugged in, with processor time. The app you are using should be tagged *In front* (KDE Plasma; after logging out and in once so the session agent loads its KWin script).

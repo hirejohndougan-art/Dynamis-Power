@@ -193,6 +193,11 @@ function LearningTab(props: { status: Status; data: Awaited<ReturnType<typeof ba
                   <td>
                     <span className={`badge ${r.verdict === "keep" ? "badge-safe" : ""}`}>{verdict(r.verdict)}</span>
                     <div className="muted small">{r.reason}</div>
+                    {r.group && Object.keys(r.group).length > 0 && (
+                      <div className="muted small">
+                        {t("learning_tested_with", { list: Object.entries(r.group).map(([k, v]) => `${k} = ${v}`).join(", ") })}
+                      </div>
+                    )}
                   </td>
                   <td className="small">{t("watts_delta", { w: (r.effect.mean > 0 ? "+" : "") + r.effect.mean.toFixed(2) })}</td>
                   <td>

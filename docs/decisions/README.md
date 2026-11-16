@@ -17,6 +17,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0011](0011-auto-mode-rules-and-session-agent.md) | Auto mode: plain rules, and a session agent that reports five facts |
 | [0012](0012-calibration-method.md) | How calibration tests and keeps a setting |
 | [0013](0013-app-shares-not-caps.md) | Apps get a bigger or smaller share, never a cap or a freeze |
+| [0014](0014-tuning-together-one-step-at-a-time.md) | Tune interacting settings together, one step at a time |
 
 ## Adding a record
 

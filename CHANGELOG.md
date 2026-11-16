@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Phase 5: tuning settings that affect each other.
+  - Turbo boost and the speed limit are tuned together after every setting has been tested on its own: one step at a time, each step an ordinary experiment, with results tied to the other values and the power mode, and a lag limit for the whole set (`dynamis-core/src/tune.rs`).
+  - Learned values apply per power mode on battery; originals return on mains. Forgetting one forgets the set.
+  - Calibration records format version 2 (adds `group`); version 1 single results for these two settings are dropped and re-tested.
+  - The Learning tab shows what each result was tested together with.
+  - Decision record 0014.
+
 - Phase 6: apps.
   - Per-app battery use (estimates: power above idle, shared by processor time) for today and the last 7 days, kept on this computer only.
   - Priority for the app in front and slowing background apps on battery, by changing only the app's share of the processor (`cpu.weight` in `user.slice`); off by default, journaled, undone by Restore. Per-app *never slow* and *always slow*.

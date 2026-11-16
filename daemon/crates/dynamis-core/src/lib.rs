@@ -27,6 +27,7 @@ pub mod report;
 pub mod selfstat;
 pub mod sensors;
 pub mod settings;
+pub mod tune;
 mod writer;
 
 pub use fs::SysRoot;

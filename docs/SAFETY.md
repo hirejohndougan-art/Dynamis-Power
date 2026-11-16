@@ -99,6 +99,15 @@ Phase 4 (learning) adds:
 | Off means off | Switching learning off ends any test and puts learned settings back |
 | Owner-aware recovery | A pending change is undone after a crash only when the process that made it is gone, so a running test is never undone by mistake |
 
+Phase 5 (tuning together) adds:
+
+| Rail | How |
+| --- | --- |
+| Still one change at a time | Settings that affect each other are tuned by single steps; no trial ever changes two settings at once ([decision 0014](decisions/0014-tuning-together-one-step-at-a-time.md)) |
+| Lag limit for the whole set | The stall added by every kept step together may not exceed the single-step limit, so small steps cannot add up to a slow laptop |
+| Bounded search | One grid step at a time, inside the setting's own limits (speed limit never below 30%; the grid stops at 50%), at most 12 kept steps per power mode |
+| Per power mode | Results only count for the power mode they were measured under; another mode starts from the original values |
+
 Phase 6 (apps) adds:
 
 | Rail | How |

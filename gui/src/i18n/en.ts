@@ -175,6 +175,7 @@ export const en = {
   risky_confirm: "Yes, change it",
   learning_records: "Every test",
   learning_none: "No tests yet.",
+  learning_tested_with: "Tested together with {list}",
   col_value: "Tried",
   col_result: "Result",
   col_effect: "Measured",

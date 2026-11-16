@@ -64,7 +64,7 @@ Each layer works without the ones after it.
 ## How learning works
 
 - **Calibration:** alternate one setting on and off in short blocks (A B A B) during quiet periods; compare average power and stall time; store the effect with a confidence level. No measurable benefit means the safe default stays.
-- **Optimisation:** for interacting settings, Bayesian optimisation or a contextual bandit over the stored experiment records. Explores only inside the profile's bounds, spends a small share of time exploring, reverts at once if responsiveness drops.
+- **Optimisation:** for interacting settings (turbo boost and the speed limit, per power mode), coordinate descent with re-testing: one step of one setting at a time, each an ordinary experiment, with results tied to the values of the others and a lag limit for the whole set. *(Built, phase 5; see [decision 0014](decisions/0014-tuning-together-one-step-at-a-time.md).)* A model-based optimiser (Bayesian, or a contextual bandit) may come later on the same records if real laptops show savings left behind.
 - **Responsiveness is a hard limit**, never a term traded against power. Published research on learned power managers found that the instantly measurable power reward tends to dominate the policy otherwise.
 - **For compute jobs, score energy per job, not watts.** Throttling can make a job take longer and use more total energy.
 
@@ -94,7 +94,7 @@ Shared results for the same model cut this to days. The app never claims an exac
 
 | Job | Technique | Runs |
 | --- | --- | --- |
-| Finding best settings | Bayesian optimisation or contextual bandit | On the laptop |
+| Finding best settings | Coordinate descent with re-testing (built); a model-based optimiser possibly later | On the laptop |
 | Recognising workload | Rules, then a small decision tree | On the laptop |
 | Forecasting | Per-weekday statistics, simple regression | On the laptop |
 | Explaining and diagnosing | Language model reading the journal | Optional, opt-in; never in the control loop |

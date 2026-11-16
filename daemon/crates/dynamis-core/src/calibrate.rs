@@ -19,6 +19,8 @@
 //! what to do next. The daemon does the I/O. That is what lets the
 //! statistics be tested on simulated laptops with known effects.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::auto::Workload;
@@ -121,6 +123,11 @@ pub struct Record {
     /// Plain-language reason for the verdict.
     pub reason: String,
     pub time: u64,
+    /// Phase 5: the values of the settings tuned together (and of the
+    /// profile's own settings) while this one was tested. Empty for
+    /// settings tested on their own. See [`crate::tune`].
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub group: BTreeMap<String, String>,
 }
 
 /// What the daemon should do after a reading.
@@ -131,7 +138,8 @@ pub enum Action {
     /// Switch the setting to this value now (a new block starts).
     Apply(String),
     /// The experiment is over.
-    Finish(Record),
+    /// Boxed: a record is much bigger than the other variants.
+    Finish(Box<Record>),
 }
 
 #[derive(Debug, Clone)]
@@ -186,7 +194,7 @@ impl Experiment {
         self.block += 1;
         self.block_start = now;
         if self.block == self.plan.blocks {
-            return Action::Finish(self.analyse(now));
+            return Action::Finish(Box::new(self.analyse(now)));
         }
         Action::Apply(self.value_of(self.block).to_string())
     }
@@ -281,6 +289,7 @@ impl Experiment {
             verdict,
             reason,
             time: now as u64,
+            group: BTreeMap::new(),
         }
     }
 }
@@ -363,8 +372,7 @@ pub fn candidates(setting: &str) -> &'static [&'static str] {
         "audio.power_save" => &["1", "10"],
         "vm.dirty_writeback" => &["1500", "3000"],
         "pcie.aspm" => &["powersave"],
-        "cpu.turbo" => &["off"],
-        "cpu.max_perf_pct" => &["80", "60"],
+        // cpu.turbo and cpu.max_perf_pct are tuned together: crate::tune.
         _ => &[],
     }
 }
@@ -412,7 +420,7 @@ mod tests {
                 stall_pct: 1.0 + if b { ds } else { 0.0 } + 0.2 * rng.next(),
             };
             match e.observe(t, s) {
-                Action::Finish(r) => return r,
+                Action::Finish(r) => return *r,
                 Action::Apply(_) | Action::Continue => {}
             }
         }

@@ -68,6 +68,9 @@ export interface Record {
   effect: { mean: number; ci_low: number; ci_high: number; confidence: number };
   stall: { mean: number };
   time: number;
+  /** Phase 5: the other processor settings (and the power mode's) while
+   * this one was tested together with them. */
+  group?: { [setting: string]: string };
 }
 
 export interface Learned {

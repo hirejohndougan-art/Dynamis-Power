@@ -254,11 +254,15 @@ fn choice_survives_restart() {
 }
 
 /// Wait (without blocking the client's connection) until `check` passes.
-async fn eventually<F: AsyncFnMut() -> bool>(what: &str, mut check: F) {
+async fn eventually<F: AsyncFnMut() -> bool>(what: &str, check: F) {
+    eventually_within(10, what, check).await
+}
+
+async fn eventually_within<F: AsyncFnMut() -> bool>(secs: u64, what: &str, mut check: F) {
     let start = Instant::now();
     while !check().await {
         assert!(
-            start.elapsed() < Duration::from_secs(10),
+            start.elapsed() < Duration::from_secs(secs),
             "timed out waiting for {what}"
         );
         // A short pause; replies keep arriving because each check is a call.
@@ -390,7 +394,29 @@ fn auto_mode_follows_the_situation() {
 
 /// A pretend laptop: reads the settings Dynamis Power changes and reports
 /// battery power and stall to match, with noise. Known truth to test against.
+/// A simulated laptop: watts and stall (percent) from nmi off, turbo off and
+/// the speed limit.
+type Model = fn(bool, bool, f64) -> (f64, f64);
+
+/// Turbo off adds lag; each 10% of speed limit saves a little and adds lag.
+fn plain_laptop(nmi_off: bool, turbo_off: bool, max_perf: f64) -> (f64, f64) {
+    let watts = 6.0
+        - if nmi_off { 0.4 } else { 0.0 }
+        - if turbo_off { 0.8 } else { 0.0 }
+        - (100.0 - max_perf) / 20.0 * 0.3;
+    let stall = 0.5 + if turbo_off { 5.0 } else { 0.0 } + (100.0 - max_perf) / 10.0;
+    (watts, stall)
+}
+
 fn spawn_plant(root: std::path::PathBuf, stop: Arc<AtomicBool>) -> std::thread::JoinHandle<()> {
+    spawn_model(root, stop, plain_laptop)
+}
+
+fn spawn_model(
+    root: std::path::PathBuf,
+    stop: Arc<AtomicBool>,
+    model: Model,
+) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let read = |rel: &str| {
             fs::read_to_string(root.join(rel))
@@ -411,12 +437,8 @@ fn spawn_plant(root: std::path::PathBuf, stop: Arc<AtomicBool>) -> std::thread::
                 .wrapping_mul(6364136223846793005)
                 .wrapping_add(1442695040888963407);
             let noise = ((seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5) * 0.2;
-            let watts = 6.0
-                - if nmi_off { 0.4 } else { 0.0 }
-                - if turbo_off { 0.8 } else { 0.0 }
-                - (100.0 - max_perf) / 20.0 * 0.3
-                + noise;
-            let stall_pct = 0.5 + if turbo_off { 5.0 } else { 0.0 } + (100.0 - max_perf) / 20.0;
+            let (watts, stall_pct) = model(nmi_off, turbo_off, max_perf);
+            let watts = watts + noise;
             let dt = last.elapsed().as_secs_f64();
             last = Instant::now();
             stall_us += stall_pct / 100.0 * dt * 1e6;
@@ -528,7 +550,9 @@ fn learning_keeps_only_what_saves_power_without_lag() {
         "{:?}",
         verdict("cpu.turbo", "off")
     );
-    assert!(verdict("cpu.max_perf_pct", "80")
+    // Phase 5 tunes these two together, one step at a time from 100%.
+    assert!(!verdict("cpu.max_perf_pct", "90").is_empty());
+    assert!(verdict("cpu.max_perf_pct", "90")
         .iter()
         .all(|v| !v.starts_with("keep")));
     assert!(verdict("vm.dirty_writeback", "1500")
@@ -818,4 +842,117 @@ fn apps_share_the_cpu_by_policy_and_restore_puts_it_back() {
         let p = &c.apps().await.unwrap()["policy"];
         assert_eq!(p["slow_background"], false);
     });
+}
+
+/// Phase 5: turbo off alone makes this laptop laggy, but once the speed
+/// limit is at 80% or lower it costs no lag and saves power. Tuning them
+/// together, one step at a time, finds that; testing each once does not.
+fn interacting_laptop(_nmi_off: bool, turbo_off: bool, max_perf: f64) -> (f64, f64) {
+    let watts = 6.0 - if turbo_off { 0.5 } else { 0.0 } - (100.0 - max_perf) / 10.0 * 0.25;
+    let stall =
+        0.5 + if turbo_off && max_perf > 80.0 {
+            5.0
+        } else {
+            0.0
+        } + if max_perf < 70.0 { 3.0 } else { 0.0 };
+    (watts, stall)
+}
+
+#[test]
+fn tuning_finds_settings_that_only_help_together() {
+    let Some(env) = Env::new("tune") else { return };
+    let stop = Arc::new(AtomicBool::new(false));
+    let plant = spawn_model(env.dir.join("root"), stop.clone(), interacting_laptop);
+    let _d = Guard(env.daemon_with(
+        "state",
+        &[
+            "--tick-secs",
+            "0.02",
+            "--calib-block-secs",
+            "0.3",
+            "--calib-settle-secs",
+            "0.05",
+            "--calib-cooldown-secs",
+            "0",
+        ],
+    ));
+    let read = |rel: &str| {
+        fs::read_to_string(env.dir.join("root").join(rel))
+            .unwrap()
+            .trim()
+            .to_string()
+    };
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        c.set_learning(true).await.unwrap();
+        eventually_within(180, "tuning to finish", async || {
+            c.status().await.unwrap()["learning"]["status"]
+                .as_str()
+                .is_some_and(|s| s.contains("Every setting has been tested"))
+        })
+        .await;
+        let l = c.learned().await.unwrap();
+        let turbo: Vec<&str> = l["records"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["setting"] == "cpu.turbo")
+            .map(|r| r["verdict"].as_str().unwrap())
+            .collect();
+        assert_eq!(turbo.first(), Some(&"reject"), "alone, turbo off adds lag");
+        assert!(turbo.contains(&"keep"), "{turbo:?}");
+        let learned: Vec<(String, String)> = l["learned"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r["setting"].as_str().unwrap().to_string(),
+                    r["value"].as_str().unwrap().to_string(),
+                )
+            })
+            .filter(|(s, _)| s.starts_with("cpu."))
+            .collect();
+        assert!(
+            learned.contains(&("cpu.turbo".into(), "off".into())),
+            "{learned:?}"
+        );
+        assert!(
+            learned.contains(&("cpu.max_perf_pct".into(), "70".into())),
+            "{learned:?}"
+        );
+    });
+    assert_eq!(read("sys/devices/system/cpu/intel_pstate/no_turbo"), "1");
+    assert_eq!(
+        read("sys/devices/system/cpu/intel_pstate/max_perf_pct"),
+        "70"
+    );
+
+    // On mains both go back to where they started.
+    fs::write(env.dir.join("root/sys/class/power_supply/AC0/online"), "1").unwrap();
+    wait_for(|| {
+        read("sys/devices/system/cpu/intel_pstate/no_turbo") == "0"
+            && read("sys/devices/system/cpu/intel_pstate/max_perf_pct") == "100"
+    });
+    fs::write(env.dir.join("root/sys/class/power_supply/AC0/online"), "0").unwrap();
+    wait_for(|| read("sys/devices/system/cpu/intel_pstate/max_perf_pct") == "70");
+
+    // Forgetting one of them forgets the set.
+    zbus::block_on(async {
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        assert!(c.forget("cpu.turbo").await.unwrap());
+    });
+    assert_eq!(read("sys/devices/system/cpu/intel_pstate/no_turbo"), "0");
+    assert_eq!(
+        read("sys/devices/system/cpu/intel_pstate/max_perf_pct"),
+        "100"
+    );
+    stop.store(true, Ordering::Relaxed);
+    plant.join().unwrap();
 }

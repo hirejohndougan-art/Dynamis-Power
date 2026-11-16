@@ -34,6 +34,7 @@ export function mockBackend(): Backend {
     { setting: "cpu.turbo", value: "off", baseline: "on", verdict: "reject", reason: "made the laptop less responsive (+4.8 points of stall)", effect: { mean: -0.79, ci_low: -0.9, ci_high: -0.68, confidence: 1 }, stall: { mean: 4.8 }, time: t0 - 5400 },
     { setting: "vm.dirty_writeback", value: "1500", baseline: "500", verdict: "reject", reason: "no useful saving", effect: { mean: 0.01, ci_low: -0.04, ci_high: 0.06, confidence: 0.2 }, stall: { mean: 0 }, time: t0 - 4500 },
     { setting: "kernel.nmi_watchdog", value: "off", baseline: "on", verdict: "keep", reason: "saves 0.39 W (about 6%)", effect: { mean: -0.39, ci_low: -0.45, ci_high: -0.33, confidence: 1 }, stall: { mean: 0 }, time: t0 - 3600 },
+    { setting: "cpu.max_perf_pct", value: "90", baseline: "100", verdict: "keep", reason: "saves 0.21 W (about 4%)", effect: { mean: -0.21, ci_low: -0.27, ci_high: -0.15, confidence: 1 }, stall: { mean: 0.1 }, time: t0 - 2400, group: { "cpu.turbo": "on", "cpu.epp": "balance_performance" } },
   ];
   let watts = 5.6;
   let conflicts: Conflict[] = [{ unit: "tlp.service", name: "TLP", active: true, state: "enabled" }];

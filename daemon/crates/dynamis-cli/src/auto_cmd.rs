@@ -144,6 +144,12 @@ pub fn cmd_learned(forget: Option<&str>, json: bool, session_bus: bool) -> io::R
                     s(&r["verdict"]),
                     s(&r["reason"])
                 );
+                // Phase 5: what it was tested together with.
+                if let Some(g) = r["group"].as_object().filter(|g| !g.is_empty()) {
+                    let with: Vec<String> =
+                        g.iter().map(|(k, v)| format!("{k}={}", s(v))).collect();
+                    println!("  {:<22} with {}", "", with.join(", "));
+                }
             }
         }
         match v["display"].as_object() {
