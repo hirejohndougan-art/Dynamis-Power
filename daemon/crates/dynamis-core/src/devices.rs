@@ -50,6 +50,9 @@ pub struct Device {
     pub what: &'static str,
     /// Its address on the bus, e.g. `1-2` or `0000:00:14.0`.
     pub address: String,
+    /// Which model of device it is (`usb:046d:c52b`, `pci:8086:a0ed`), the
+    /// same whichever port it is in: what a person's "keep awake" list holds.
+    pub model: Option<String>,
     /// `on` or `auto`.
     pub control: String,
     /// Why it is never touched, if so, as a key the app translates: input,
@@ -182,6 +185,16 @@ fn pci_class(root: &SysRoot, name: &str) -> (&'static str, Option<&'static str>)
     (what, (base == 0x03).then_some("graphics"))
 }
 
+fn model_key(root: &SysRoot, bus: &str, dir: &str, vendor: &str, product: &str) -> Option<String> {
+    let read = |f: &str| {
+        root.read_string(&format!("{dir}/{f}"))
+            .ok()
+            .map(|v| v.trim().trim_start_matches("0x").to_ascii_lowercase())
+            .filter(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_hexdigit()))
+    };
+    Some(format!("{bus}:{}:{}", read(vendor)?, read(product)?))
+}
+
 /// Every USB device and PCI function with a `power/control` file.
 pub fn scan(root: &SysRoot) -> Vec<Device> {
     let mut out = Vec::new();
@@ -201,6 +214,7 @@ pub fn scan(root: &SysRoot) -> Vec<Device> {
             name: usb_name(root, &name),
             what: "usb_device",
             address: name.clone(),
+            model: model_key(root, "usb", &path, "idVendor", "idProduct"),
             control: control.trim().to_string(),
             excluded: usb_excluded(root, &name),
             path,
@@ -226,6 +240,7 @@ pub fn scan(root: &SysRoot) -> Vec<Device> {
             name: None,
             what,
             address: name.clone(),
+            model: model_key(root, "pci", &path, "vendor", "device"),
             control: control.trim().to_string(),
             excluded: by_class.or(by_driver),
             path,
@@ -270,6 +285,15 @@ pub mod fixture {
         fs::write(dir.join("power/control"), format!("{control}\n")).unwrap();
         fs::write(dir.join("product"), format!("{product}\n")).unwrap();
         fs::write(dir.join("bDeviceClass"), "00\n").unwrap();
+        fs::write(dir.join("idVendor"), "1234\n").unwrap();
+        fs::write(
+            dir.join("idProduct"),
+            format!(
+                "{:04x}\n",
+                name.len() * 7 + name.as_bytes()[name.len() - 1] as usize
+            ),
+        )
+        .unwrap();
         for (i, (class, drv)) in ifaces.iter().enumerate() {
             let idir = root.join(format!("sys/bus/usb/devices/{name}:1.{i}"));
             fs::create_dir_all(&idir).unwrap();
@@ -324,6 +348,16 @@ mod tests {
         assert_eq!(d.len(), 9);
         assert_eq!(get("usb:1-1").excluded, None);
         assert_eq!(get("usb:1-1").name.as_deref(), Some("Webcam"));
+        assert!(get("usb:1-1")
+            .model
+            .as_deref()
+            .unwrap()
+            .starts_with("usb:1234:"));
+        assert_eq!(
+            get("pci:0000:00:14.0").model,
+            None,
+            "no ids in this fixture"
+        );
         assert_eq!(
             get("usb:usb1").name.as_deref(),
             Some("xHCI Host Controller")

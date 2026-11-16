@@ -157,6 +157,8 @@ export interface AutoPrefs {
   low_battery_pct: number;
   critical_battery_pct: number;
   app_rules?: AppRule[];
+  /** What to believe about the charger (for chargers that report wrongly). */
+  power_source?: "detect" | "mains" | "battery";
   [other: string]: unknown;
 }
 
@@ -304,7 +306,12 @@ export type Unclean = {
   suspects: Labelled[];
 };
 
-export type DevicePolicy = { usb: boolean; pci: boolean };
+export type DevicePolicy = {
+  usb: boolean;
+  pci: boolean;
+  /** Device models the person keeps awake (`usb:046d:c52b`). */
+  never?: string[];
+};
 export type DeviceInfo = {
   id: string;
   kind: "usb" | "pci";
@@ -314,6 +321,10 @@ export type DeviceInfo = {
   what: string;
   /** Its address on the bus. */
   address: string;
+  /** Which model it is, the same in any port; null if it does not say. */
+  model: string | null;
+  /** The person keeps this model awake. */
+  kept_awake: boolean;
   /** The device may sleep when idle now. */
   sleeps: boolean;
   /** Dynamis Power changed it (and will put it back). */

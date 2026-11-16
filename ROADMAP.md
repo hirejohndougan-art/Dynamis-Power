@@ -69,6 +69,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [ ] Learning on busy, slow laptops: judge "quiet" by stable power rather than processor use? Threshold on 2-core chips
 - [ ] Battery power update rates and noise across makers
 - [ ] Testing while plugged in by running from the battery: which laptops support it safely (decision record)
+- [ ] Importing a TLP configuration: TLP's `_ON_AC` and `_ON_BAT` values have no direct place in modes. Options: battery values become Longer battery and Balanced on battery, mains values become Balanced and Faster on mains; or import only values that are the same on both, plus charge thresholds; or show the mapping and let the person choose per line
 - [ ] Each vendor tool (asusctl, supergfxctl, System76 Power, Slimbook, TUXEDO, laptop-mode-tools, `powertop --auto-tune`): conflict or coexist; confirm thermald is compatible
 - [ ] GNOME: extension on extensions.gnome.org or in the package only; any way to know the window in front without one
 - [ ] Which laptops reset or ignore the charge limit
@@ -84,7 +85,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 **Devices and buses (the biggest savings TLP has that Dynamis Power lacks)**
 
 - [x] USB autosuspend for idle devices, never for input devices, audio, phones, printers or mobile broadband *(in SETTINGS: `usb.autosuspend`)*
-- [ ] A per-device "never" list the person can add to (for a device not caught by class or driver)
+- [x] A per-device "keep awake" list the person can add to (by device model, so it holds in any port)
 - [x] Runtime power management for idle PCI devices, with a per-driver "never" list *(in SETTINGS: `pci.runtime_pm`)*
 - [ ] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
 - [ ] Wake-on-LAN off
@@ -125,9 +126,10 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] After an unclean shutdown, say whether the laptop was going to sleep or waking when it stopped (from the previous boot's kernel log), to tell sleep problems from other freezes
 - [x] Re-apply settings after resume from sleep (mode, kept, learned settings, app shares)
 - [x] Apply settings to devices plugged in later (USB, Thunderbolt), as TLP does (at the next reading)
-- [ ] A mode to use at boot before auto mode decides, and an option to ignore a power supply that reports wrongly (TLP's `TLP_DEFAULT_MODE` and `TLP_PS_IGNORE`)
+- [x] Ignore a charger that reports wrongly (TLP's `TLP_PS_IGNORE`): Advanced → System
+- [ ] A mode to use at boot before auto mode decides (TLP's `TLP_DEFAULT_MODE`; today the last chosen mode is used)
 - [x] A full diagnostic report like `tlp-stat`: `dynamis stat`, `Diagnostics()`, and in the app's Export
-- [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export)
+- [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export). Needs a decision first (see the follow-up list): TLP sets values per power source, Dynamis Power per mode
 
 **Done when:** on the test laptops, with TLP removed, `tlp-stat` run once with TLP reinstalled shows nothing TLP would set that Dynamis Power does not, and battery life is at least as long as with a hand-tuned TLP.
 

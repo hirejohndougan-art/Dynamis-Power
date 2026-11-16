@@ -43,7 +43,7 @@ export function mockBackend(): Backend {
   ];
   let watts = 5.6;
   let conflicts: Conflict[] = [{ unit: "tlp.service", name: "TLP", active: true, state: "enabled" }];
-  let prefs: AutoPrefs = { on_ac: "balanced", on_battery: "balanced", boost_on_ac: true, low_battery_pct: 30, critical_battery_pct: 15, app_rules: [] };
+  let prefs: AutoPrefs = { on_ac: "balanced", on_battery: "balanced", boost_on_ac: true, low_battery_pct: 30, critical_battery_pct: 15, app_rules: [], power_source: "detect" };
   let appPolicy: AppPolicy = { v: 1, track: true, slow_background: false, boost_front: false, never_slow: [], always_slow: [] };
   let usage = {
     today: [
@@ -144,18 +144,18 @@ export function mockBackend(): Backend {
   const blockedIds = new Map<string, string>();
   let fullCharge: string | null = null;
   let fullChargeEnded: string | null = null;
-  let devicePolicy: DevicePolicy = { usb: false, pci: false };
-  const deviceList: (Omit<DeviceInfo, "sleeps" | "managed"> & { own: boolean })[] = [
-    { id: "usb:1-3", kind: "usb", name: "Integrated Camera", what: "usb_device", address: "1-3", excluded: null, own: false },
-    { id: "usb:1-5", kind: "usb", name: "Fingerprint reader", what: "usb_device", address: "1-5", excluded: null, own: false },
-    { id: "usb:1-2", kind: "usb", name: "Logitech USB Receiver", what: "usb_device", address: "1-2", excluded: "input", own: false },
-    { id: "usb:1-10", kind: "usb", name: "Bluetooth", what: "usb_device", address: "1-10", excluded: "bluetooth", own: false },
-    { id: "usb:usb1", kind: "usb", name: "xHCI Host Controller", what: "usb_device", address: "usb1", excluded: null, own: true },
-    { id: "pci:0000:00:02.0", kind: "pci", name: null, what: "graphics", address: "0000:00:02.0", excluded: "graphics", own: false },
-    { id: "pci:0000:00:14.0", kind: "pci", name: null, what: "usb_controller", address: "0000:00:14.0", excluded: null, own: false },
-    { id: "pci:0000:00:16.0", kind: "pci", name: null, what: "communication", address: "0000:00:16.0", excluded: "management", own: false },
-    { id: "pci:0000:00:17.0", kind: "pci", name: null, what: "storage", address: "0000:00:17.0", excluded: null, own: false },
-    { id: "pci:0000:01:00.0", kind: "pci", name: null, what: "network", address: "0000:01:00.0", excluded: null, own: true },
+  let devicePolicy: DevicePolicy = { usb: false, pci: false, never: [] };
+  const deviceList: (Omit<DeviceInfo, "sleeps" | "managed" | "kept_awake"> & { own: boolean })[] = [
+    { id: "usb:1-3", kind: "usb", name: "Integrated Camera", what: "usb_device", address: "1-3", model: "usb:8086:a9e3", excluded: null, own: false },
+    { id: "usb:1-5", kind: "usb", name: "Fingerprint reader", what: "usb_device", address: "1-5", model: "usb:8086:59f0", excluded: null, own: false },
+    { id: "usb:1-2", kind: "usb", name: "Logitech USB Receiver", what: "usb_device", address: "1-2", model: "usb:8086:43c8", excluded: "input", own: false },
+    { id: "usb:1-10", kind: "usb", name: "Bluetooth", what: "usb_device", address: "1-10", model: "usb:8086:2c42", excluded: "bluetooth", own: false },
+    { id: "usb:usb1", kind: "usb", name: "xHCI Host Controller", what: "usb_device", address: "usb1", model: "usb:8086:a609", excluded: null, own: true },
+    { id: "pci:0000:00:02.0", kind: "pci", name: null, what: "graphics", address: "0000:00:02.0", model: "pci:8086:c991", excluded: "graphics", own: false },
+    { id: "pci:0000:00:14.0", kind: "pci", name: null, what: "usb_controller", address: "0000:00:14.0", model: "pci:8086:b98b", excluded: null, own: false },
+    { id: "pci:0000:00:16.0", kind: "pci", name: null, what: "communication", address: "0000:00:16.0", model: "pci:8086:bcbd", excluded: "management", own: false },
+    { id: "pci:0000:00:17.0", kind: "pci", name: null, what: "storage", address: "0000:00:17.0", model: "pci:8086:52e5", excluded: null, own: false },
+    { id: "pci:0000:01:00.0", kind: "pci", name: null, what: "network", address: "0000:01:00.0", model: "pci:8086:08f3", excluded: null, own: true },
   ];
   // Unclean shutdowns, as the service counts them (dynamis-core boots.rs).
   let unclean: Unclean = { last: null, in_safe_mode: 0, suspects: [] };
@@ -247,7 +247,7 @@ export function mockBackend(): Backend {
         })(),
       },
       power: {
-        on_ac: false, has_battery: true, battery_pct: 79, charging: false,
+        on_ac: prefs.power_source === "mains", has_battery: true, battery_pct: 79, charging: false,
         watts: Math.round(watts * 100) / 100, hours_left: Math.round((31.2 / watts) * 10) / 10, hours_to_full: null,
         health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: Number(values["battery.charge_limit"]),
       },
@@ -298,7 +298,7 @@ export function mockBackend(): Backend {
       learning = false;
       appPolicy = { ...appPolicy, slow_background: false, boost_front: false, always_slow: [] };
       keptSettings.clear();
-      devicePolicy = { usb: false, pci: false };
+      devicePolicy = { usb: false, pci: false, never: devicePolicy.never ?? [] };
       fullCharge = null;
       target = null;
       adaptive = false;
@@ -376,8 +376,9 @@ export function mockBackend(): Backend {
         policy: devicePolicy,
         blocked: { usb: null, pci: null },
         devices: deviceList.map(({ own, ...x }) => {
-          const managed = devicePolicy[x.kind] && !x.excluded && !own;
-          return { ...x, managed, sleeps: own || managed };
+          const kept_awake = !!x.model && (devicePolicy.never ?? []).includes(x.model);
+          const managed = devicePolicy[x.kind] && !x.excluded && !own && !kept_awake;
+          return { ...x, kept_awake, managed, sleeps: own || managed };
         }),
       }),
     setDevicePolicy: async (p) => {

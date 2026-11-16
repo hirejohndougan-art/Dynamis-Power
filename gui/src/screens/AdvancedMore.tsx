@@ -183,6 +183,39 @@ export function SensorsTab(props: { intervalMs?: number }) {
 
 // --- System -----------------------------------------------------------------
 
+/** For chargers that report wrongly (TLP's TLP_PS_IGNORE). */
+function PowerSourceChoice() {
+  const prefs = useLoad(() => backend.autoPrefs(), []);
+  const [error, setError] = useState<string | null>(null);
+  const p = prefs.data;
+  if (!p) return null;
+  return (
+    <>
+      <Choice
+        name="power-source"
+        label={t("ps_label")}
+        value={p.power_source ?? "detect"}
+        options={[
+          ["detect", t("ps_detect")],
+          ["mains", t("ps_mains")],
+          ["battery", t("ps_battery")],
+        ]}
+        onChange={async (v) => {
+          try {
+            await backend.setAutoPrefs({ ...p, power_source: v });
+            setError(null);
+            prefs.reload();
+            window.dispatchEvent(new Event("dynamis:changed"));
+          } catch (e) {
+            setError(String((e as Error)?.message ?? e));
+          }
+        }}
+      />
+      <p className="muted small">{error ?? t("ps_desc")}</p>
+    </>
+  );
+}
+
 export function SystemTab() {
   const info = useLoad(() => backend.system(), []);
   const conflicts = useLoad(() => backend.conflicts(), []);
@@ -208,6 +241,8 @@ export function SystemTab() {
         </dl>
       )}
       <p className="muted small">{t("system_budget")}</p>
+      <h3>{t("ps_heading")}</h3>
+      <PowerSourceChoice />
       <h3>{t("system_conflicts")}</h3>
       <Conflicts list={conflicts.data} reload={conflicts.reload} />
       <h3>{t("system_desktop")}</h3>

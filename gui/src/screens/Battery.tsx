@@ -147,10 +147,35 @@ function Devices(props: { locked: boolean; run: (a: () => Promise<string | void>
                   <span className="muted small">
                     {x.address}
                     {" · "}
-                    {x.excluded ? t(`dev_keep_${x.excluded}` as "dev_keep_input") : x.sleeps ? t("dev_sleeps") : t("dev_awake")}
+                    {x.excluded
+                      ? t(`dev_keep_${x.excluded}` as "dev_keep_input")
+                      : x.kept_awake
+                        ? t("dev_kept_awake")
+                        : x.sleeps
+                          ? t("dev_sleeps")
+                          : t("dev_awake")}
                   </span>
                 </div>
-                {x.managed && <span className="badge badge-safe">{t("dev_managed")}</span>}
+                <div className="row" style={{ gap: 8 }}>
+                  {x.managed && <span className="badge badge-safe">{t("dev_managed")}</span>}
+                  {!x.excluded && x.model && (
+                    <button
+                      type="button"
+                      className="btn btn-small"
+                      aria-pressed={x.kept_awake}
+                      aria-label={`${t("dev_keep_awake")}: ${name(x)}`}
+                      disabled={props.locked}
+                      onClick={() => {
+                        const never = new Set(d.policy.never ?? []);
+                        if (x.kept_awake) never.delete(x.model!);
+                        else never.add(x.model!);
+                        set({ ...d.policy, never: [...never] });
+                      }}
+                    >
+                      {t("dev_keep_awake")}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

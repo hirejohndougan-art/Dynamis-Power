@@ -124,6 +124,29 @@ pub struct Prefs {
     /// Per-app modes. The app in front wins; otherwise the first rule whose
     /// app is open.
     pub app_rules: Vec<AppRule>,
+    /// What to believe about the charger: `detect` (what it reports),
+    /// `mains` or `battery` (for chargers that report wrongly; TLP's
+    /// `TLP_PS_IGNORE`). Applies to everything, not only auto mode.
+    pub power_source: PowerSource,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PowerSource {
+    #[default]
+    Detect,
+    Mains,
+    Battery,
+}
+
+impl PowerSource {
+    pub fn override_on_ac(self) -> Option<bool> {
+        match self {
+            PowerSource::Detect => None,
+            PowerSource::Mains => Some(true),
+            PowerSource::Battery => Some(false),
+        }
+    }
 }
 
 impl Default for Prefs {
@@ -142,6 +165,7 @@ impl Default for Prefs {
             min_dwell_s: 60.0,
             max_switches_per_hour: 12,
             app_rules: Vec::new(),
+            power_source: PowerSource::Detect,
         }
     }
 }

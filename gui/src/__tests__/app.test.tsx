@@ -203,6 +203,17 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.queryByText("Kept after restarts")).toBeNull());
   });
 
+  it("can ignore a charger that reports wrongly", async () => {
+    window.location.hash = "#advanced:system";
+    render(<App />);
+    const mains = await screen.findByRole("radio", { name: "Always treat as plugged in" });
+    await act(async () => fireEvent.click(mains));
+    await waitFor(() => expect((screen.getByRole("radio", { name: "Always treat as plugged in" }) as HTMLInputElement).checked).toBe(true));
+    expect((await backend.status()).power.on_ac).toBe(true);
+    await act(async () => fireEvent.click(screen.getByRole("radio", { name: "As the charger reports" })));
+    await waitFor(async () => expect((await backend.status()).power.on_ac).toBe(false));
+  });
+
   it("charges fully once, then puts the limit back", async () => {
     await backend.setSetting("battery.charge_limit", "80", false);
     window.location.hash = "#battery";
@@ -227,6 +238,11 @@ describe("the app with the stand-in backend", () => {
     expect(screen.getByText(/1-2 · kept awake: input devices/)).toBeTruthy();
     expect(screen.getAllByText("Changed").length).toBe(2);
     expect(screen.getByText(/0000:00:14.0/).closest("li")?.textContent).toContain("USB controller");
+    // Keep one device awake by hand.
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Keep awake: Integrated Camera" })));
+    await waitFor(() => expect(screen.getByText(/1-3 · you keep it awake/)).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Keep awake: Integrated Camera" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: /Keep awake: Logitech/ })).toBeNull();
     // Restore switches it off again.
     await backend.restore();
   });

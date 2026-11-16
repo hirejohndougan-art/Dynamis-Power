@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Devices: "Keep awake" per device model on the Battery screen, for a device that misbehaves asleep but is not caught by class or driver. Kept across Restore.
+- Ignore a charger that reports wrongly (TLP's `TLP_PS_IGNORE`): Advanced → System, "When is the laptop plugged in?". Everything follows it (modes, learning, battery limits, device power). `power_source` in the auto preferences; shown in `dynamis stat`.
+
 - "Charge fully once" on the Battery screen and in the panel menu: lifts the charge limit until the battery is full, the charger is unplugged or a day passes, then puts it back. Setting the limit by hand or Restore ends it; charging that follows habits waits meanwhile. `ChargeFullyOnce`, `full_charge` in `Status`.
 - `dynamis stat`: a full diagnostic report like `tlp-stat` (the machine, service, battery, every setting with its original value and why it is or is not offered, devices, other power tools, the last changes). Also `Diagnostics()` and an Export option in the app.
 - New settings: `storage.sata_alpm` (SATA link power; learning tests `med_power_with_dipm`; `min_power` not offered) and `cpu.min_freq` (lowest frequency, where the driver lists frequencies).

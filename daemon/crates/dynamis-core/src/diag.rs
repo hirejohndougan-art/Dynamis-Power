@@ -249,6 +249,13 @@ pub fn report(
     if ps.batteries.is_empty() {
         let _ = writeln!(o, "No battery.");
     }
+    if let Some(ac) = power::source_override() {
+        let _ = writeln!(
+            o,
+            "Power source:   always treated as {} (set by the person; the charger's report is ignored)",
+            if ac { "plugged in" } else { "on battery" }
+        );
+    }
     let _ = writeln!(o);
 
     let (baseline, blocked) = state

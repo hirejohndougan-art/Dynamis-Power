@@ -136,6 +136,11 @@ impl Core {
             .ok()
             .and_then(|t| serde_json::from_str::<profiles::Overrides>(&t).ok())
             .unwrap_or_default();
+        let prefs = saved_auto
+            .as_ref()
+            .map(|a| a.prefs.clone())
+            .unwrap_or_default();
+        dynamis_core::sensors::power::set_source_override(prefs.power_source.override_on_ac());
         let auto = AutoState {
             enabled: saved_auto.as_ref().is_some_and(|a| a.enabled),
             rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
@@ -390,6 +395,7 @@ impl Core {
                 ));
             }
         }
+        dynamis_core::sensors::power::set_source_override(p.power_source.override_on_ac());
         self.auto.rules.prefs = p.clone();
         self.auto.observer.prefs = p;
         let enabled = self.auto.enabled;

@@ -1580,6 +1580,24 @@ fn idle_devices_sleep_on_battery() {
             .clone();
         assert_eq!(mouse_info["excluded"], "input");
 
+        // The person keeps the webcam awake: it goes back to its own value.
+        let cam_model = info["devices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["id"] == "usb:1-1")
+            .unwrap()["model"]
+            .clone();
+        assert!(cam_model.is_string(), "{info}");
+        c.set_device_policy(&serde_json::json!({"usb": true, "pci": true, "never": [cam_model]}))
+            .await
+            .unwrap();
+        assert_eq!(control(cam), "on");
+        c.set_device_policy(&serde_json::json!({"usb": true, "pci": true}))
+            .await
+            .unwrap();
+        assert_eq!(control(cam), "auto");
+
         // A new device plugged in follows at the next reading.
         fixture::usb(&root, "1-3", "Card reader", "on", &[("08", "usb-storage")]);
         eventually("new device sleeps", async || {
@@ -1610,7 +1628,7 @@ fn idle_devices_sleep_on_battery() {
         let info = c.devices().await.unwrap();
         assert_eq!(
             info["policy"],
-            serde_json::json!({"usb": false, "pci": false})
+            serde_json::json!({"usb": false, "pci": false, "never": []})
         );
     });
 }
@@ -1676,5 +1694,37 @@ fn charge_fully_once_then_back_to_the_limit() {
         assert_eq!(c.status().await.unwrap()["full_charge"]["active"], false);
         std::thread::sleep(std::time::Duration::from_millis(600));
         assert_eq!(limit(), "90");
+    });
+}
+
+/// A charger that reports wrongly can be ignored (TLP's `TLP_PS_IGNORE`).
+#[test]
+fn a_wrong_charger_report_can_be_ignored() {
+    let Some(env) = Env::new("pssource") else {
+        return;
+    };
+    let root = env.dir.join("root");
+    fs::write(root.join("sys/class/power_supply/AC0/online"), "1").unwrap();
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        assert_eq!(c.status().await.unwrap()["power"]["on_ac"], true);
+        let mut prefs = c.auto_prefs().await.unwrap();
+        assert_eq!(prefs["power_source"], "detect");
+        prefs["power_source"] = "battery".into();
+        c.set_auto_prefs(&prefs).await.unwrap();
+        assert_eq!(c.status().await.unwrap()["power"]["on_ac"], false);
+        assert!(c
+            .diagnostics()
+            .await
+            .unwrap()
+            .contains("always treated as on battery"));
+        prefs["power_source"] = "detect".into();
+        c.set_auto_prefs(&prefs).await.unwrap();
+        assert_eq!(c.status().await.unwrap()["power"]["on_ac"], true);
     });
 }

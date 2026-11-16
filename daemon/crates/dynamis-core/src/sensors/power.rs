@@ -44,10 +44,39 @@ pub struct PowerSupplies {
     pub chargers: Vec<Charger>,
 }
 
+/// The person's choice to ignore a charger that reports wrongly (TLP's
+/// `TLP_PS_IGNORE`): 0 = believe it, 1 = always plugged in, 2 = always on
+/// battery. Process-wide: the service sets it from its preferences.
+static SOURCE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Set the power source override (`None` = believe the charger).
+pub fn set_source_override(on_ac: Option<bool>) {
+    let v = match on_ac {
+        None => 0,
+        Some(true) => 1,
+        Some(false) => 2,
+    };
+    SOURCE.store(v, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The power source override, if the person set one.
+pub fn source_override() -> Option<bool> {
+    match SOURCE.load(std::sync::atomic::Ordering::Relaxed) {
+        1 => Some(true),
+        2 => Some(false),
+        _ => None,
+    }
+}
+
 impl PowerSupplies {
-    /// True if any charger reports it is connected.
+    /// True if any charger reports it is connected, unless the person chose
+    /// to ignore what the charger reports ([`set_source_override`]).
     pub fn on_ac(&self) -> bool {
-        self.chargers.iter().any(|c| c.online)
+        match SOURCE.load(std::sync::atomic::Ordering::Relaxed) {
+            1 => true,
+            2 => false,
+            _ => self.chargers.iter().any(|c| c.online),
+        }
     }
 
     /// Total battery power across all batteries, in watts.

@@ -23,7 +23,7 @@ use crate::core::{open_engine, write_atomic};
 const FILE: &str = "devices-policy.json";
 const VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DevicePolicy {
     /// Let idle USB devices sleep (not input, sound, printers, phones,
     /// Bluetooth or mobile broadband).
@@ -32,6 +32,10 @@ pub struct DevicePolicy {
     /// Let idle internal (PCI) hardware sleep (not graphics).
     #[serde(default)]
     pub pci: bool,
+    /// Device models the person keeps awake (`usb:046d:c52b`), for devices
+    /// that misbehave asleep but are not caught by class or driver.
+    #[serde(default)]
+    pub never: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,11 +91,13 @@ impl DevicesState {
         want_saving: bool,
     ) -> Result<(), String> {
         self.policy = p;
+        self.policy.never.sort();
+        self.policy.never.dedup();
         write_atomic(
             &dir.join(FILE),
             &serde_json::to_string_pretty(&Saved {
                 v: VERSION,
-                policy: p,
+                policy: self.policy.clone(),
             })
             .map_err(|e| e.to_string())?,
         )?;
@@ -100,10 +106,21 @@ impl DevicesState {
         Ok(())
     }
 
-    /// Switch both off (Restore); the engine puts the devices back.
+    /// Switch both off (Restore); the engine puts the devices back. The
+    /// devices the person keeps awake stay on their list.
     pub fn clear(&mut self, dir: &Path) {
-        self.policy = DevicePolicy::default();
-        let _ = std::fs::remove_file(dir.join(FILE));
+        self.policy = DevicePolicy {
+            never: std::mem::take(&mut self.policy.never),
+            ..DevicePolicy::default()
+        };
+        if self.policy.never.is_empty() {
+            let _ = std::fs::remove_file(dir.join(FILE));
+        } else if let Ok(t) = serde_json::to_string_pretty(&Saved {
+            v: VERSION,
+            policy: self.policy.clone(),
+        }) {
+            let _ = write_atomic(&dir.join(FILE), &t);
+        }
         self.dirty = true;
         self.listing = None;
     }
@@ -138,7 +155,11 @@ impl DevicesState {
                 Kind::Usb => self.policy.usb,
                 Kind::Pci => self.policy.pci,
             };
-            let result = if on && want_saving && d.excluded.is_none() {
+            let kept_awake = d
+                .model
+                .as_ref()
+                .is_some_and(|m| self.policy.never.contains(m));
+            let result = if on && want_saving && d.excluded.is_none() && !kept_awake {
                 engine.set_device_power(
                     d.kind,
                     &d.path,
@@ -149,6 +170,8 @@ impl DevicesState {
             } else if touched.contains_key(&d.path) {
                 let why = if !on {
                     "switched off"
+                } else if kept_awake {
+                    "you keep it awake"
                 } else {
                     "plugged in or Faster mode"
                 };
@@ -179,6 +202,8 @@ impl DevicesState {
                     "name": d.name,
                     "what": d.what,
                     "address": d.address,
+                    "model": d.model,
+                    "kept_awake": d.model.as_ref().is_some_and(|m| self.policy.never.contains(m)),
                     "sleeps": d.control == "auto",
                     "managed": touched.contains_key(&d.path),
                     "excluded": d.excluded,
