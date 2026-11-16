@@ -888,13 +888,29 @@ fn tuning_finds_settings_that_only_help_together() {
         let c = dynamis_client::Client::connect_to(&env.address)
             .await
             .unwrap();
+        let p = c.status().await.unwrap()["learning"]["progress"].clone();
+        assert_eq!(p["pct"], 0.0, "nothing tested yet: {p}");
+        assert_eq!(p["stage"], "single");
+        assert!(p["left"].as_u64().unwrap() >= 4, "{p}");
+        assert!(p["hours_left"].as_f64().unwrap() > 0.0);
         c.set_learning(true).await.unwrap();
+        // It rises as tests finish (it may step back a little when a step
+        // together is kept and opens new ones).
+        let mut seen = Vec::new();
         eventually_within(180, "tuning to finish", async || {
-            c.status().await.unwrap()["learning"]["status"]
+            let st = c.status().await.unwrap();
+            seen.push(st["learning"]["progress"]["pct"].as_f64().unwrap_or(0.0));
+            st["learning"]["status"]
                 .as_str()
                 .is_some_and(|s| s.contains("Every setting has been tested"))
         })
         .await;
+        assert!(seen.iter().any(|p| *p > 0.0 && *p < 100.0), "{seen:?}");
+        let p = &c.status().await.unwrap()["learning"]["progress"];
+        assert_eq!(p["pct"], 100.0, "{p}");
+        assert_eq!(p["stage"], "done");
+        assert_eq!(p["left"], 0);
+        assert!(p["done"].as_u64().unwrap() >= 8, "{p}");
         let l = c.learned().await.unwrap();
         let turbo: Vec<&str> = l["records"]
             .as_array()

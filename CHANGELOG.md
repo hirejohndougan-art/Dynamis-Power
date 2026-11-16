@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Learning in the main menu: progress as a percentage of the tests this laptop needs (with a bar, the stage, and tests and quiet battery time left), what was kept with Forget, and the tests so far. Home shows the percentage too. Service: `learning.progress` in `Status`.
+
 - Advanced: Profiles (what each mode sets here, standard values, export and import), Sensors (live power, processor power, deep sleep, speed, waiting, temperatures), System (versions, the service's own use, other power tools, desktop and updates), Developer (dry run, TLP/TuneD advisor, raw data, restore). Service: `Profiles`, `SetProfileOverrides`, `Sensors`, `System`, `Advise`, `SetDryRun`, `dry_run` in `Status`; engine dry-run mode (`would` entries); `advisor.rs`; cpuidle sensor. Home shows a notice while dry run is on.
 
 - Panel icon ("tray"), from login on every desktop with panel icons: the mode at a glance (logo coloured by mode, tooltip with battery and time left), left click opens the app, and a menu to pick the mode, switch automatic choice, make the battery last (2/4/6 hours or stop), open the app, or hide the icon. Drawn by the session agent over the standard StatusNotifierItem and DBusMenu protocols, so the app can stay closed. A switch on Modes shows or hides it. The service package also installs an autostart entry for desktops that do not start user services, and a second agent in a session exits.

@@ -158,4 +158,22 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(screen.getByRole("tab", { name: "Sensors" })));
     expect(await screen.findByText(/Whole laptop/)).toBeTruthy();
   });
+
+  it("has Learning in the main menu, with progress as a percentage", async () => {
+    render(<App />);
+    const link = await screen.findByRole("link", { name: "Learning" });
+    await act(async () => fireEvent.click(link));
+    window.location.hash = "#learning";
+    await act(async () => window.dispatchEvent(new HashChangeEvent("hashchange")));
+    expect(await screen.findByRole("heading", { name: /^\d+% learned$/ })).toBeTruthy();
+    const bar = screen.getByRole("progressbar");
+    const pct = Number(bar.getAttribute("aria-valuenow"));
+    expect(pct).toBeGreaterThan(0);
+    expect(pct).toBeLessThan(100);
+    expect(screen.getByText(/tests left, roughly/)).toBeTruthy();
+    expect(screen.getByText("What it kept")).toBeTruthy();
+    const forget = screen.getAllByRole("button", { name: /^Forget:/ })[0];
+    await act(async () => fireEvent.click(forget));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Forget:/ }).length).toBeLessThan(3));
+  });
 });

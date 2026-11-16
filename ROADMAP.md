@@ -29,6 +29,54 @@ The desktop app and `.deb` packages for it and the service (part of phase 8) wer
 
 **Phase 4 is the go/no-go point.** If per-setting calibration cannot beat stock settings on battery, the approach gets rethought before more is built.
 
+## To do: fully replace TLP
+
+Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed with no loss. Each item becomes a setting plugin (probe, read, apply, revert, risk tier; see docs/SETTINGS.md) that profiles can set and learning can test, or a service behaviour. Items marked *(in SETTINGS)* already have a reserved ID there.
+
+**Devices and buses (the biggest savings TLP has that Dynamis Power lacks)**
+
+- [ ] USB autosuspend for idle devices, never for input devices, audio, phones, printers or mobile broadband, with a per-device "never" list *(in SETTINGS: `usb.autosuspend`)*
+- [ ] Runtime power management for idle PCI devices, with a per-driver "never" list *(in SETTINGS: `pci.runtime_pm`)*
+- [ ] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
+- [ ] Wake-on-LAN off
+- [ ] Sound controller power saving as well as the codec (TLP's controller option)
+- [ ] Discrete and integrated GPU: runtime power-down of a second GPU *(in SETTINGS: `gpu.dgpu_runtime_pm`)*, Intel GPU frequency limits *(in SETTINGS: `gpu.max_freq`)*, AMD GPU power level
+
+**Storage**
+
+- [ ] SATA link power *(in SETTINGS: `storage.sata_alpm`; "minimum power" stays opt-in)*
+- [ ] AHCI controller runtime power management
+- [ ] Hard disk power level (APM) and spin-down time, for laptops with spinning disks
+- [ ] I/O scheduler *(in SETTINGS: `storage.io_scheduler`)*
+
+**Processor**
+
+- [ ] Minimum performance level (`min_perf_pct`), alongside the maximum already built
+- [ ] Minimum and maximum frequency for drivers without performance levels (AMD and other cpufreq drivers)
+- [ ] HWP dynamic boost (Intel)
+- [ ] Scaling governor where the driver offers a choice, without fighting the speed preference
+
+**Radios**
+
+- [ ] Switch Bluetooth, Wi-Fi or mobile broadband off on battery, at startup, or when a wired network connects, as the person chooses *(in SETTINGS: `bt.power` for Bluetooth)*; remember and restore their on/off state across restarts
+- [ ] Optional rules on docking and undocking
+
+**Battery**
+
+- [ ] Charge start threshold (begin charging only below a level), alongside the stop threshold already built
+- [ ] Vendor charge controls where the standard file is missing (ThinkPad, ASUS, Dell, Huawei, LG, Samsung, Sony, System76 and others), each probed, never guessed
+- [ ] "Charge fully once" and battery recalibration on request (TLP's `fullcharge` and `recalibrate`)
+
+**System**
+
+- [ ] Sleep type on battery (`s2idle` or `deep`), offered only where the firmware supports both
+- [ ] Re-apply settings after resume from sleep, and to devices plugged in later (USB, Thunderbolt), as TLP does
+- [ ] A mode to use at boot before auto mode decides, and an option to ignore a power supply that reports wrongly (TLP's `TLP_DEFAULT_MODE` and `TLP_PS_IGNORE`)
+- [ ] A full diagnostic report like `tlp-stat`, building on `dynamis status`, `inventory` and `hardware-report`
+- [ ] Import a TLP configuration: read `/etc/tlp.conf` and `/etc/tlp.d/` and offer the matching Dynamis Power settings (the reverse of the advisor's TLP export)
+
+**Done when:** on the test laptops, with TLP removed, `tlp-stat` run once with TLP reinstalled shows nothing TLP would set that Dynamis Power does not, and battery life is at least as long as with a hand-tuned TLP.
+
 ## Realistic expectations
 
 This is a spare-time project. Phases 1 to 4 make a useful first version and will likely take several months. Dates are not promised.

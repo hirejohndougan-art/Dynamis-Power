@@ -62,6 +62,27 @@ impl Default for Timing {
     }
 }
 
+/// One single-setting test learning can run here.
+struct SingleTest {
+    setting: &'static str,
+    current: String,
+    value: String,
+    done: bool,
+}
+
+/// How far learning has got (for the app).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Progress {
+    /// Whole percent, rounded down so it reads 100 only when done.
+    pub pct: f64,
+    pub done: usize,
+    pub left: usize,
+    /// "single", "together" or "done".
+    pub stage: &'static str,
+    /// Quiet time on battery the tests left need, roughly.
+    pub hours_left: f64,
+}
+
 struct Running {
     exp: Experiment,
     monitor: Monitor,
@@ -348,6 +369,25 @@ impl Core {
         };
 
         // Phase 4: every setting on its own first.
+        if let Some(p) = self.single_tests(engine).into_iter().find(|p| !p.done) {
+            return Some((plan(p.setting, p.current, p.value), State::new()));
+        }
+
+        // Phase 5: the processor settings that affect each other, together.
+        let state = self.tune_state();
+        let (id, v) = tune::next(&self.learn.records, &state, MAX_TRIES, |id, v| {
+            allowed(id, v).is_some_and(|a| a == v)
+        })?;
+        let current = state.get(&id)?.clone();
+        Some((plan(&id, current, v), tune::record_group(&state, &id)))
+    }
+
+    /// Every single-setting test this machine allows, and whether it is
+    /// done (settled, tried enough times, or the setting already learned).
+    fn single_tests(&self, engine: &dynamis_core::engine::Engine) -> Vec<SingleTest> {
+        let blocked = engine.blocked();
+        let learned = self.learn.learned();
+        let mut out = Vec::new();
         for s in settings::all() {
             let id = s.id();
             if tune::in_group(id) || blocked.contains_key(id) || s.risk().needs_opt_in() {
@@ -359,12 +399,13 @@ impl Core {
             let Ok(current) = s.read(&self.root) else {
                 continue;
             };
-            if current == "mixed" || self.learn.learned().iter().any(|r| r.setting == id) {
+            if current == "mixed" {
                 continue;
             }
+            let is_learned = learned.iter().any(|r| r.setting == id);
             for v in calibrate::candidates(id) {
                 let Ok(v) = allowed.check(v) else { continue };
-                if v == current || engine.quirks().blocking(id, &v).is_some() {
+                if engine.quirks().blocking(id, &v).is_some() {
                     continue;
                 }
                 let tries: Vec<&Record> = self
@@ -378,20 +419,80 @@ impl Core {
                     })
                     .collect();
                 let settled = tries.iter().any(|r| r.verdict != Verdict::Inconclusive);
-                if settled || tries.len() >= MAX_TRIES {
+                // The value it already has needs no test, unless that is
+                // only because learning set it.
+                let nothing_to_test = v == current && !is_learned;
+                if nothing_to_test {
                     continue;
                 }
-                return Some((plan(id, current.clone(), v), State::new()));
+                out.push(SingleTest {
+                    setting: id,
+                    current: current.clone(),
+                    value: v,
+                    done: is_learned || settled || tries.len() >= MAX_TRIES,
+                });
             }
         }
+        out
+    }
 
-        // Phase 5: the processor settings that affect each other, together.
+    /// How far learning has got: tests done and left, as a percentage.
+    /// The tests together (phase 5) cannot all be known in advance: when a
+    /// step is kept, the steps from the new values are added, so the
+    /// percentage can step back a little. The app says it is an estimate.
+    pub fn learning_progress(&self) -> Option<Progress> {
+        let engine = open_engine(&self.root, &self.state_dir).ok()?;
+        let singles = self.single_tests(&engine);
+        let singles_done = singles.iter().filter(|t| t.done).count();
+        let singles_left = singles.len() - singles_done;
+        let blocked = engine.blocked();
+        let allowed = |id: &str, v: &str| -> bool {
+            let Some(s) = settings::by_id(id) else {
+                return false;
+            };
+            if blocked.contains_key(id) || s.risk().needs_opt_in() {
+                return false;
+            }
+            let Probe::Supported { allowed } = s.probe(&self.root) else {
+                return false;
+            };
+            allowed.check(v).is_ok_and(|a| a == v) && engine.quirks().blocking(id, v).is_none()
+        };
         let state = self.tune_state();
-        let (id, v) = tune::next(&self.learn.records, &state, MAX_TRIES, |id, v| {
-            allowed(id, v).is_some_and(|a| a == v)
-        })?;
-        let current = state.get(&id)?.clone();
-        Some((plan(&id, current, v), tune::record_group(&state, &id)))
+        let together_left = tune::remaining(&self.learn.records, &state, MAX_TRIES, allowed).len();
+        let together_done = self
+            .learn
+            .records
+            .iter()
+            .filter(|r| tune::in_group(&r.setting) && !r.group.is_empty())
+            .count();
+        // Before the tests together start, count the first steps they will
+        // take from here, so the total does not jump when they begin.
+        let done = singles_done + together_done;
+        let left = singles_left + together_left;
+        let total = done + left;
+        let pct = if total == 0 {
+            100.0
+        } else {
+            (done as f64 / total as f64 * 100.0).floor()
+        };
+        // One test: its blocks, the settling at each switch, then the rest
+        // before the next.
+        let t = self.learn.timing;
+        let per_test_s = t.block_s * 8.0 + t.cooldown_s;
+        Some(Progress {
+            pct,
+            done,
+            left,
+            stage: if singles_left > 0 {
+                "single"
+            } else if together_left > 0 {
+                "together"
+            } else {
+                "done"
+            },
+            hours_left: left as f64 * per_test_s / 3600.0,
+        })
     }
 
     fn start_experiment(&mut self, now: f64, _ctx: &Context, workload: Workload) {

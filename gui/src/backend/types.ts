@@ -15,6 +15,8 @@ export interface Status {
     tested_settings: number;
     kept: { setting: string; label: string; value: string; baseline: string; saves_w: number; reason: string }[];
     saves_w: number;
+    /** How far learning has got. Null if it could not be worked out. */
+    progress?: LearningProgress | null;
   };
   power: {
     on_ac: boolean;
@@ -37,6 +39,16 @@ export interface Status {
   display: { w_per_pct: number; base_w: number; r2: number; samples: number } | null;
   /** "Last until", when set. Times are Unix seconds. */
   last_until?: { until: number; level: Level; reason: string | null; on_track: boolean } | null;
+}
+
+export interface LearningProgress {
+  /** Whole percent; 100 only when every test is done. */
+  pct: number;
+  done: number;
+  left: number;
+  stage: "single" | "together" | "done";
+  /** Quiet time on battery the tests left need, roughly. */
+  hours_left: number;
 }
 
 /** How hard "Last until" is saving. */

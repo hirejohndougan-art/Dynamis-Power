@@ -41,6 +41,8 @@ impl Core {
             })
             .collect();
         let saves: f64 = self.learn.learned().iter().map(|r| -r.effect.mean).sum();
+        // Before the engine below is opened: it takes the engine's lock.
+        let progress = self.learning_progress();
         let engine = open_engine(&self.root, &self.state_dir).ok();
         let mut tested: Vec<&str> = self
             .learn
@@ -67,6 +69,7 @@ impl Core {
                 "tested_settings": tested_settings,
                 "kept": kept,
                 "saves_w": (saves * 100.0).round() / 100.0,
+                "progress": progress,
             },
             "power": {
                 "on_ac": on_ac,

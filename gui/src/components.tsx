@@ -1,5 +1,6 @@
 // Small accessible building blocks shared by the screens.
 import { useEffect, useRef, type ReactNode } from "react";
+import { t } from "./i18n";
 
 export function Switch(props: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
@@ -61,6 +62,16 @@ export function Sparkline(props: { values: number[]; label: string }) {
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={props.label}>
       <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/** A progress bar with its value for screen readers. */
+export function ProgressBar(props: { pct: number; label?: string }) {
+  const pct = Math.max(0, Math.min(100, props.pct));
+  return (
+    <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={props.label ?? t("learn_bar")}>
+      <span style={{ width: `${pct}%` }} />
+    </div>
   );
 }
 

@@ -25,6 +25,7 @@ A sidebar with six main sections. Advanced is always last and visually separated
 | Home | Everyone | How things stand and the one main control |
 | Modes | Everyone | Choose or schedule profiles; "Last until" |
 | Battery | Everyone | Health, charge limit, history |
+| Learning | Everyone | How far learning has got (a percentage, tests and quiet time left), what it kept with Forget, the tests so far |
 | Apps | Everyone | What uses power; per-app rules |
 | Activity | Everyone | Plain-language history of changes, with Undo; logs and export |
 | Sharing | Everyone | Opt-in results sharing, what's sent, delete my data |
@@ -51,6 +52,10 @@ Health percentage against design capacity, wear trend, charge limit toggle (only
 ## Apps
 
 A ranked list of apps by estimated energy today and this week, clearly marked as estimates. Plugged in, where there are no battery watts to share out, the list ranks by processor time instead. Each app has an *Options* dialog: share of the processor (*Normal*, *Never slow it down*, *Always slow it down*) and *Mode while it is open*. Below the list: *Slow down apps in the background on battery*, *Give the app in front priority*, *Count battery use per app*, and *Forget app history*. Tags on each row say whether it is open or in front, its mode, and whether it is slowed or has priority right now. **(Built.)** Still planned: a warning with one action for misbehaving apps.
+
+## Learning
+
+**Built.** Its own place in the main menu. The top card shows the switch and progress as a percentage of the tests this laptop needs, with a bar, the stage (one setting at a time, or processor settings together), and about how many tests and how much quiet time on battery are left. The percentage is an estimate: while settings are tuned together, a kept change can open a step or two more, so it can step back slightly; it reads 100% only when nothing is left to test. Below: what it kept (plain names, what each was, what it saves, *Forget*) and the tests so far. The technical table stays in Advanced → Learning. Home's learning card shows the same percentage and bar.
 
 ## Activity, logs and export
 

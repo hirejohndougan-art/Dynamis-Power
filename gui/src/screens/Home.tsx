@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { backend, type Profile, type Status } from "../backend";
-import { Dialog, Sparkline, Switch } from "../components";
+import { Dialog, ProgressBar, Sparkline, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { clock, duration, formatTime, profileName, t, tn } from "../i18n";
 import { describe } from "../activity";
@@ -116,6 +116,12 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
             <h2 id="learn-heading">{t("learn_heading")}</h2>
             <Switch checked={s.learning.on} label={t("learn_switch")} onChange={(on) => run(() => backend.setLearning(on))} />
           </div>
+          {s.learning.progress && (
+            <>
+              <ProgressBar pct={s.learning.progress.pct} />
+              <p className="small">{t("learn_pct", { pct: s.learning.progress.pct })}</p>
+            </>
+          )}
           {s.learning.on ? (
             <>
               <p>{tn("learn_progress", s.learning.tested_settings, { checked: s.learning.tested_settings, kept: s.learning.kept.length })}</p>
@@ -125,7 +131,7 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
           ) : (
             <p className="muted">{t("learn_off")}</p>
           )}
-          <button type="button" className="btn-link" onClick={() => props.go("advanced:learning")}>
+          <button type="button" className="btn-link" onClick={() => props.go("learning")}>
             {t("learn_details")}
           </button>
         </section>

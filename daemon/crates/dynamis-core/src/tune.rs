@@ -181,9 +181,24 @@ pub fn next(
     max_tries: usize,
     ok: impl Fn(&str, &str) -> bool,
 ) -> Option<(String, String)> {
+    remaining(records, current, max_tries, ok)
+        .into_iter()
+        .next()
+}
+
+/// Every step still to test from `current`, in the order [`next`] takes
+/// them. Used for progress: when one is kept, the steps from the new values
+/// take their place, so this can grow again by a step or two.
+pub fn remaining(
+    records: &[Record],
+    current: &State,
+    max_tries: usize,
+    ok: impl Fn(&str, &str) -> bool,
+) -> Vec<(String, String)> {
+    let mut out = Vec::new();
     let context = context_of(current);
     if kept_steps(records, &context).len() >= MAX_KEEPS {
-        return None;
+        return out;
     }
     for id in GROUP {
         let Some(now) = current.get(*id) else {
@@ -202,11 +217,11 @@ pub fn next(
                 .collect();
             let settled = tries.iter().any(|r| r.verdict != Verdict::Inconclusive);
             if !settled && tries.len() < max_tries {
-                return Some((id.to_string(), v));
+                out.push((id.to_string(), v));
             }
         }
     }
-    None
+    out
 }
 
 #[cfg(test)]

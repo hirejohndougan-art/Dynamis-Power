@@ -184,6 +184,11 @@ export function mockBackend(): Backend {
         tested_settings: new Set(records.filter((r) => r.verdict !== "inconclusive").map((r) => r.setting)).size,
         kept: kept().map((r) => ({ setting: r.setting, label: label(r.setting), value: r.value, baseline: r.baseline, saves_w: -r.effect.mean, reason: r.reason })),
         saves_w: kept().reduce((a, r) => a - r.effect.mean, 0),
+        progress: (() => {
+          const done = records.length + 1;
+          const left = Math.max(0, 12 - done);
+          return { pct: Math.floor((done / (done + left)) * 100), done, left, stage: left === 0 ? "done" : done < 8 ? "single" : "together", hours_left: (left * 780) / 3600 };
+        })(),
       },
       power: {
         on_ac: false, has_battery: true, battery_pct: 79, charging: false,

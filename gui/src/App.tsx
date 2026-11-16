@@ -7,15 +7,16 @@ import { Advanced, TABS, type Tab } from "./screens/Advanced";
 import { Apps } from "./screens/Apps";
 import { Battery } from "./screens/Battery";
 import { Home } from "./screens/Home";
+import { Learning } from "./screens/Learning";
 import { Modes } from "./screens/Modes";
 import { Welcome, welcomed } from "./screens/Welcome";
 
-type Screen = "home" | "modes" | "apps" | "battery" | "activity" | "advanced";
+type Screen = "home" | "modes" | "apps" | "battery" | "learning" | "activity" | "advanced";
 
 /** Screen in the URL hash, e.g. #activity or #advanced:learning. */
 function fromHash(): [Screen, string | undefined] {
   const [s, sub] = window.location.hash.replace("#", "").split(":");
-  return [(["home", "modes", "apps", "battery", "activity", "advanced"].includes(s) ? s : "home") as Screen, sub];
+  return [(["home", "modes", "apps", "battery", "learning", "activity", "advanced"].includes(s) ? s : "home") as Screen, sub];
 }
 
 export function App() {
@@ -41,6 +42,7 @@ export function App() {
     ["modes", "nav_modes"],
     ["apps", "nav_apps"],
     ["battery", "nav_battery"],
+    ["learning", "nav_learning"],
     ["activity", "nav_activity"],
   ];
 
@@ -82,6 +84,8 @@ export function App() {
           <Apps status={status} refresh={refresh} />
         ) : screen === "battery" ? (
           <Battery status={status} refresh={refresh} />
+        ) : screen === "learning" ? (
+          <Learning status={status} refresh={refresh} />
         ) : screen === "activity" ? (
           <Activity version={status.version} onChange={refresh} />
         ) : (
