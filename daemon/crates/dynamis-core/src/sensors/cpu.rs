@@ -45,6 +45,27 @@ impl CpuState {
     }
 }
 
+/// How many logical processors there are: the `cpuN` directories, or the
+/// frequency policies where those are missing; at least 1.
+pub fn count(root: &SysRoot) -> usize {
+    let cpus = root
+        .list_dir("/sys/devices/system/cpu")
+        .into_iter()
+        .filter(|n| {
+            n.strip_prefix("cpu")
+                .is_some_and(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit()))
+        })
+        .count();
+    if cpus > 0 {
+        return cpus;
+    }
+    root.list_dir(CPUFREQ)
+        .into_iter()
+        .filter(|n| n.starts_with("policy"))
+        .count()
+        .max(1)
+}
+
 pub fn read(root: &SysRoot) -> CpuState {
     let policies = root
         .list_dir(CPUFREQ)

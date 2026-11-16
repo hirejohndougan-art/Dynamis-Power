@@ -98,7 +98,7 @@ Phase 4 (learning) adds:
 
 | Rail | How |
 | --- | --- |
-| Pre-flight checks | Tests start only on battery at 40%+, below 80 °C, during idle or light use, with no app holds, no other trial and no safe mode |
+| Pre-flight checks | Tests start only on battery at 40%+, below 80 °C, during idle or light use (or, on laptops with few cores, busier interactive use below 120% of one core while power has been steady for a minute; [decision 0020](decisions/0020-quiet-by-steady-power.md)), while power use is steady where that can be judged, with no app holds, no other trial and no safe mode |
 | Stop when things change | Charger, workload, profile or an app request ends a test early; the original value is put back |
 | Responsiveness is a hard limit | A change that adds more than 0.5 points of stall is rejected however much power it saves |
 | Health monitor during tests | Trouble undoes the test at once and blocks the setting |

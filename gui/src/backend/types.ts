@@ -298,6 +298,7 @@ export type WaitReason =
   | "no_power"
   | "warm"
   | "busy"
+  | "unsteady"
   | "app_hold"
   | "safe_mode"
   | "trial"

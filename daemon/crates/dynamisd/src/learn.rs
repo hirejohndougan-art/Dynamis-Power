@@ -44,6 +44,13 @@ const MAX_TRIES: usize = 3;
 pub(crate) const MIN_BATTERY_PCT: f64 = 40.0;
 pub(crate) const MAX_TEMP_C: f64 = 80.0;
 
+/// Below this share of the whole processor, busier interactive use still
+/// counts as quiet for learning: 120% of one core, so one busy core on a
+/// two-core chip (50%) is quiet, and between 40% and 80% of the chip.
+pub(crate) fn busy_limit(cores: usize) -> f64 {
+    (120.0 / cores.max(1) as f64).clamp(40.0, 80.0)
+}
+
 /// Timing, adjustable for tests.
 #[derive(Debug, Clone, Copy)]
 pub struct Timing {
@@ -133,6 +140,9 @@ pub struct Learning {
     /// How often the battery's power reading actually changes.
     power_seen: Option<(f64, f64)>,
     power_gaps: Vec<f64>,
+    /// Power readings over about the last block, to judge whether power use
+    /// is steady (decision 0020).
+    recent_power: std::collections::VecDeque<(f64, f64)>,
 }
 
 impl Learning {
@@ -167,6 +177,7 @@ impl Learning {
             last_tick: None,
             power_seen: None,
             power_gaps: Vec::new(),
+            recent_power: std::collections::VecDeque::new(),
         }
     }
 
@@ -270,8 +281,18 @@ impl Learning {
     fn note_power(&mut self, power_w: Option<f64>, now: f64) {
         let Some(w) = power_w else {
             self.power_seen = None;
+            self.recent_power.clear();
             return;
         };
+        let window = self.steady_window_s();
+        self.recent_power.push_back((now, w));
+        while self
+            .recent_power
+            .front()
+            .is_some_and(|(t, _)| now - t > window)
+        {
+            self.recent_power.pop_front();
+        }
         match self.power_seen {
             Some((pw, pt)) if (pw - w).abs() > 1e-6 => {
                 self.power_gaps.push(now - pt);
@@ -283,6 +304,36 @@ impl Learning {
             None => self.power_seen = Some((w, now)),
             _ => {}
         }
+    }
+
+    /// How long power must have been steady: one test block (a minute by
+    /// default).
+    fn steady_window_s(&self) -> f64 {
+        self.timing.block_s.min(60.0)
+    }
+
+    /// Whether power use has been steady over the last window (decision
+    /// 0020): its spread is small next to its level. `None` when that
+    /// cannot be told (too few readings, or a battery that updates its
+    /// reading too slowly), and the processor check alone is used.
+    pub(crate) fn steady(&self, now: f64) -> Option<bool> {
+        let window = self.steady_window_s();
+        if self.power_update_s().is_some_and(|u| u > window / 4.0) {
+            return None;
+        }
+        let n = self.recent_power.len();
+        let first = self.recent_power.front()?.0;
+        if n < 4 || now - first < window * 0.75 {
+            return None;
+        }
+        let mean = self.recent_power.iter().map(|(_, w)| w).sum::<f64>() / n as f64;
+        let var = self
+            .recent_power
+            .iter()
+            .map(|(_, w)| (w - mean).powi(2))
+            .sum::<f64>()
+            / n as f64;
+        Some(var.sqrt() <= (0.12 * mean).max(0.25))
     }
 
     pub fn testing(&self) -> bool {
@@ -445,13 +496,36 @@ impl Core {
         if ctx.max_temp_c.is_some_and(|t| t >= MAX_TEMP_C) {
             return Err(("warm", "the laptop is warm".into()));
         }
-        if !matches!(workload, Workload::Idle | Workload::LightInteractive) {
+        if !self.quiet_enough(workload, ctx) {
             return Err(("busy", format!("{} right now", workload.describe())));
+        }
+        // Light work on a slow laptop counts only while power is steady.
+        match self.learn.steady(now) {
+            Some(false) => {
+                return Err(("unsteady", "power use is changing".into()));
+            }
+            None if workload == Workload::BurstyInteractive => {
+                return Err(("busy", format!("{} right now", workload.describe())));
+            }
+            _ => {}
         }
         if !self.holds.is_empty() {
             return Err(("app_hold", "an app is holding a power mode".into()));
         }
         Ok(())
+    }
+
+    /// The processor check (decision 0020): idle and light use are quiet;
+    /// so is busier interactive use below a limit that grows as the number
+    /// of cores falls (one busy core on a two-core chip is half the chip).
+    fn quiet_enough(&self, workload: Workload, ctx: &Context) -> bool {
+        match workload {
+            Workload::Idle | Workload::LightInteractive => true,
+            Workload::BurstyInteractive => {
+                ctx.cpu_busy_pct < busy_limit(dynamis_core::sensors::cpu::count(&self.root))
+            }
+            _ => false,
+        }
     }
 
     /// Current values of the settings tuned together and of the power
@@ -708,18 +782,17 @@ impl Core {
         // Read these before borrowing the running experiment mutably.
         let active = self.active();
         let holds_empty = self.holds.is_empty();
-        // In a Learn now session, nobody is at the laptop: the step between
-        // idle and light use is the built-in light load or the screen going
-        // off, not a person, so it does not end a test.
-        let quiet = |w: Workload| matches!(w, Workload::Idle | Workload::LightInteractive);
-        let lenient = self.learn.session.as_ref().is_some_and(|s| s.active());
+        // Moving between quiet kinds of use (idle, light, light work on a
+        // slow laptop) does not end a test: A and B blocks alternate, so a
+        // slow change cancels out. Anything busier does.
+        let still_quiet = self.quiet_enough(workload, ctx);
         let Some(run) = self.learn.running.as_mut() else {
             return;
         };
         let problems = run.monitor.check();
         let changed = if ctx.on_ac {
             Some("the charger was plugged in".to_string())
-        } else if workload != run.workload && !(lenient && quiet(workload) && quiet(run.workload)) {
+        } else if workload != run.workload && !still_quiet {
             Some(format!("{} started", workload.describe()))
         } else if active != run.profile {
             Some("the power mode changed".to_string())
@@ -958,6 +1031,35 @@ mod tests {
     fn learning() -> Learning {
         let dir = std::env::temp_dir().join(format!("dynamis-learn-unit-{}", std::process::id()));
         Learning::load(&dir, Timing::default())
+    }
+
+    #[test]
+    fn busy_limit_grows_as_cores_fall() {
+        assert_eq!(busy_limit(1), 80.0);
+        assert_eq!(busy_limit(2), 60.0);
+        assert_eq!(busy_limit(4), 40.0);
+        assert_eq!(busy_limit(16), 40.0);
+    }
+
+    #[test]
+    fn steady_power_needs_a_full_window_and_a_small_spread() {
+        let mut l = learning();
+        l.timing.block_s = 60.0;
+        // Not enough yet.
+        l.note_power(Some(6.0), 0.0);
+        assert_eq!(l.steady(0.0), None);
+        for (i, w) in [6.1, 5.9, 6.0, 6.05, 5.95, 6.0].iter().enumerate() {
+            l.note_power(Some(*w), 10.0 * (i + 1) as f64);
+        }
+        assert_eq!(l.steady(60.0), Some(true));
+        // A jump: not steady.
+        for (i, w) in [9.0, 4.0, 9.5, 3.5, 9.0, 4.0].iter().enumerate() {
+            l.note_power(Some(*w), 70.0 + 10.0 * i as f64);
+        }
+        assert_eq!(l.steady(120.0), Some(false));
+        // Gone: cannot tell.
+        l.note_power(None, 130.0);
+        assert_eq!(l.steady(130.0), None);
     }
 
     #[test]

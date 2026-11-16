@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Learning on slow laptops (decision 0020): a moment counts as quiet when power use has been steady for a minute; busier interactive use also counts on laptops with few cores (below 120% of one core, between 40% and 80% of the chip), so learning runs on a two-core laptop in everyday light work. Moving between quiet kinds of use no longer ends a test. New waiting reason "power use kept changing".
+
 - *Learn now* in the service (it was a mockup): every test back to back while the laptop is left alone on battery, waiting for the screen to turn off first, with turbo and the speed limit measured under a built-in light load (about 10% of one core) unless the person leaves it out. Stops and keeps finished tests on any use of the laptop, plugging in, battery below 40%, warmth, a call, sleep or safe mode; keeps the laptop from sleeping meanwhile (logind inhibitor; the lid still works). Learning stays on afterwards. `LearnSession`, `StartLearnSession`, `StopLearnSession`.
 
 - Screen brightness for each mode (Modes screen): pick a level per mode, with what the screen uses there and how many minutes more or less the battery lasts. Set once when the mode starts (by hand, auto mode, an app or *Make it last*), so the brightness keys still win in between. Engine `set_brightness` (journaled as `brightness`, 5–100%); `Brightness`, `SetBrightnessPrefs`. Restore forgets the levels.

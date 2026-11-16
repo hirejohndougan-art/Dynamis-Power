@@ -80,7 +80,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 
 **To build, from those decisions:**
 
-- [ ] Learning: quiet means steady power for a minute, with the processor limit scaled by cores (0020)
+- [x] Learning: quiet means steady power for a minute, with the processor limit scaled by cores (0020)
 - [ ] TLP import: read `tlp.conf` and `tlp.d`, preview line by line, apply after a yes (0017)
 - [ ] `wifi.power_save` through nl80211; unit allows `AF_NETLINK` without `PrivateNetwork`, still no IP sockets; quirk for RTL8821CE and similar (0018)
 - [ ] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)

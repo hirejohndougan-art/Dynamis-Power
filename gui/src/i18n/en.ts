@@ -88,6 +88,7 @@ export const en = {
   learn_wait_no_power: "This battery reports neither power use nor charge left, so learning cannot measure on this laptop.",
   learn_wait_warm: "The laptop was warm. Tests wait for it to cool so heat does not affect the results.",
   learn_wait_busy: "The laptop was busy. Learning tests during quiet moments, such as when you are reading or watching a video.",
+  learn_wait_unsteady: "Power use kept changing. Each test needs about a minute of steady use to measure, such as reading, writing or a video.",
   learn_wait_app_hold: "An app was holding a power mode (for example a game or a video call), and learning leaves it alone.",
   learn_wait_safe_mode: "Safe mode is on, so nothing is tested.",
   learn_wait_trial: "Another change was being tried, and only one change runs at a time.",
