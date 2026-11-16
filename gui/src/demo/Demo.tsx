@@ -8,7 +8,7 @@ const changed = () => window.dispatchEvent(new Event("dynamis:changed"));
 
 const MODE_COLOUR: Record<string, string> = {
   "power-saver": "#2e7d32",
-  balanced: "#0f6e56",
+  balanced: "#ffef00",
   performance: "#d9480f",
   off: "#757575",
 };
@@ -18,7 +18,8 @@ function TrayLogo(props: { mode: string }) {
   return (
     <svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true">
       <rect x="1" y="1" width="26" height="26" rx="8" fill={MODE_COLOUR[props.mode] ?? MODE_COLOUR.off} />
-      <path d="M15.5 6 9 15.5h5l-1.5 6.5L19 12.5h-5z" fill="#fff" />
+      {/* Dark bolt on yellow, white on the darker modes (as the real panel icon). */}
+      <path d="M15.5 6 9 15.5h5l-1.5 6.5L19 12.5h-5z" fill={props.mode === "balanced" ? "#1b1d1f" : "#fff"} />
     </svg>
   );
 }

@@ -14,6 +14,8 @@ The visual mock-ups are kept with the project's design files. This document is t
 4. **Nothing risky without a clear yes.** Risky settings are off until switched on individually, with a plain explanation.
 5. **Quiet.** Few notifications, none during calls or full-screen video.
 6. **Accessible.** Full keyboard use, screen-reader labels, readable contrast, scalable text, follows the desktop's light or dark theme.
+
+**Colours.** Canary yellow (`#ffef00`) is the app's colour: buttons, switches, bars, the selected mode and the chart's fill. On light backgrounds yellow is too faint for text and thin lines, so those use a dark gold (`#6b5a00`, the `--accent-strong` token), and text on yellow is near-black. In dark mode yellow works for both. The app icon and the panel icon for Balanced are yellow with a dark bolt (`gui/scripts/make-icons.py` draws the app icons).
 7. **Free when closed.** The window costs nothing when it isn't open. The panel icon is drawn by the session agent that runs anyway, so it adds no process; it can be hidden.
 
 ## Navigation
@@ -33,10 +35,10 @@ A sidebar with six main sections. Advanced is always last and visually separated
 
 ## Home
 
+- **Power use, at the top:** watts now, the average, and a chart of the last 30 minutes with grid lines (watts from zero up the side, minutes along the bottom). Readings come from the app while it is open on battery; plugged in, the chart says most laptops report nothing while charging.
 - **Big estimate:** "About 4 h 10 min left" as a range ("3 h 50 – 4 h 30"), or "Fully charged in 40 min".
 - **Status sentence:** "Saving battery while you browse." with the active mode as a chip.
 - **The slider:** Longer battery ↔ Faster, five steps.
-- **Live draw:** current watts with a small 30-minute sparkline.
 - **Learning card:** "Learning your laptop — 6 of 18 settings checked. Saved about 25 min so far." with a link to Activity.
 - **Last change card:** the most recent automatic change, its result and Undo.
 - **Safety strip** (only when relevant): "A test was undone because Wi-Fi dropped. Nothing else changed."
@@ -96,7 +98,7 @@ Advanced opens with a one-line notice: "These controls are for experienced users
 
 **Built.** An icon next to the clock (StatusNotifierItem with a DBusMenu menu, drawn by the session agent `dynamis-agent`), shown from login on every desktop that supports panel icons (KDE Plasma, Xfce, Cinnamon, MATE, Budgie; GNOME with the AppIndicator extension, which Ubuntu ships on).
 
-- The icon is the app's logo, coloured by mode (green Longer battery, teal Balanced, orange Faster, grey when the service is not running or safe mode is on). The tooltip says the mode, battery level and time left.
+- The icon is the app's logo, coloured by mode (green Longer battery, canary yellow Balanced with a dark bolt, orange Faster, grey when the service is not running or safe mode is on). The tooltip says the mode, battery level and time left.
 - **Left click** opens the app.
 - **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *Open Dynamis Power*; *Hide this icon*.
 - Every change goes to the service exactly as the app sends it (polkit, safe mode and every rail apply). In safe mode the controls are greyed out.

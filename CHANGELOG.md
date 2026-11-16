@@ -112,6 +112,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Changed
 
+- Canary yellow is the app's colour, with dark gold for lines and text on light backgrounds; the app icon and the panel icon for Balanced are yellow with a dark bolt.
+- Home: Power use is at the top, with a chart of the last 30 minutes with grid lines, watts and time labels, and the average.
 - The settings lock is now a kernel file lock, released automatically when a process exits, instead of a PID file. Rust 1.89 or newer is required.
 
 - Phase 2 (started): changing settings safely, from the command line.

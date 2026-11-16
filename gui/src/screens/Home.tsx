@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { backend, type Profile, type Status } from "../backend";
-import { Dialog, ProgressBar, Sparkline, Switch } from "../components";
+import { Dialog, PowerChart, ProgressBar, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { clock, duration, formatTime, profileName, t, tn } from "../i18n";
 import { describe } from "../activity";
@@ -72,6 +72,36 @@ function UncleanNotice({ s }: { s: Status }) {
   );
 }
 
+/** Power use now, with a chart of the last half hour (readings the app has
+ * seen since it was opened, every 5 seconds). */
+function PowerCard(props: { s: Status; watts: number[] }) {
+  const { s, watts } = props;
+  const now = s.power.on_ac ? null : s.power.watts;
+  const avg = watts.length ? watts.reduce((a, b) => a + b, 0) / watts.length : null;
+  const minutes = Math.max(1, Math.round(((watts.length - 1) * 5) / 60));
+  return (
+    <section className="card" aria-labelledby="draw-heading">
+      <h2 id="draw-heading">{t("draw_heading")}</h2>
+      <div className="stat-row">
+        {now != null ? <p className="big">{t("draw_watts", { w: now.toFixed(1) })}</p> : <p className="muted">{t("draw_none")}</p>}
+        {now != null && avg != null && watts.length > 1 && (
+          <p className="muted">{t("draw_avg", { w: avg.toFixed(1), m: minutes })}</p>
+        )}
+      </div>
+      <PowerChart
+        values={s.power.on_ac ? [] : watts}
+        stepS={5}
+        label={
+          watts.length > 1
+            ? t("draw_chart_label", { m: minutes, min: Math.min(...watts).toFixed(1), max: Math.max(...watts).toFixed(1), now: (now ?? watts[watts.length - 1]).toFixed(1) })
+            : t("draw_chart_empty")
+        }
+        empty={s.power.on_ac ? t("draw_chart_plugged") : t("draw_chart_empty")}
+      />
+    </section>
+  );
+}
+
 export function Home(props: { status: Status; watts: number[]; refresh: () => void; go: (screen: string) => void }) {
   const s = props.status;
   const journal = useLoad(() => backend.journal(30), [s.profile, s.learning.tests]);
@@ -139,6 +169,8 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
         </div>
       )}
 
+      <PowerCard s={s} watts={props.watts} />
+
       <section className="card" aria-label={t("battery_title")}>
         <Estimate s={s} />
         <p>{nowLine}</p>
@@ -169,18 +201,6 @@ export function Home(props: { status: Status; watts: number[]; refresh: () => vo
       </section>
 
       <div className="grid">
-        <section className="card" aria-labelledby="draw-heading">
-          <h2 id="draw-heading">{t("draw_heading")}</h2>
-          {s.power.watts != null && !s.power.on_ac ? (
-            <>
-              <p className="big">{t("draw_watts", { w: s.power.watts.toFixed(1) })}</p>
-              <Sparkline values={props.watts} label={t("draw_chart", { m: Math.round((props.watts.length * 5) / 60) })} />
-            </>
-          ) : (
-            <p className="muted">{t("draw_none")}</p>
-          )}
-        </section>
-
         <section className="card" aria-labelledby="learn-heading">
           <div className="row spread">
             <h2 id="learn-heading">{t("learn_heading")}</h2>

@@ -473,7 +473,8 @@ pub fn pixmaps(mode: &str) -> Pixmaps {
         "power-saver" => (0x2e, 0x7d, 0x32),
         "performance" => (0xd9, 0x48, 0x0f),
         "off" => (0x75, 0x75, 0x75),
-        _ => (0x0f, 0x6e, 0x56),
+        // Balanced: the app's canary yellow.
+        _ => (0xff, 0xef, 0x00),
     };
     [16, 22, 24, 32, 48]
         .iter()
@@ -533,10 +534,13 @@ fn draw(n: usize, (r, g, b): (u8, u8, u8)) -> Vec<u8> {
             }
             let total = (ss * ss) as f64;
             let alpha = sq as f64 / total;
-            // Within the square: blend the mode colour towards white by the
-            // bolt's share of the covered samples.
+            // Within the square: blend the mode colour towards the bolt's
+            // colour by the bolt's share of the covered samples. The bolt is
+            // white on dark colours and near-black on light ones (yellow).
             let w = if sq > 0 { bo as f64 / sq as f64 } else { 0.0 };
-            let mix = |c: u8| (c as f64 * (1.0 - w) + 255.0 * w).round() as u8;
+            let light = 0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64 > 160.0;
+            let bolt = if light { 27.0 } else { 255.0 };
+            let mix = |c: u8| (c as f64 * (1.0 - w) + bolt * w).round() as u8;
             out.extend_from_slice(&[(alpha * 255.0).round() as u8, mix(r), mix(g), mix(b)]);
         }
     }
@@ -865,11 +869,15 @@ mod tests {
         let p = pixmaps("balanced");
         let (w, h, data) = &p[1];
         assert_eq!((*w, *h, data.len()), (22, 22, 22 * 22 * 4));
-        // Corner transparent, middle of the bolt white, square edge coloured.
+        // Corner transparent, square edge canary yellow, and the bolt dark on
+        // yellow (white on the darker modes).
         assert_eq!(data[0], 0);
         let at = |x: usize, y: usize| &data[(y * 22 + x) * 4..(y * 22 + x) * 4 + 4];
         assert_eq!(at(11, 11)[0], 255);
-        assert!(at(11, 11)[1] > 200, "{:?}", at(11, 11));
-        assert_eq!(at(3, 11), &[255, 0x0f, 0x6e, 0x56]);
+        assert!(at(11, 11)[1] < 60, "{:?}", at(11, 11));
+        assert_eq!(at(3, 11), &[255, 0xff, 0xef, 0x00]);
+        let saver = pixmaps("power-saver");
+        let d = &saver[1].2;
+        assert!(d[(11 * 22 + 11) * 4 + 1] > 200, "white bolt on green");
     }
 }

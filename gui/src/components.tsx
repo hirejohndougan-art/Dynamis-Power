@@ -65,6 +65,84 @@ export function Sparkline(props: { values: number[]; label: string }) {
   );
 }
 
+/** A step for the chart's watt lines: 0.5, 1, 2 or 5 times a power of ten,
+ * giving about four lines. */
+function niceStep(max: number) {
+  const raw = max / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  return [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
+}
+
+/** Power use over time, with grid lines: watts up the side (from zero, so
+ * the height is honest) and minutes along the bottom. `values` are readings
+ * `stepS` seconds apart, oldest first. */
+export function PowerChart(props: { values: number[]; stepS: number; label: string; empty?: string }) {
+  const v = props.values;
+  const max = Math.max(1, ...v) * 1.1;
+  const step = niceStep(max);
+  const top = Math.ceil(max / step) * step;
+  const lines: number[] = [];
+  for (let y = 0; y <= top + 1e-9; y += step) lines.push(Math.round(y * 100) / 100);
+  const W = 1000;
+  const H = 180;
+  const spanS = Math.max((v.length - 1) * props.stepS, 0);
+  const x = (i: number) => (v.length < 2 ? W : (i / (v.length - 1)) * W);
+  const y = (w: number) => H - (w / top) * H;
+  const pts = v.map((w, i) => `${x(i).toFixed(1)},${y(w).toFixed(1)}`).join(" ");
+  // Minute marks along the bottom: every 1, 2, 5 or 10 minutes.
+  const spanMin = spanS / 60;
+  const every = [1, 2, 5, 10, 15, 30].find((m) => spanMin / m <= 6) ?? 30;
+  const ticks: number[] = [];
+  for (let m = every; m < spanMin - every * 0.3; m += every) ticks.push(m);
+  const unit = step < 1 ? 1 : 0;
+  return (
+    <div className="chart">
+      <div className="chart-y" aria-hidden="true">
+        {lines.map((w) => (
+          <span key={w} style={{ top: `${(y(w) / H) * 100}%` }}>
+            {t("chart_w", { w: w.toFixed(unit) })}
+          </span>
+        ))}
+      </div>
+      <div className="chart-plot" role="img" aria-label={props.label}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="chart-fade" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" className="chart-fade-top" />
+              <stop offset="100%" className="chart-fade-bottom" />
+            </linearGradient>
+          </defs>
+          {lines.slice(1).map((w) => (
+            <line key={w} className="chart-grid" x1={0} x2={W} y1={y(w)} y2={y(w)} vectorEffect="non-scaling-stroke" />
+          ))}
+          {ticks.map((m) => {
+            const xx = W - (m * 60 / spanS) * W;
+            return <line key={m} className="chart-grid" x1={xx} x2={xx} y1={0} y2={H} vectorEffect="non-scaling-stroke" />;
+          })}
+          {v.length > 1 && (
+            <>
+              <polygon className="chart-area" fill="url(#chart-fade)" points={`0,${H} ${pts} ${W},${H}`} />
+              <polyline className="chart-line" points={pts} vectorEffect="non-scaling-stroke" />
+            </>
+          )}
+        </svg>
+        {v.length < 2 && props.empty && <div className="chart-empty">{props.empty}</div>}
+      </div>
+      <div className="chart-x" aria-hidden="true">
+        {v.length > 1 && <span style={{ left: "0%" }}>{t("chart_ago", { m: Math.max(1, Math.round(spanMin)) })}</span>}
+        {ticks
+          .filter((m) => m < spanMin * 0.85)
+          .map((m) => (
+            <span key={m} style={{ left: `${100 - (m * 60 * 100) / spanS}%` }}>
+              {t("chart_ago", { m })}
+            </span>
+          ))}
+        <span style={{ left: "100%" }}>{t("chart_now")}</span>
+      </div>
+    </div>
+  );
+}
+
 /** Pick one of a few values. Every choice is visible at once, as buttons
  * (real radio inputs underneath, so keyboards and screen readers work).
  * Used instead of drop-down lists, which some embedded views cannot open. */

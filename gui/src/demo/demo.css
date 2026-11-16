@@ -2,11 +2,11 @@
    this adds the explicit dark choice the published page needs. */
 :root[data-theme="dark"] {
   --bg: #151718; --surface: #1d2022; --surface-2: #25292b; --border: #2f3436; --border-strong: #3d4346;
-  --text: #eceeed; --text-2: #d3d7d5; --muted: #a0a7a4; --accent: #3fb59b; --accent-hover: #5cc8af;
-  --accent-text: #7fd8c3; --accent-soft: #163a32; --on-accent: #08231d; --warn-bg: #3a2a10;
-  --warn-border: #5c431a; --warn-text: #f3cf91; --danger: #ff8a7d; --focus: #7fd8c3; color-scheme: dark;
+  --text: #eceeed; --text-2: #d3d7d5; --muted: #a0a7a4; --accent: #ffef00; --accent-hover: #fff566;
+  --accent-strong: #ffef00; --accent-text: #fff27a; --accent-soft: #34310a; --on-accent: #1b1d1f; --warn-bg: #3a2a10;
+  --warn-border: #5c431a; --warn-text: #f3cf91; --danger: #ff8a7d; --focus: #ffef00; color-scheme: dark;
 }
-:root { --panel-bg: #202326; --panel-text: #f1f3f2; --desk: #c9d3cf; }
+:root { --panel-bg: #202326; --panel-text: #f1f3f2; --desk: #d6d4c8; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --desk: #0c0e0f; } }
 :root[data-theme="dark"] { --desk: #0c0e0f; }
 
@@ -22,7 +22,7 @@ body { background: var(--desk); }
 .tray-wrap { position: relative; }
 .tray-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
 .tray-icon:hover, .tray-icon[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
-.tray-icon:focus-visible { outline: 2px solid #7fd8c3; outline-offset: 1px; }
+.tray-icon:focus-visible { outline: 2px solid #ffef00; outline-offset: 1px; }
 .tray-menu { position: absolute; right: 0; top: 38px; min-width: 260px; max-width: calc(100vw - 32px); padding: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
 .tray-menu button { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 34px; padding: 0 10px 0 6px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .tray-menu button:hover:not(:disabled), .tray-menu button:focus-visible { background: var(--accent-soft); outline: none; }
