@@ -173,4 +173,30 @@ impl Client {
             .await
             .map_err(explain)
     }
+
+    /// Other power tools installed and running or set to start.
+    pub async fn conflicts(&self) -> Result<Value> {
+        self.json("Conflicts", &()).await
+    }
+
+    /// Switch off one known power tool (asks for an administrator password).
+    pub async fn switch_off_conflict(&self, unit: &str) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SwitchOffConflict", &(unit,))
+            .await
+            .map_err(explain)
+    }
+
+    pub async fn auto_prefs(&self) -> Result<Value> {
+        self.json("AutoPrefs", &()).await
+    }
+
+    pub async fn set_auto_prefs(&self, prefs: &Value) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetAutoPrefs", &(prefs.to_string(),))
+            .await
+            .map_err(explain)
+    }
 }

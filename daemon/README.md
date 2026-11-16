@@ -168,6 +168,8 @@ dynamis auto off
 | `Undo(setting)`, `Forget(setting)` | method | Put one setting back; forget what was learned about it |
 | `Restore()` | method → JSON | Restore every original setting (switches auto mode and learning off; works in safe mode) |
 | `SetSetting(setting, value, allow_risky)`, `SetSafeMode(on)` | method | Change one setting; safe mode on or off |
+| `AutoPrefs()`, `SetAutoPrefs(json)` | method | Auto mode's preferences; out-of-range values are refused with a reason |
+| `Conflicts()`, `SwitchOffConflict(unit)` | method | Other power tools found running or enabled (asked of systemd); switch one off (administrator password; only known tools; recorded so removal turns it back on) |
 | `ReportSession(facts)` | method | For the session agent only |
 
 ### Learning

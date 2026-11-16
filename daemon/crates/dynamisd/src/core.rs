@@ -291,6 +291,53 @@ impl Core {
         )
     }
 
+    pub fn auto_prefs(&self) -> &Prefs {
+        &self.auto.rules.prefs
+    }
+
+    /// Change auto mode's preferences (Modes screen). Values are checked and
+    /// refused when out of range, rather than silently clamped.
+    pub fn set_auto_prefs(&mut self, p: Prefs, now: f64) -> Result<(), String> {
+        let within = |v: f64, lo: f64, hi: f64, what: &str| {
+            if (lo..=hi).contains(&v) {
+                Ok(())
+            } else {
+                Err(format!("{what} must be between {lo} and {hi}"))
+            }
+        };
+        within(p.low_battery_pct, 10.0, 60.0, "low battery level")?;
+        within(
+            p.critical_battery_pct,
+            5.0,
+            p.low_battery_pct,
+            "very low battery level",
+        )?;
+        within(p.hot_c, 60.0, 100.0, "hot temperature")?;
+        within(p.busy_start_pct, 30.0, 100.0, "busy level")?;
+        within(p.busy_end_pct, 5.0, p.busy_start_pct, "busy end level")?;
+        within(p.busy_start_s, 5.0, 600.0, "busy time")?;
+        within(p.min_dwell_s, 10.0, 3600.0, "time between switches")?;
+        within(
+            p.max_switches_per_hour as f64,
+            1.0,
+            60.0,
+            "switches an hour",
+        )?;
+        for prof in [p.on_ac, p.on_battery] {
+            if !self.available.contains(&prof) {
+                return Err(format!(
+                    "'{}' is not available on this machine",
+                    prof.as_str()
+                ));
+            }
+        }
+        self.auto.rules.prefs = p.clone();
+        self.auto.observer.prefs = p;
+        let enabled = self.auto.enabled;
+        // Saving goes through set_auto so the file format stays in one place.
+        self.set_auto(enabled, now)
+    }
+
     pub fn report_session(&mut self, owner: &str, report: SessionReport) {
         self.auto.session = report;
         self.auto.session_owner = Some(owner.to_string());

@@ -13,6 +13,7 @@
 
 mod api;
 mod bus;
+mod conflicts;
 mod core;
 mod learn;
 

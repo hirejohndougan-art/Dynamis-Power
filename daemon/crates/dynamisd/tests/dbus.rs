@@ -697,3 +697,37 @@ fn the_client_explains_a_missing_service() {
         assert!(err.contains("not running"), "{err}");
     });
 }
+
+#[test]
+fn auto_preferences_and_conflicts() {
+    let Some(env) = Env::new("prefs") else { return };
+    let _d = Guard(env.daemon("state"));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+
+        let mut p = c.auto_prefs().await.unwrap();
+        assert_eq!(p["on_battery"], "balanced");
+        p["on_battery"] = "power-saver".into();
+        p["low_battery_pct"] = 40.into();
+        c.set_auto_prefs(&p).await.unwrap();
+        assert_eq!(c.auto_prefs().await.unwrap()["low_battery_pct"], 40.0);
+
+        // Out of range: refused with a reason, nothing changed.
+        p["low_battery_pct"] = 95.into();
+        let err = c.set_auto_prefs(&p).await.unwrap_err();
+        assert!(err.contains("low battery level"), "{err}");
+        assert_eq!(c.auto_prefs().await.unwrap()["low_battery_pct"], 40.0);
+
+        // No systemd on a test bus: no conflicts, no error.
+        assert_eq!(c.conflicts().await.unwrap(), serde_json::json!([]));
+        // Only known tools can ever be switched off.
+        let err = c.switch_off_conflict("sshd.service").await.unwrap_err();
+        assert!(err.contains("knows how to switch off"), "{err}");
+    });
+    let saved = fs::read_to_string(env.dir.join("state/auto.json")).unwrap();
+    assert!(saved.contains("\"low_battery_pct\":40"), "{saved}");
+}

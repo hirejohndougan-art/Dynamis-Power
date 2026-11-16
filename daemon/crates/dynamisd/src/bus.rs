@@ -43,6 +43,8 @@ pub const OBJECTS: [(&str, &str); 2] = [
 const ACTION_SWITCH: &str = "net.dynamis.power.switch-profile";
 const ACTION_HOLD: &str = "net.dynamis.power.hold-profile";
 const ACTION_REPORT: &str = "net.dynamis.power.report-session";
+/// Switching off another power tool: needs an administrator password.
+const ACTION_CONFLICTS: &str = "net.dynamis.power.manage-conflicts";
 
 /// Dynamis Power's own interface: auto mode, and reports from the session agent.
 pub const OWN_NAME: &str = "net.dynamis.Power";
@@ -530,6 +532,51 @@ impl DynamisPower {
             .set_safe_mode(on)
             .map(|w| w.unwrap_or_default())
             .map_err(fdo::Error::Failed)
+    }
+
+    /// Other power tools installed and running or set to start (JSON).
+    async fn conflicts(&self, #[zbus(connection)] conn: &Connection) -> String {
+        serde_json::to_string(&crate::conflicts::find(conn).await).unwrap_or_else(|_| "[]".into())
+    }
+
+    /// Stop and disable one known power tool (needs an administrator
+    /// password). Removing Dynamis Power turns it back on.
+    async fn switch_off_conflict(
+        &self,
+        unit: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_CONFLICTS).await?;
+        let dir = self.0.lock().state_dir.clone();
+        crate::conflicts::switch_off(conn, &unit, &dir)
+            .await
+            .map_err(fdo::Error::Failed)
+    }
+
+    /// Auto mode's preferences (JSON).
+    fn auto_prefs(&self) -> String {
+        serde_json::to_string(self.0.lock().auto_prefs()).unwrap_or_default()
+    }
+
+    /// Change auto mode's preferences. Takes the same JSON `AutoPrefs`
+    /// returns; out-of-range values are refused with a sentence saying why.
+    async fn set_auto_prefs(
+        &self,
+        prefs: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let p: dynamis_core::auto::Prefs =
+            serde_json::from_str(&prefs).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        let now = self.0.epoch.elapsed().as_secs_f64();
+        self.0
+            .lock()
+            .set_auto_prefs(p, now)
+            .map_err(fdo::Error::InvalidArgs)?;
+        self.0.ticker.poke();
+        Ok(())
     }
 
     /// Every calibration result and the display model, as JSON.
