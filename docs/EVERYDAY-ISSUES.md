@@ -39,6 +39,8 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 
 ## 4. Other software changing the same settings
 
+**Status: built**, except offering to switch the named tool off (a follow-up, per tool). Code: `dynamisd/src/outside.rs`, `Engine::note_outside`. Checked on each reading, so while auto mode, learning, app priority or "Last until" is on (the service does not wake up just to check). A difference that first shows right after one of Dynamis Power's own changes is taken as its side effect (choosing a governor resets the speed preference on some processors), not another tool's.
+
 **What happens.** A second tool changes a setting back: `powertop --auto-tune` at boot, vendor tools (asusctl, System76 Power, Slimbook, TUXEDO Control Center), laptop-mode-tools, distribution scripts, udev rules. Each undoes the other and nobody can tell why. TLP, power-profiles-daemon and tuned-ppd are already handled.
 
 **Plan.**

@@ -49,6 +49,10 @@ export function describe(e: JournalEntry): Item | null {
       return item(t("ev_quirk", v), strip(reason, ""), "rollbacks");
     case "block":
       return item(t("ev_blocked", v), reason, "problems");
+    case "outside": {
+      const tool = reason.match(/likely by (.+)$/)?.[1];
+      return item(t("ev_outside", v), tool ? t("why_outside_tool", { tool }) : t("why_outside"), "problems");
+    }
     case "failed":
       return item(t("ev_failed", v), reason, "problems");
     case "unblock":

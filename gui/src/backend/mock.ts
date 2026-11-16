@@ -7,7 +7,7 @@ import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, S
 const now = () => Math.floor(Date.now() / 1000);
 
 /** Things only the demo can do, such as pretending the laptop froze. */
-export const demoControls: { freeze?: () => void } = {};
+export const demoControls: { freeze?: () => void; outside?: () => void } = {};
 
 export function mockBackend(): Backend {
   let profile: Profile = "balanced";
@@ -145,6 +145,20 @@ export function mockBackend(): Backend {
   // Unclean shutdowns, as the service counts them (dynamis-core boots.rs).
   let unclean: Unclean = { last: null, in_safe_mode: 0, suspects: [] };
   let uncleanInARow = 0;
+  // Another tool (here TuneD) setting the speed preference back.
+  demoControls.outside = () => {
+    const id = "cpu.epp";
+    if (blockedIds.has(id)) return;
+    const ours = values[id];
+    const theirs = ours === "performance" ? "balance_power" : "performance";
+    values[id] = theirs;
+    log({ event: "outside", id, label: label(id), from: ours, to: theirs, reason: "changed outside Dynamis Power, likely by TuneD" });
+    const day = now() - 86400;
+    if (journal.filter((e) => e.event === "outside" && e.id === id && e.time >= day).length >= 2) {
+      blockedIds.set(id, "another tool changes this setting: TuneD");
+      log({ event: "block", id, label: label(id), reason: "another tool changes this setting: TuneD" });
+    }
+  };
   demoControls.freeze = () => {
     const t = now();
     const recent = [...new Set(journal.filter((e) => e.event === "done" && t - e.time < 600 && e.id).map((e) => e.id))]

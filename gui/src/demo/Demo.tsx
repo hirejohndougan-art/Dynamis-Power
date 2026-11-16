@@ -183,6 +183,17 @@ export function Demo() {
           >
             Pretend the laptop froze
           </button>
+          <button
+            type="button"
+            className="btn btn-small"
+            title="As if another power tool set the speed preference back. The second time, Dynamis Power leaves the setting to it."
+            onClick={() => {
+              demoControls.outside?.();
+              changed();
+            }}
+          >
+            Pretend another tool changed a setting
+          </button>
           {!appOpen && <button type="button" className="btn btn-small" onClick={() => setAppOpen(true)}>Open the app</button>}
         </span>
       </div>

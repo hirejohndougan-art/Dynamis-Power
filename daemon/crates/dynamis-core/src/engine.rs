@@ -119,7 +119,9 @@ type Result<T> = std::result::Result<T, EngineError>;
 pub struct Entry {
     pub v: u32,
     pub time: u64,
-    /// start, done, failed, keep, revert, recover, restore, block, unblock
+    /// start, done, failed, keep, revert, recover, restore, block, unblock,
+    /// outside (changed by something else), quirk, would, app-weight, safe-mode-*,
+    /// dry-run-*
     pub event: String,
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -392,14 +394,40 @@ impl Engine {
     /// The last `n` journal entries, oldest first. Lines that fail to parse
     /// (a torn final line after a power cut) are skipped.
     pub fn journal(&self, n: usize) -> Vec<Entry> {
-        let mut text = fs::read_to_string(self.dir.join("journal.1.jsonl")).unwrap_or_default();
-        text.push_str(&fs::read_to_string(self.dir.join("journal.jsonl")).unwrap_or_default());
-        let all: Vec<Entry> = text
-            .lines()
-            .filter_map(|l| serde_json::from_str(l).ok())
-            .collect();
-        let skip = all.len().saturating_sub(n);
-        all.into_iter().skip(skip).collect()
+        journal_at(&self.dir, n)
+    }
+
+    /// Record that a setting changed behind Dynamis Power's back: `ours` is
+    /// what it last set, `now` what the kernel reports. After the second
+    /// such change in a day, the setting is blocked so the two tools do not
+    /// fight. Returns whether it was blocked now.
+    pub fn note_outside(
+        &mut self,
+        id: &str,
+        ours: &str,
+        now_value: &str,
+        tool: Option<&str>,
+    ) -> Result<bool> {
+        let reason = match tool {
+            Some(t) => format!("changed outside Dynamis Power, likely by {t}"),
+            None => "changed outside Dynamis Power".to_string(),
+        };
+        self.log("outside", id, Some(ours), Some(now_value), &reason)?;
+        let since = now().saturating_sub(OUTSIDE_WINDOW_S);
+        let count = self
+            .journal(usize::MAX)
+            .iter()
+            .filter(|e| e.event == "outside" && e.id == id && e.time >= since)
+            .count();
+        if count >= OUTSIDE_LIMIT && !self.blocked().contains_key(id) {
+            let why = match tool {
+                Some(t) => format!("another tool changes this setting: {t}"),
+                None => "something outside Dynamis Power keeps changing this setting".to_string(),
+            };
+            self.block(id, &why)?;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     /// Change one setting, following the steps in the module docs.
@@ -875,6 +903,25 @@ impl Engine {
         f.sync_all()?;
         Ok(())
     }
+}
+
+/// Outside changes to one setting within [`OUTSIDE_WINDOW_S`] before it is
+/// left to the other tool.
+pub const OUTSIDE_LIMIT: usize = 2;
+const OUTSIDE_WINDOW_S: u64 = 86_400;
+
+/// The last `n` journal entries in a state directory, oldest first, without
+/// opening an engine (no lock, no recovery). Lines that fail to parse (a torn
+/// final line after a power cut) are skipped.
+pub fn journal_at(dir: &Path, n: usize) -> Vec<Entry> {
+    let mut text = fs::read_to_string(dir.join("journal.1.jsonl")).unwrap_or_default();
+    text.push_str(&fs::read_to_string(dir.join("journal.jsonl")).unwrap_or_default());
+    let all: Vec<Entry> = text
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
+    let skip = all.len().saturating_sub(n);
+    all.into_iter().skip(skip).collect()
 }
 
 fn now() -> u64 {

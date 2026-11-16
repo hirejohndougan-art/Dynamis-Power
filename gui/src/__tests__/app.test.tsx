@@ -203,6 +203,25 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.queryByText("Kept after restarts")).toBeNull());
   });
 
+  it("shows settings changed by another tool, and leaves them to it the second time", async () => {
+    demoControls.outside!();
+    window.location.hash = "#activity";
+    const first = render(<App />);
+    const problems = await screen.findByRole("button", { name: "Problems" });
+    await act(async () => fireEvent.click(problems));
+    expect(await screen.findByText(/CPU speed preference was changed by something else/)).toBeTruthy();
+    expect(screen.getByText(/Most likely TuneD\. Dynamis Power does not change it back/)).toBeTruthy();
+    expect(screen.queryByText("Blocked CPU speed preference")).toBeNull();
+    first.unmount();
+
+    demoControls.outside!();
+    render(<App />);
+    const problems2 = await screen.findByRole("button", { name: "Problems" });
+    await act(async () => fireEvent.click(problems2));
+    expect(await screen.findByText("Blocked CPU speed preference")).toBeTruthy();
+    expect(screen.getByText(/another tool changes this setting: TuneD/)).toBeTruthy();
+  });
+
   // Last: it switches safe mode on and off in the shared stand-in.
   it("explains a freeze, and uses safe mode as a test", async () => {
     await backend.setSetting("vm.swappiness", "30", false);

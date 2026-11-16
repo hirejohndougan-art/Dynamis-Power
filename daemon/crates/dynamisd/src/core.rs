@@ -94,6 +94,8 @@ pub struct Core {
     pub profile_overrides: profiles::Overrides,
     /// Settings set by hand that are applied again after restarts and sleep.
     pub kept: KeptState,
+    /// Settings changed behind Dynamis Power's back.
+    pub outside: crate::outside::OutsideState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -146,6 +148,7 @@ impl Core {
             predict,
             profile_overrides,
             kept,
+            outside: Default::default(),
         }
     }
 
@@ -397,6 +400,8 @@ impl Core {
     /// in progress is no longer valid, and devices may be new. Apply the
     /// mode, kept settings, learned settings and app shares again.
     pub fn after_resume(&mut self) {
+        self.outside
+            .quiet_until(unix_now() + crate::outside::AFTER_WAKE_S);
         self.stop_experiment_for("the laptop slept");
         if let Err(e) = self.apply_active("woke from sleep") {
             eprintln!("dynamisd: {e}");
@@ -454,6 +459,13 @@ impl Core {
         let unix = unix_now();
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
         self.kept.tick(&root, &dir, unix);
+        // Another tool changing our settings: after the second time in a day
+        // the setting is left to it, and no longer kept either.
+        for id in self.outside.check(&root, &dir, unix) {
+            if let Err(e) = self.kept.drop_setting(&id, &dir) {
+                eprintln!("dynamisd: {e}");
+            }
+        }
         let mut target_changed = false;
         if self
             .predict

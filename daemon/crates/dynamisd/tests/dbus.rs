@@ -1447,3 +1447,85 @@ fn settings_set_by_hand_survive_sleep_and_restarts() {
             .is_empty());
     });
 }
+
+/// Another tool changing a setting Dynamis Power set: journaled with the
+/// likely tool, and after the second time in a day left to that tool.
+#[test]
+fn settings_changed_by_another_tool_are_noticed_and_left_alone() {
+    let Some(env) = Env::new("outside") else {
+        return;
+    };
+    let root = env.dir.join("root");
+    let swappiness = root.join("proc/sys/vm/swappiness");
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        // Readings run while auto mode is on.
+        c.set_auto(true).await.unwrap();
+        c.set_setting("vm.swappiness", "20", false).await.unwrap();
+        c.set_kept("vm.swappiness", true).await.unwrap();
+        // Let a few readings see our own change first.
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+
+        // TuneD is running and sets it back.
+        let p = root.join("proc/4321");
+        fs::create_dir_all(&p).unwrap();
+        fs::write(p.join("comm"), "tuned\n").unwrap();
+        fs::write(&swappiness, "60").unwrap();
+        let outside = async || {
+            c.journal(50)
+                .await
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|e| e["event"] == "outside" && e["id"] == "vm.swappiness")
+                .count()
+        };
+        eventually("first outside change journaled", async || {
+            outside().await == 1
+        })
+        .await;
+        let j = c.journal(50).await.unwrap();
+        let e = j
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["event"] == "outside")
+            .unwrap();
+        assert_eq!(
+            (e["from"].as_str(), e["to"].as_str()),
+            (Some("20"), Some("60"))
+        );
+        assert!(e["reason"].as_str().unwrap().contains("TuneD"), "{e}");
+        // Not blocked yet: setting it again works.
+        c.set_setting("vm.swappiness", "20", false).await.unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+
+        // The second time in a day: left to TuneD.
+        fs::write(&swappiness, "60").unwrap();
+        eventually("second outside change blocks it", async || {
+            let rows = c.settings().await.unwrap();
+            rows.as_array().unwrap().iter().any(|r| {
+                r["id"] == "vm.swappiness"
+                    && r["blocked"].as_str().is_some_and(|b| b.contains("TuneD"))
+            })
+        })
+        .await;
+        assert!(c.set_setting("vm.swappiness", "20", false).await.is_err());
+        let kept = c.status().await.unwrap()["kept"]["settings"].clone();
+        assert!(
+            kept.as_array().unwrap().is_empty(),
+            "no longer kept: {kept}"
+        );
+        assert_eq!(
+            fs::read_to_string(&swappiness).unwrap().trim(),
+            "60",
+            "never fights"
+        );
+    });
+}

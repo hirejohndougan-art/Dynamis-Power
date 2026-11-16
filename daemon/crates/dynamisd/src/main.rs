@@ -19,6 +19,7 @@ mod core;
 mod crash;
 mod kept;
 mod learn;
+mod outside;
 mod predict;
 
 use std::path::PathBuf;
