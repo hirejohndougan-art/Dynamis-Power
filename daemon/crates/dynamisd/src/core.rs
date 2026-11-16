@@ -311,6 +311,11 @@ impl Core {
             &self.profile_overrides,
             reason,
         );
+        // A setting left to another tool (decision 0022) is not a failure.
+        let results: Vec<_> = results
+            .into_iter()
+            .filter(|a| !matches!(a.result, Err(EngineError::Elsewhere { .. })))
+            .collect();
         let failures: Vec<String> = results
             .iter()
             .filter_map(|a| {

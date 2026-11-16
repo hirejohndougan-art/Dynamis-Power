@@ -61,12 +61,23 @@ pub enum EngineError {
     Unsupported(String),
     NeedsOptIn(String),
     Advisory(String),
-    Blocked { id: String, reason: String },
+    Blocked {
+        id: String,
+        reason: String,
+    },
     Invalid(String),
     Write(String),
     State(String),
     NoTrial,
-    Quirk { id: String, reason: String },
+    Quirk {
+        id: String,
+        reason: String,
+    },
+    /// Another tool that runs alongside manages this setting (decision 0022).
+    Elsewhere {
+        id: String,
+        tool: String,
+    },
 }
 
 impl std::fmt::Display for EngineError {
@@ -100,6 +111,10 @@ impl std::fmt::Display for EngineError {
             State(s) => write!(f, "state directory problem: {s}"),
             NoTrial => write!(f, "no trial is in progress"),
             Quirk { id, reason } => write!(f, "'{id}' is not allowed on this machine: {reason}"),
+            Elsewhere { id, tool } => write!(
+                f,
+                "'{id}' is left to {tool}, which is running and manages it"
+            ),
         }
     }
 }
@@ -458,6 +473,12 @@ impl Engine {
             return Err(EngineError::Blocked {
                 id: req.id.into(),
                 reason: reason.clone(),
+            });
+        }
+        if let Some(tool) = crate::tools::managed_elsewhere(&self.root).get(req.id) {
+            return Err(EngineError::Elsewhere {
+                id: req.id.into(),
+                tool: tool.to_string(),
             });
         }
         let allowed = match s.probe(&self.root) {

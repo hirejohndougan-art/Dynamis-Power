@@ -26,6 +26,10 @@ pub const KNOWN: &[(&str, &str, bool)] = &[
         true,
     ),
     ("tuned-ppd.service", "tuned-ppd", true),
+    // They set the processor's speed preference, governor and limits
+    // themselves (decision 0022).
+    ("tccd.service", "TUXEDO Control Center", false),
+    ("slimbookbattery.service", "Slimbook Battery", false),
 ];
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

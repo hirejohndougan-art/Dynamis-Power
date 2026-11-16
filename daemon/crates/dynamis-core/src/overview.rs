@@ -20,6 +20,8 @@ pub struct SettingRow {
     /// Value before Dynamis Power first changed it.
     pub original: Option<String>,
     pub blocked: Option<String>,
+    /// Another tool that is running manages this setting (decision 0022).
+    pub managed_by: Option<&'static str>,
     /// Values a quirk forbids here, with the reason.
     pub not_allowed: Vec<(Vec<String>, String)>,
 }
@@ -27,6 +29,7 @@ pub struct SettingRow {
 pub fn settings(root: &SysRoot, engine: &Engine) -> Vec<SettingRow> {
     let blocked = engine.blocked();
     let baseline = engine.baseline();
+    let elsewhere = crate::tools::managed_elsewhere(root);
     settings::all()
         .iter()
         .map(|s| {
@@ -44,6 +47,7 @@ pub fn settings(root: &SysRoot, engine: &Engine) -> Vec<SettingRow> {
                 current: s.read(root).ok(),
                 original: baseline.get(s.id()).cloned(),
                 blocked: blocked.get(s.id()).cloned(),
+                managed_by: elsewhere.get(s.id()).copied(),
                 not_allowed: engine
                     .quirks()
                     .quirks

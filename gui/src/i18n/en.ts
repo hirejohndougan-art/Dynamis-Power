@@ -439,6 +439,8 @@ export const en = {
   status_changed: "Changed",
   status_learned: "Learned",
   status_blocked: "Blocked: {why}",
+  battery_limit_elsewhere: "{tool} is running and sets the charge limit, so Dynamis Power leaves it to that.",
+  status_elsewhere: "Left to {tool}, which is running",
   status_not_offered: "Not offered here",
   status_not_allowed: "Not allowed here: {values}",
   reset: "Reset",

@@ -84,7 +84,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 - [ ] TLP import: read `tlp.conf` and `tlp.d`, preview line by line, apply after a yes (0017)
 - [ ] `wifi.power_save` through nl80211; unit allows `AF_NETLINK` without `PrivateNetwork`, still no IP sockets; quirk for RTL8821CE and similar (0018)
 - [ ] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)
-- [ ] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
+- [x] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
 - [ ] Desktops: hide battery features without a battery; the welcome says which features apply (0023)
 - [ ] GNOME extension in the package, with help switching it on (0024)
 - [ ] Hibernation readiness check and plain advice, in the sleep test report (0025)

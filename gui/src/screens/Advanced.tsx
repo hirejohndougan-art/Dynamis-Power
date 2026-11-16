@@ -64,6 +64,7 @@ function SettingsTab(props: { rows: SettingRow[]; learned: string[]; kept: strin
   const status = (r: SettingRow) => {
     if (!r.available) return t("status_not_offered");
     if (r.blocked) return t("status_blocked", { why: r.blocked });
+    if (r.managed_by) return t("status_elsewhere", { tool: r.managed_by });
     if (props.learned.includes(r.id)) return t("status_learned");
     if (props.kept.includes(r.id)) return t("status_kept");
     if (r.original && r.original !== r.current) return t("status_changed");

@@ -1327,3 +1327,41 @@ mod brightness {
         ));
     }
 }
+
+mod alongside {
+    use super::*;
+
+    /// While asusd runs, the firmware power mode and the charge limit are
+    /// left to it (decision 0022); when it stops, they are Dynamis Power's
+    /// again.
+    #[test]
+    fn settings_are_left_to_a_tool_running_alongside() {
+        let sb = Sandbox::new();
+        let proc_dir = sb.dir.join("root/proc/4242");
+        std::fs::create_dir_all(&proc_dir).unwrap();
+        std::fs::write(proc_dir.join("comm"), "asusd\n").unwrap();
+        std::fs::write(
+            sb.dir
+                .join("root/sys/class/power_supply/BAT0/charge_control_end_threshold"),
+            "100\n",
+        )
+        .unwrap();
+        let mut e = sb.engine();
+        let err = e.apply(&req("battery.charge_limit", "80")).unwrap_err();
+        assert!(
+            matches!(&err, EngineError::Elsewhere { tool, .. } if tool.contains("asusd")),
+            "{err}"
+        );
+        let rows = dynamis_core::overview::settings(&sb.root(), &e);
+        let row = rows
+            .iter()
+            .find(|r| r.id == "battery.charge_limit")
+            .unwrap();
+        assert_eq!(row.managed_by, Some("Asus Linux (asusd)"));
+        // Other settings are still Dynamis Power's.
+        e.apply(&req("kernel.nmi_watchdog", "off")).unwrap();
+        // asusd stops.
+        std::fs::remove_dir_all(&proc_dir).unwrap();
+        e.apply(&req("battery.charge_limit", "80")).unwrap();
+    }
+}

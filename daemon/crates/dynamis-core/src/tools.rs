@@ -4,6 +4,7 @@
 
 use crate::fs::SysRoot;
 use crate::settings::Setting;
+use std::collections::BTreeMap;
 
 /// Processes that set power settings: (name in `comm` or the program file
 /// name, name for people).
@@ -65,6 +66,34 @@ pub fn running(root: &SysRoot) -> Vec<String> {
         if let Some(t) = tool_of(root, &pid) {
             if !out.contains(&t) {
                 out.push(t);
+            }
+        }
+    }
+    out
+}
+
+/// Tools Dynamis Power runs alongside (decision 0022), and the settings it
+/// leaves to each while that tool is running.
+pub const ALONGSIDE: &[(&str, &[&str])] = &[
+    (
+        "Asus Linux (asusd)",
+        &[
+            "platform.profile",
+            "battery.charge_limit",
+            "battery.charge_start",
+        ],
+    ),
+    ("supergfxctl", &["gpu.dgpu_runtime_pm"]),
+];
+
+/// Settings left to another tool that is running now, with the tool's name.
+pub fn managed_elsewhere(root: &SysRoot) -> BTreeMap<&'static str, &'static str> {
+    let running = running(root);
+    let mut out = BTreeMap::new();
+    for (tool, ids) in ALONGSIDE {
+        if running.iter().any(|r| r == tool) {
+            for id in *ids {
+                out.insert(*id, *tool);
             }
         }
     }

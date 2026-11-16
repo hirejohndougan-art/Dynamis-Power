@@ -61,7 +61,9 @@ export function Battery(props: { status: Status; refresh: () => void; go?: (scre
       </div>
       <section className="card" aria-labelledby="limit-heading">
         <h2 id="limit-heading">{t("battery_limit")}</h2>
-        {limitRow?.available && pr?.adaptive_charging ? (
+        {limitRow?.managed_by ? (
+          <p className="muted">{t("battery_limit_elsewhere", { tool: limitRow.managed_by })}</p>
+        ) : limitRow?.available && pr?.adaptive_charging ? (
           <p className="muted">{t("charge_limit_by_routine")}</p>
         ) : limitRow?.available ? (
           <>
@@ -81,7 +83,7 @@ export function Battery(props: { status: Status; refresh: () => void; go?: (scre
         ) : (
           <p className="muted">{t("battery_limit_none")}</p>
         )}
-        {limitRow?.available && (
+        {limitRow?.available && !limitRow.managed_by && (
           <>
             {fc?.active ? (
               <div className="notice notice-info">

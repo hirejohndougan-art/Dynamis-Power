@@ -117,6 +117,8 @@ export interface SettingRow {
   current: string | null;
   original: string | null;
   blocked: string | null;
+  /** Another tool that is running manages this setting, so it is left alone. */
+  managed_by?: string | null;
   not_allowed: [string[], string][];
 }
 
