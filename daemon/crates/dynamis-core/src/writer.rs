@@ -61,8 +61,26 @@ fn allowed(path: &str) -> bool {
     ALLOWED_PREFIXES.iter().any(|p| path.starts_with(p))
 }
 
+/// The one write that is not a file: Wi-Fi power saving through nl80211
+/// (decision 0018), `nl80211:<interface>/power_save` with `on` or `off`.
+fn wifi_power_save(path: &str) -> Option<&str> {
+    let ifname = path.strip_prefix("nl80211:")?.strip_suffix("/power_save")?;
+    crate::wifi::valid_name(ifname).then_some(ifname)
+}
+
 pub(crate) fn write_all(root: &SysRoot, writes: &[Write]) -> Result<(), String> {
     for w in writes {
+        if w.path.starts_with("nl80211:") {
+            let ifname = wifi_power_save(&w.path)
+                .ok_or_else(|| format!("refused to write outside the allowed paths: {}", w.path))?;
+            let on = match w.contents.as_str() {
+                "on" => true,
+                "off" => false,
+                v => return Err(format!("{}: {v} is not on or off", w.path)),
+            };
+            crate::wifi::set(root, ifname, on).map_err(|e| format!("{}: {e}", w.path))?;
+            continue;
+        }
         if !allowed(&w.path) {
             return Err(format!(
                 "refused to write outside the allowed paths: {}",
@@ -104,6 +122,9 @@ mod tests {
             "/sys/bus/pci/devices/0000:00:14.0/remove",
             "/sys/bus/pci/devices/0000:00:14.0/power/control/../../remove",
             "/sys/class/backlight/intel_backlight/bl_power",
+            "nl80211:wlan0/ps",
+            "nl80211:../x/power_save",
+            "nl80211:wlan0/../../power_save",
             "/sys/class/backlight/intel_backlight/max_brightness",
         ] {
             let err = write_all(

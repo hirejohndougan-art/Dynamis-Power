@@ -64,7 +64,7 @@ The service, `dynamisd`, adds:
 | Rail | How |
 | --- | --- |
 | Recovery at boot | `dynamisd` opens the engine before anything else at start, so an unfinished change is undone and blocked at boot |
-| No network | The systemd unit sets `PrivateNetwork=yes`, `IPAddressDeny=any` and allows only local sockets. Planned for Wi-Fi power saving ([decision 0018](decisions/0018-wifi-power-saving-through-the-kernel-only.md)): netlink to the local kernel as well, without `PrivateNetwork`; IP sockets stay forbidden and `IPAddressDeny=any` stays |
+| No network | No network connections of any kind. The systemd unit sets `IPAddressDeny=any` and `RestrictAddressFamilies=AF_UNIX AF_NETLINK`: local sockets (D-Bus) and netlink to the local kernel, used only to switch Wi-Fi power saving ([decision 0018](decisions/0018-wifi-power-saving-through-the-kernel-only.md)); no IP sockets. `PrivateNetwork=` is not set, because a private network namespace would hide the Wi-Fi interfaces; the service can see interface names, never traffic, addresses or network names. A test (`the_unit_still_forbids_network_access`) guards the unit |
 | Hardened service | Read-only filesystem except the state directory and the kernel settings it tunes, no new privileges, 64 MB memory cap, and more; see `daemon/dist/dynamisd.service` |
 | Who may change profiles | polkit: the person at the laptop yes, remote or background sessions no. If polkit cannot be asked, the answer is no |
 | One owner | Refuses to start if power-profiles-daemon, tuned-ppd or a second copy owns the interface, before touching any setting |

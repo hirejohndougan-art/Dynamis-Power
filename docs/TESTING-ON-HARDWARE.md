@@ -139,6 +139,12 @@ On the VivoBook (and any laptop where Modes used to show only Balanced):
 3. Plug the charger in: every device goes back to what it was. *Restore original settings* does the same and switches both off.
 4. Compare power on battery with the switches off and on (`sudo dynamis gauge`), with the same light use.
 
+### Wi-Fi power saving
+
+1. `iw dev` lists the Wi-Fi interface; `iw dev <name> get power_save` shows its state.
+2. `dynamis settings` should list `wifi.power_save` with the same state (or say the driver does not report it, or that a quirk keeps it off on this chip).
+3. `sudo dynamis set wifi.power_save off`, then `iw dev <name> get power_save` should say off; `sudo dynamis restore` puts it back. Note if the connection drops or web pages get slow with it on.
+
 ### Learn now
 
 1. Charge to at least 60%, unplug, and in the app press *Learning → Start learning now* (leave the light workload ticked). Leave the laptop alone.

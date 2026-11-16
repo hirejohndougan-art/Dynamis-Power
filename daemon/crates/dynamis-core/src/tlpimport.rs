@@ -174,6 +174,7 @@ const PER_SOURCE: &[(&str, &str, Convert)] = &[
         "vm.dirty_writeback",
         secs_to_centisecs,
     ),
+    ("WIFI_PWR", "wifi.power_save", same),
 ];
 
 /// TLP keys with one value.

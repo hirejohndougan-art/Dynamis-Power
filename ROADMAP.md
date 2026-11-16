@@ -82,7 +82,7 @@ The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES
 
 - [x] Learning: quiet means steady power for a minute, with the processor limit scaled by cores (0020)
 - [x] TLP import: read `tlp.conf` and `tlp.d`, preview line by line, apply after a yes (0017)
-- [ ] `wifi.power_save` through nl80211; unit allows `AF_NETLINK` without `PrivateNetwork`, still no IP sockets; quirk for RTL8821CE and similar (0018)
+- [x] `wifi.power_save` through nl80211; unit allows `AF_NETLINK` without `PrivateNetwork`, still no IP sockets; quirk for RTL8821CE and similar (0018)
 - [ ] Battery recalibration with `force-discharge`: opt-in, stops at 15%, warmth, unplugging or safe mode, always back to `auto` (0019)
 - [x] Other tools: add TUXEDO (tccd) and Slimbook Battery to the switch-off list; leave platform profile and charge limit to asusd while it runs, and the second graphics chip to supergfxctl (0022)
 - [x] Desktops: hide battery features without a battery; the welcome says which features apply (0023)
@@ -98,7 +98,7 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [x] USB autosuspend for idle devices, never for input devices, audio, phones, printers or mobile broadband *(in SETTINGS: `usb.autosuspend`)*
 - [x] A per-device "keep awake" list the person can add to (by device model, so it holds in any port)
 - [x] Runtime power management for idle PCI devices, with a per-driver "never" list *(in SETTINGS: `pci.runtime_pm`)*
-- [ ] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
+- [x] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
 - [ ] Wake-on-LAN off
 - [x] Sound controller power saving as well as the codec (`audio.controller_power`)
 - [ ] Discrete and integrated GPU: runtime power-down of a second GPU *(in SETTINGS: `gpu.dgpu_runtime_pm`)*, Intel GPU frequency limits *(in SETTINGS: `gpu.max_freq`; needs real hardware to learn how the driver rounds)*, AMD GPU power level *(done: `gpu.amd_power_level`)*

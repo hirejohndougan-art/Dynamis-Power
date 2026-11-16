@@ -2169,3 +2169,22 @@ fn a_tlp_configuration_is_imported_after_a_preview() {
         assert!(j.contains("\"event\":\"import\""));
     });
 }
+
+/// Safety rule 6 and decision 0018: the service's unit allows no IP
+/// sockets and no IP traffic; netlink (to the local kernel) is the only
+/// addition to local sockets.
+#[test]
+fn the_unit_still_forbids_network_access() {
+    let unit = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/dynamisd.service"),
+    )
+    .unwrap();
+    assert!(unit.lines().any(|l| l.trim() == "IPAddressDeny=any"));
+    let families: Vec<&str> = unit
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("RestrictAddressFamilies="))
+        .expect("RestrictAddressFamilies is set")
+        .split_whitespace()
+        .collect();
+    assert_eq!(families, ["AF_UNIX", "AF_NETLINK"]);
+}

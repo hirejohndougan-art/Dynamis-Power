@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Wi-Fi power saving (`wifi.power_save`, decision 0018): read and set through the kernel's wireless interface (nl80211 netlink, written by hand with no new dependency), for every wireless interface whose driver reports it. Learning tests it; built-in quirks keep it off on Realtek RTL8821CE and RTL8723BE; TLP's `WIFI_PWR_ON_*` imports to it. The service's unit now allows netlink and no longer sets `PrivateNetwork=`; IP sockets and IP traffic stay forbidden, and a test guards that.
+
 - Import from TLP (Advanced → System; decision 0017): reads `/etc/tlp.d/*.conf` and `/etc/tlp.conf` (text only), shows each value as Dynamis Power would use it with a checkbox, and the lines it does not import with why. Same value plugged in and on battery: a setting kept after restarts. Different: the battery value in Longer battery and the plugged-in value in Faster for settings a mode sets, else the battery value. Risky settings, values this laptop does not offer, and settings blocked here are not imported. `TlpImport`, `ApplyTlpImport`; journaled as `import`.
 
 - Computers without a battery (decision 0023): the Battery screen leaves the menu, Modes asks only for the mode for ordinary use, Learning says it cannot measure there yet and hides Learn now and the sleep test, the welcome says what works, and letting idle devices sleep (when switched on) applies on mains there, since such a computer is never on battery.

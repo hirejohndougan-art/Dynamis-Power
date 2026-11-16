@@ -19,10 +19,13 @@ StateDirectory=dynamis-power
 StateDirectoryMode=0700
 
 # --- Hardening -------------------------------------------------------------
-# No network at all: the daemon only speaks D-Bus over a local socket.
-PrivateNetwork=yes
+# No network access: the daemon speaks D-Bus over a local socket, and
+# netlink to the local kernel only for Wi-Fi power saving (decision 0018).
+# No IP sockets of any kind (AF_INET and AF_INET6 are not allowed), and no IP
+# traffic even if one were opened. PrivateNetwork= is not set because a
+# private network namespace hides the Wi-Fi interfaces from the daemon.
 IPAddressDeny=any
-RestrictAddressFamilies=AF_UNIX
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
 # The whole filesystem is read-only except the state directory and the kernel
 # interfaces under /sys and /proc/sys it tunes. ProtectKernelTunables= is
 # deliberately NOT set: it would make those read-only too.

@@ -1365,3 +1365,56 @@ mod alongside {
         e.apply(&req("battery.charge_limit", "80")).unwrap();
     }
 }
+
+mod wifi_power_save {
+    use super::*;
+    use dynamis_core::wifi::fixture;
+
+    fn state(sb: &Sandbox, ifname: &str) -> String {
+        std::fs::read_to_string(
+            sb.dir
+                .join(format!("root/run/dynamis-test/nl80211/{ifname}/power_save")),
+        )
+        .unwrap()
+        .trim()
+        .to_string()
+    }
+
+    #[test]
+    fn set_for_every_interface_and_put_back() {
+        let sb = Sandbox::new();
+        let root = sb.dir.join("root");
+        std::fs::remove_dir_all(root.join("sys/class/net/wlan0")).unwrap();
+        fixture::add(&root, "wlan1", 3, false, "iwlwifi");
+        fixture::add(&root, "wlan2", 4, false, "mt7921e");
+        let s = settings::by_id("wifi.power_save").unwrap();
+        assert!(matches!(s.probe(&sb.root()), Probe::Supported { .. }));
+        assert_eq!(s.read(&sb.root()).unwrap(), "off");
+        let mut e = sb.engine();
+        e.apply(&req("wifi.power_save", "on")).unwrap();
+        assert_eq!(
+            (state(&sb, "wlan1"), state(&sb, "wlan2")),
+            ("on".into(), "on".into())
+        );
+        e.restore().unwrap();
+        assert_eq!(state(&sb, "wlan1"), "off");
+    }
+
+    #[test]
+    fn known_bad_chips_never_get_it() {
+        let sb = Sandbox::new();
+        fixture::add(&sb.dir.join("root"), "wlp1s0", 2, false, "rtw_8821ce");
+        let mut e = sb.engine();
+        let err = e.apply(&req("wifi.power_save", "on")).unwrap_err();
+        assert!(matches!(err, EngineError::Quirk { .. }), "{err}");
+        assert_eq!(state(&sb, "wlp1s0"), "off");
+    }
+
+    #[test]
+    fn no_wifi_means_not_offered() {
+        let sb = Sandbox::new();
+        std::fs::remove_dir_all(sb.dir.join("root/sys/class/net/wlan0")).unwrap();
+        let s = settings::by_id("wifi.power_save").unwrap();
+        assert!(matches!(s.probe(&sb.root()), Probe::Unsupported { .. }));
+    }
+}

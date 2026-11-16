@@ -31,6 +31,7 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &PcieAspm,
         &StorageIoScheduler,
         &StorageSataAlpm,
+        &WifiPowerSave,
         &GpuAmdPowerLevel,
         &BatteryChargeLimit,
         &BatteryChargeStart,
@@ -1085,5 +1086,68 @@ impl Setting for SystemMemSleep {
             path: MEM_SLEEP.into(),
             contents: value.into(),
         }])
+    }
+}
+
+/// Wi-Fi power saving, through the kernel's wireless interface (nl80211;
+/// decision 0018). Every wireless interface whose driver reports it, at
+/// once. Not a file: the writer takes `nl80211:<interface>/power_save` and
+/// makes the netlink request.
+pub struct WifiPowerSave;
+
+impl WifiPowerSave {
+    /// Wireless interfaces whose driver reports power saving, with its state
+    /// (one that does not is left alone).
+    fn reporting(root: &SysRoot) -> Vec<(String, bool)> {
+        crate::wifi::interfaces(root)
+            .into_iter()
+            .filter_map(|i| crate::wifi::get(root, &i).ok().map(|on| (i, on)))
+            .collect()
+    }
+}
+
+impl Setting for WifiPowerSave {
+    fn id(&self) -> &'static str {
+        "wifi.power_save"
+    }
+    fn label(&self) -> &'static str {
+        "Wi-Fi power saving"
+    }
+    fn risk(&self) -> RiskTier {
+        // Some chips drop connections or add lag with it; those are in the
+        // built-in quirk list.
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        let ifs = crate::wifi::interfaces(root);
+        let Some(first) = ifs.first() else {
+            return unsupported("no Wi-Fi here");
+        };
+        if WifiPowerSave::reporting(root).is_empty() {
+            let why = crate::wifi::get(root, first).err().unwrap_or_default();
+            return unsupported(format!("the Wi-Fi driver does not say: {why}"));
+        }
+        Probe::Supported {
+            allowed: Allowed::OnOff,
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let states = WifiPowerSave::reporting(root);
+        let Some((_, first)) = states.first() else {
+            return Err(ReadError::Missing);
+        };
+        if states.iter().any(|(_, on)| on != first) {
+            return Ok("mixed".into());
+        }
+        Ok(if *first { "on" } else { "off" }.into())
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(WifiPowerSave::reporting(root)
+            .into_iter()
+            .map(|(i, _)| Write {
+                path: format!("nl80211:{i}/power_save"),
+                contents: value.into(),
+            })
+            .collect())
     }
 }

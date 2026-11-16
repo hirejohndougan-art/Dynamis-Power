@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "serial": 1,
+  "serial": 2,
   "issued": "2026-11-16",
   "quirks": [
     {
@@ -9,6 +9,30 @@
       "values": ["powersave"],
       "match": { "wifi_driver": "rtw*8821ce" },
       "reason": "Realtek RTL8821CE Wi-Fi is widely reported to drop out or freeze the system when PCIe link power saving is forced on.",
+      "url": "https://github.com/hirejohndougan-art/Dynamis-Power/blob/main/docs/SETTINGS.md"
+    },
+    {
+      "id": "builtin-0002",
+      "setting": "wifi.power_save",
+      "values": ["on"],
+      "match": { "wifi_driver": "rtw*8821ce" },
+      "reason": "Realtek RTL8821CE Wi-Fi is widely reported to drop connections or slow down with Wi-Fi power saving on.",
+      "url": "https://github.com/hirejohndougan-art/Dynamis-Power/blob/main/docs/SETTINGS.md"
+    },
+    {
+      "id": "builtin-0003",
+      "setting": "wifi.power_save",
+      "values": ["on"],
+      "match": { "wifi_driver": "rtl8821ce" },
+      "reason": "Realtek RTL8821CE Wi-Fi (out-of-tree driver) is widely reported to drop connections with Wi-Fi power saving on.",
+      "url": "https://github.com/hirejohndougan-art/Dynamis-Power/blob/main/docs/SETTINGS.md"
+    },
+    {
+      "id": "builtin-0004",
+      "setting": "wifi.power_save",
+      "values": ["on"],
+      "match": { "wifi_driver": "rtl8723be" },
+      "reason": "Realtek RTL8723BE Wi-Fi is widely reported to lose its connection with Wi-Fi power saving on.",
       "url": "https://github.com/hirejohndougan-art/Dynamis-Power/blob/main/docs/SETTINGS.md"
     }
   ]

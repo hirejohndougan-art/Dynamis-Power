@@ -34,6 +34,7 @@ pub mod settings;
 pub mod tlpimport;
 pub mod tools;
 pub mod tune;
+pub mod wifi;
 mod writer;
 
 pub use fs::SysRoot;

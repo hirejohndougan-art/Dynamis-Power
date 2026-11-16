@@ -60,7 +60,7 @@ Some firmware expects either `platform.profile` or `cpu.epp`, not both. Each plu
 
 | ID | What it controls | Typical interface | Risk |
 | --- | --- | --- | --- |
-| `wifi.power_save` | Wi-Fi power save | nl80211 | Usually safe |
+| `wifi.power_save` | Wi-Fi power save | nl80211 netlink (`NL80211_CMD_GET/SET_POWER_SAVE`), every wireless interface whose driver reports it; [decision 0018](decisions/0018-wifi-power-saving-through-the-kernel-only.md). Learning tests `on`. Never on RTL8821CE or RTL8723BE (built-in quirks). NetworkManager may set it back when it reconnects; the outside-change rule then leaves it to NetworkManager | Usually safe |
 | `bt.power` | Bluetooth off when unused | rfkill | Safe |
 | `pcie.aspm` | PCIe link power | `/sys/module/pcie_aspm/parameters/policy` | Usually safe if firmware enables it; forcing is risky |
 | `pci.runtime_pm` | Idle PCI devices power down | Per-device `power/control` | Usually safe |
