@@ -84,6 +84,8 @@ Off by default. Shows, field by field, what would be shared, then a single Share
 
 Advanced opens with a one-line notice: "These controls are for experienced users. Everything here can be undone."
 
+Advanced always shows the technical details (setting IDs, raw kernel values, allowed ranges, why a value is not allowed here). There is no Details toggle here; the plain-language rule with a Details toggle applies to the main screens.
+
 | Tab | Contents |
 | --- | --- |
 | Settings | Every setting the app manages, grouped by component. Each row: plain name, technical ID, current value, learned best value, risk tier badge, status (*learned*, *testing*, *pinned*, *blocked*), and controls to pin a value, exclude it from learning, or reset it. Risky and experimental settings each need their own switch |

@@ -59,9 +59,9 @@ describe("the app with the stand-in backend", () => {
     expect(await screen.findByText("These controls are for experienced users. Everything here can be undone.")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("Watchdog wakeups")).toBeTruthy());
     expect(screen.getByText(/Not allowed here: on/)).toBeTruthy();
-    expect(screen.queryByText("kernel.nmi_watchdog")).toBeNull();
-    await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Details" })));
+    // Advanced always shows the details: no toggle.
     expect(screen.getByText("kernel.nmi_watchdog")).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: "Details" })).toBeNull();
   });
 
   it("blocks changes in safe mode and says so", async () => {

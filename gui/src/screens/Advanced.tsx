@@ -57,7 +57,6 @@ type Run = (a: () => Promise<string | void>) => void;
 
 function SettingsTab(props: { rows: SettingRow[]; learned: string[]; kept: string[]; run: Run }) {
   const [keep, setKeep] = useState(false);
-  const [details, setDetails] = useState(false);
   const [editing, setEditing] = useState<SettingRow | null>(null);
   const [value, setValue] = useState("");
   const [confirmRisky, setConfirmRisky] = useState(false);
@@ -83,7 +82,6 @@ function SettingsTab(props: { rows: SettingRow[]; learned: string[]; kept: strin
 
   return (
     <>
-      <Switch checked={details} onChange={setDetails} label={t("details")} />
       <div className="table-wrap">
         <table>
           <thead>
@@ -101,18 +99,16 @@ function SettingsTab(props: { rows: SettingRow[]; learned: string[]; kept: strin
               <tr key={r.id}>
                 <td>
                   {r.label}
-                  {details && (
-                    <div>
-                      <code>{r.id}</code> <span className="muted small">{r.available ? t("change_allowed", { allowed: r.allowed }) : r.allowed}</span>
-                    </div>
-                  )}
+                  <div>
+                    <code>{r.id}</code> <span className="muted small">{r.available ? t("change_allowed", { allowed: r.allowed }) : r.allowed}</span>
+                  </div>
                   {r.not_allowed.map(([vals, why], i) => (
-                    <div key={i} className="muted small">{t("status_not_allowed", { values: vals.map((v) => valueName(r.id, v)).join(", ") || "*" })}{details && ` — ${why}`}</div>
+                    <div key={i} className="muted small">{t("status_not_allowed", { values: vals.map((v) => valueName(r.id, v)).join(", ") || "*" })}{` — ${why}`}</div>
                   ))}
                 </td>
                 <td>
                   {valueName(r.id, r.current)}
-                  {details && r.current && valueName(r.id, r.current) !== r.current && <div><code>{r.current}</code></div>}
+                  {r.current && valueName(r.id, r.current) !== r.current && <div><code>{r.current}</code></div>}
                 </td>
                 <td>{valueName(r.id, r.original)}</td>
                 <td><span className={`badge badge-${r.risk}`}>{r.risk_label}</span></td>
