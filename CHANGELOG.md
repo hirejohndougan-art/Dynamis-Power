@@ -113,6 +113,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 ### Changed
 
 - Canary yellow is the app's colour, with dark gold for lines and text on light backgrounds; the app icon and the panel icon for Balanced are yellow with a dark bolt.
+- Home is now called Dashboard. Devices has its own menu item, with every device listed (nothing folded away) by its friendly name from the system's PCI and USB ID databases ("Realtek RTL8821CE 802.11ac PCIe Wireless Network Adapter" instead of an address). The sleep test moved from Battery to Learning. Apps no longer lists Dynamis Power's own app or panel icon, and their processor time is not counted.
 - Home: a battery meter across the time-left card with the percentage inside (orange at 20% or less), and the hottest temperature next to power use (`power.temp_c` in `Status`).
 - Learning: *Learn now* mocked up (marked *Planned*; the service does not have it yet): a baseline session run while the laptop is left alone. The demo plays it out, with "Pretend someone touched the laptop".
 - Advanced → Settings always shows the details (setting IDs, raw values, allowed ranges, why a value is not allowed); the Details switch is gone.

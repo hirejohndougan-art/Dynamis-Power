@@ -64,7 +64,16 @@ pub fn app_from_cgroup(cgroup: &str) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
-/// Every process with its app and CPU time. Kernel threads are skipped.
+/// Dynamis Power's own app, panel icon and helpers: never listed in Apps,
+/// never counted and never given a different share (it would only be
+/// measuring itself). The service runs outside user.slice anyway.
+pub fn is_own(app: &str) -> bool {
+    let a = app.to_ascii_lowercase();
+    a.starts_with("dynamis") || a.starts_with("net.dynamis")
+}
+
+/// Every process with its app and CPU time. Kernel threads and Dynamis
+/// Power's own processes are skipped.
 pub fn scan(root: &SysRoot) -> Vec<Proc> {
     let mut out = Vec::new();
     for entry in root.list_dir("/proc") {
@@ -97,6 +106,9 @@ pub fn scan(root: &SysRoot) -> Vec<Proc> {
             })
             .unwrap_or_default();
         let app = app_from_cgroup(&cgroup).unwrap_or_else(|| SYSTEM.to_string());
+        if is_own(&app) {
+            continue;
+        }
         out.push(Proc {
             pid,
             app,
@@ -307,6 +319,10 @@ mod tests {
         assert_eq!(c("app-steam-ab12cd.scope").as_deref(), Some("steam"));
         assert_eq!(c("app-code-oss-4321.scope").as_deref(), Some("code-oss"));
         assert_eq!(c("session-2.scope"), None);
+        // Dynamis Power's own app and panel icon are never listed.
+        let own = c("app-net.dynamis.power@1a2b.service").unwrap();
+        assert!(is_own(&own) && is_own(&c("app-dynamis\\x2dagent@3c.service").unwrap()));
+        assert!(!is_own("org.mozilla.firefox"));
         assert_eq!(
             app_from_cgroup("/system.slice/NetworkManager.service"),
             None

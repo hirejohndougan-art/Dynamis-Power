@@ -6,7 +6,8 @@
 export const en = {
   app_name: "Dynamis Power",
   nav_main: "Main",
-  nav_home: "Home",
+  nav_home: "Dashboard",
+  nav_devices: "Devices",
   nav_modes: "Modes",
   nav_battery: "Battery",
   nav_activity: "Activity",
@@ -22,7 +23,7 @@ export const en = {
   profile_performance_desc: "Full speed for heavy work and games.",
 
   // Home
-  home_title: "Home",
+  home_title: "Dashboard",
   home_restore: "Restore original settings",
   est_left: "About {time} left",
   est_to_full: "Fully charged in {time}",
@@ -184,6 +185,8 @@ export const en = {
   full_charge_ended: "Charging fully ended: {why}.",
   dev_heading: "Devices",
   dev_intro: "On battery, idle devices can be powered down until they are needed. Plugged in, or in Faster, each goes back to its own setting.",
+  dev_usb_heading: "USB devices",
+  dev_pci_heading: "Built-in hardware",
   dev_usb_switch: "Let idle USB devices sleep",
   dev_usb_desc: "Not keyboards, mice, sound, printers, phones, Bluetooth or mobile broadband, which can misbehave when they sleep.",
   dev_pci_switch: "Let idle built-in hardware sleep",
@@ -481,7 +484,7 @@ export const en = {
   welcome_title_4: "Choose how it works",
   welcome_auto_desc: "Picks Longer battery, Balanced or Faster from what you are doing. You can still pick one yourself any time.",
   welcome_learn_desc: "Tests settings one at a time at quiet moments on battery, and keeps only what measurably saves power without slowing the laptop.",
-  welcome_change_later: "You can change these any time on Home.",
+  welcome_change_later: "You can change these any time on the Dashboard.",
   back: "Back",
   next: "Next",
   start: "Start",

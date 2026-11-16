@@ -93,7 +93,7 @@ describe("the app with the stand-in backend", () => {
     const learn = screen.getByRole("switch", { name: "Learn" });
     await act(async () => fireEvent.click(learn));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start" })));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Home" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Dashboard" })).toBeTruthy());
     expect(localStorage.getItem("dynamis.welcomed")).toBe("1");
     expect(screen.getByRole("switch", { name: "Learn" }).getAttribute("aria-checked")).toBe("false");
   });
@@ -231,7 +231,8 @@ describe("the app with the stand-in backend", () => {
   }, 15000);
 
   it("runs the sleep test and uses the kind it recommends", async () => {
-    window.location.hash = "#battery";
+    // The sleep test lives under Learning.
+    window.location.hash = "#learning";
     render(<App />);
     const start = await screen.findByRole("button", { name: "Start the sleep test" });
     await act(async () => fireEvent.click(start));
@@ -261,7 +262,8 @@ describe("the app with the stand-in backend", () => {
   });
 
   it("lets idle devices sleep, never the sensitive ones", async () => {
-    window.location.hash = "#battery";
+    // Devices has its own screen, with every device listed (nothing folded away).
+    window.location.hash = "#devices";
     render(<App />);
     const usb = await screen.findByRole("switch", { name: "Let idle USB devices sleep" });
     expect(usb.getAttribute("aria-checked")).toBe("false");
@@ -269,7 +271,12 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.getByRole("switch", { name: "Let idle USB devices sleep" }).getAttribute("aria-checked")).toBe("true"));
     expect(screen.getByText(/1-2 · kept awake: input devices/)).toBeTruthy();
     expect(screen.getAllByText("Changed").length).toBe(2);
-    expect(screen.getByText(/0000:00:14.0/).closest("li")?.textContent).toContain("USB controller");
+    expect(screen.getByRole("link", { name: "Devices" }).getAttribute("aria-current")).toBe("page");
+    expect(document.querySelector("details")).toBeNull();
+    // Friendly names, with the kind of device and its address beside them.
+    const xhci = screen.getByText(/0000:00:14.0/).closest("li")?.textContent ?? "";
+    expect(xhci).toContain("Intel Celeron N4020 USB 3.0 xHCI Controller");
+    expect(xhci).toContain("USB controller · 0000:00:14.0");
     // Keep one device awake by hand.
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Keep awake: Integrated Camera" })));
     await waitFor(() => expect(screen.getByText(/1-3 · you keep it awake/)).toBeTruthy());

@@ -294,7 +294,9 @@ pub fn report(
     let _ = writeln!(o);
 
     let _ = writeln!(o, "== Devices (power/control) ==");
-    for d in devices::scan(root) {
+    let mut found = devices::scan(root);
+    devices::add_friendly_names(root, &mut found);
+    for d in found {
         let _ = writeln!(
             o,
             "{:<22} {:<5} {:<15} {}{}",

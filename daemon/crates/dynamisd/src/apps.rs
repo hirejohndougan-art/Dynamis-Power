@@ -319,6 +319,8 @@ impl AppsState {
             self.meter
                 .totals(days, now_unix)
                 .into_iter()
+                // Older totals may still hold Dynamis Power's own app.
+                .filter(|(app, _)| !dynamis_core::apps::is_own(app))
                 .map(|(app, u)| json!({"app": app, "cpu_s": u.cpu_s, "wh": u.wh}))
                 .collect::<Vec<_>>()
         };

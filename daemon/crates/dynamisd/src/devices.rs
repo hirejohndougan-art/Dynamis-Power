@@ -193,7 +193,9 @@ impl DevicesState {
         let (touched, blocked) = open_engine(root, dir)
             .map(|e| (e.touched_devices(), e.blocked()))
             .unwrap_or_default();
-        let list: Vec<Value> = devices::scan(root)
+        let mut found = devices::scan(root);
+        devices::add_friendly_names(root, &mut found);
+        let list: Vec<Value> = found
             .into_iter()
             .map(|d| {
                 json!({

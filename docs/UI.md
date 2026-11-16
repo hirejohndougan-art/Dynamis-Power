@@ -20,21 +20,23 @@ The visual mock-ups are kept with the project's design files. This document is t
 
 ## Navigation
 
-A sidebar with six main sections. Advanced is always last and visually separated.
+A sidebar, in this order: Dashboard, Modes, Apps, Battery, Devices, Learning, Activity, then Advanced, always last and visually separated.
 
 | Section | Who it's for | Purpose |
 | --- | --- | --- |
-| Home | Everyone | How things stand and the one main control |
+| Dashboard | Everyone | How things stand and the one main control |
 | Modes | Everyone | Choose or schedule profiles; "Last until" |
-| Battery | Everyone | Health, charge limit, history |
-| Learning | Everyone | How far learning has got (a percentage, tests and quiet time left), what it kept with Forget, the tests so far |
-| Apps | Everyone | What uses power; per-app rules |
+| Battery | Everyone | Health, charge limit, forecast, charging |
+| Devices | Everyone | Let idle USB devices and built-in hardware sleep on battery; every device listed by its friendly name (from the system's `pci.ids` and `usb.ids`, as `lspci` and `lsusb` use), with why some stay awake and *Keep awake* per device |
+| Learning | Everyone | How far learning has got (a percentage, tests and quiet time left), what it kept with Forget, the tests so far, *Learn now* (planned) and the sleep test |
+| Apps | Everyone | What uses power; per-app rules. Dynamis Power's own app and panel icon are never listed |
 | Activity | Everyone | Plain-language history of changes, with Undo; logs and export |
 | Sharing | Everyone | Opt-in results sharing, what's sent, delete my data |
 | Advanced | Experienced users | Every setting, learning controls, sensors, profiles, safety, developer tools |
 
-## Home
+## Dashboard
 
+The first screen (called Home in older notes). 
 - **Power use, at the top:** watts now, the average, the hottest temperature, and a chart of the last 30 minutes with grid lines (watts from zero up the side, minutes along the bottom). Readings come from the app while it is open on battery; plugged in, the chart says most laptops report nothing while charging.
 - **Battery meter:** a battery-shaped bar across the time-left card, filled to the charge with the percentage inside ("79%", "79% · charging"); orange at 20% or less.
 - **Big estimate:** "About 4 h 10 min left" as a range ("3 h 50 – 4 h 30"), or "Fully charged in 40 min".
@@ -50,7 +52,7 @@ Cards for each profile with a one-line description. "Last until" opens a time pi
 
 ## Battery
 
-Health percentage against design capacity, wear trend, charge limit toggle (only where supported), adaptive charging, overnight drain report, and charge history. **Built:** health, capacity, cycles, charge limit, what the screen costs, the forecast at your usual use and usual unplug time, *Make it last* (2/4/6/8 hours or a clock time; shows the budget and recent use; *Stop*), *Follow my routine* (charging that follows habits), *Sleep test* (finds the kind of sleep that uses least battery and wakes cleanly, with an explicit yes before it starts and before the result is used), and *Devices* (two switches to let idle USB devices and built-in hardware sleep on battery, with each device listed under a Details toggle and why some are kept awake). Still planned: wear trend, overnight drain report, charge history. "Last until" lives on Battery rather than Modes, next to the forecast it depends on; Home shows it while it runs.
+Health percentage against design capacity, wear trend, charge limit toggle (only where supported), adaptive charging, overnight drain report, and charge history. **Built:** health, capacity, cycles, charge limit, what the screen costs, the forecast at your usual use and usual unplug time, *Make it last* (2/4/6/8 hours or a clock time; shows the budget and recent use; *Stop*), *Follow my routine* (charging that follows habits), and, until they moved, the sleep test (now under Learning) and the device switches (now their own Devices screen). Still planned: wear trend, overnight drain report, charge history. "Last until" lives on Battery rather than Modes, next to the forecast it depends on; Home shows it while it runs.
 
 ## Apps
 

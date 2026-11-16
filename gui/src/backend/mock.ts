@@ -223,11 +223,11 @@ export function mockBackend(): Backend {
     { id: "usb:1-2", kind: "usb", name: "Logitech USB Receiver", what: "usb_device", address: "1-2", model: "usb:8086:43c8", excluded: "input", own: false },
     { id: "usb:1-10", kind: "usb", name: "Bluetooth", what: "usb_device", address: "1-10", model: "usb:8086:2c42", excluded: "bluetooth", own: false },
     { id: "usb:usb1", kind: "usb", name: "xHCI Host Controller", what: "usb_device", address: "usb1", model: "usb:8086:a609", excluded: null, own: true },
-    { id: "pci:0000:00:02.0", kind: "pci", name: null, what: "graphics", address: "0000:00:02.0", model: "pci:8086:c991", excluded: "graphics", own: false },
-    { id: "pci:0000:00:14.0", kind: "pci", name: null, what: "usb_controller", address: "0000:00:14.0", model: "pci:8086:b98b", excluded: null, own: false },
-    { id: "pci:0000:00:16.0", kind: "pci", name: null, what: "communication", address: "0000:00:16.0", model: "pci:8086:bcbd", excluded: "management", own: false },
-    { id: "pci:0000:00:17.0", kind: "pci", name: null, what: "storage", address: "0000:00:17.0", model: "pci:8086:52e5", excluded: null, own: false },
-    { id: "pci:0000:01:00.0", kind: "pci", name: null, what: "network", address: "0000:01:00.0", model: "pci:8086:08f3", excluded: null, own: true },
+    { id: "pci:0000:00:02.0", kind: "pci", name: "Intel UHD Graphics 600", what: "graphics", address: "0000:00:02.0", model: "pci:8086:c991", excluded: "graphics", own: false },
+    { id: "pci:0000:00:14.0", kind: "pci", name: "Intel Celeron N4020 USB 3.0 xHCI Controller", what: "usb_controller", address: "0000:00:14.0", model: "pci:8086:b98b", excluded: null, own: false },
+    { id: "pci:0000:00:16.0", kind: "pci", name: "Intel Trusted Execution Engine", what: "communication", address: "0000:00:16.0", model: "pci:8086:bcbd", excluded: "management", own: false },
+    { id: "pci:0000:00:17.0", kind: "pci", name: "Intel SATA AHCI Controller", what: "storage", address: "0000:00:17.0", model: "pci:8086:52e5", excluded: null, own: false },
+    { id: "pci:0000:01:00.0", kind: "pci", name: "Realtek RTL8821CE 802.11ac Wi-Fi Adapter", what: "network", address: "0000:01:00.0", model: "pci:8086:08f3", excluded: null, own: true },
   ];
   // Unclean shutdowns, as the service counts them (dynamis-core boots.rs).
   let unclean: Unclean = { last: null, in_safe_mode: 0, suspects: [] };

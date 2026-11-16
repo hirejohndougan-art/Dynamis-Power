@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { backend, type LearnSession, type Status } from "../backend";
 import { Dialog, ProgressBar, Switch } from "../components";
+import { SleepTest } from "./SleepTest";
 import { useAction, useLoad } from "../hooks";
 import { duration, formatTime, t, tn, valueName } from "../i18n";
 
@@ -56,6 +57,7 @@ export function Learning(props: { status: Status; refresh: () => void }) {
       </section>
 
       {backend.learnSession && <LearnNow status={props.status} run={run} />}
+      {props.status.power.has_battery && <SleepTest locked={!!props.status.safe_mode} run={run} />}
 
       <section className="card" aria-labelledby="lkept-heading">
         <h2 id="lkept-heading">{t("learning_kept_heading")}</h2>

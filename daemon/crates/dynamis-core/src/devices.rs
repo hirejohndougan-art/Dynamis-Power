@@ -155,7 +155,7 @@ fn usb_name(root: &SysRoot, name: &str) -> Option<String> {
         (Some(m), Some(p)) if !p.contains(&m) && !name.starts_with("usb") => {
             Some(format!("{m} {p}"))
         }
-        (_, p) => p,
+        (_, p) => p.map(|p| p.replace('_', " ")),
     }
 }
 
@@ -193,6 +193,124 @@ fn model_key(root: &SysRoot, bus: &str, dir: &str, vendor: &str, product: &str) 
             .filter(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_hexdigit()))
     };
     Some(format!("{bus}:{}:{}", read(vendor)?, read(product)?))
+}
+
+const PCI_IDS: &[&str] = &[
+    "/usr/share/hwdata/pci.ids",
+    "/usr/share/misc/pci.ids",
+    "/usr/share/pci.ids",
+];
+const USB_IDS: &[&str] = &[
+    "/usr/share/hwdata/usb.ids",
+    "/usr/share/misc/usb.ids",
+    "/var/lib/usbutils/usb.ids",
+];
+
+/// A shorter maker name: "Intel Corporation" → "Intel",
+/// "Advanced Micro Devices, Inc. [AMD/ATI]" → "AMD".
+fn short_vendor(v: &str) -> String {
+    if let Some(b) = v
+        .split_once('[')
+        .and_then(|(_, r)| r.split_once(']'))
+        .map(|(b, _)| b)
+    {
+        return b.split('/').next().unwrap_or(b).trim().to_string();
+    }
+    let mut v = v.trim().to_string();
+    for suffix in [
+        " Semiconductor Co., Ltd.",
+        " Semiconductor Corp.",
+        " Technology Inc.",
+        " Co., Ltd.",
+        " Corporation",
+        " Corp.",
+        ", Inc.",
+        " Inc.",
+        " Ltd.",
+        " GmbH",
+    ] {
+        if let Some(s) = v.strip_suffix(suffix) {
+            v = s.to_string();
+        }
+    }
+    v
+}
+
+/// The device's name for people from an ID database (`pci.ids`, `usb.ids`,
+/// as `lspci` and `lsusb` use): "Intel Wi-Fi 6 AX201". Bracketed marketing
+/// names are preferred ("Renoir [Radeon Vega Series]" → "Radeon Vega Series").
+fn lookup(text: &str, vendor: &str, device: &str) -> Option<String> {
+    let mut vendor_name: Option<&str> = None;
+    for line in text.lines() {
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if !line.starts_with('\t') {
+            if vendor_name.is_some() || line.starts_with("C ") {
+                break; // past our maker (or into the class list)
+            }
+            if let Some(name) = line.strip_prefix(vendor).and_then(|r| r.strip_prefix("  ")) {
+                vendor_name = Some(name.trim());
+            }
+            continue;
+        }
+        let Some(maker) = vendor_name else { continue };
+        if line.starts_with("\t\t") {
+            continue; // subsystems
+        }
+        if let Some(name) = line[1..]
+            .strip_prefix(device)
+            .and_then(|r| r.strip_prefix("  "))
+        {
+            let name = name.trim();
+            let name = name
+                .split_once('[')
+                .and_then(|(_, r)| r.split_once(']'))
+                .map(|(b, _)| b.trim())
+                .filter(|b| !b.is_empty())
+                .unwrap_or(name);
+            let maker = short_vendor(maker);
+            return Some(if name.starts_with(&maker) {
+                name.to_string()
+            } else {
+                format!("{maker} {name}")
+            });
+        }
+    }
+    None
+}
+
+/// Fill in names for people: PCI functions from `pci.ids`, and USB
+/// devices that do not name themselves from `usb.ids`. Read only when the
+/// app asks (the databases are a megabyte or so).
+pub fn add_friendly_names(root: &SysRoot, list: &mut [Device]) {
+    let load = |paths: &[&str]| paths.iter().find_map(|p| root.read_string(p).ok());
+    let pci = list
+        .iter()
+        .any(|d| d.kind == Kind::Pci)
+        .then(|| load(PCI_IDS))
+        .flatten();
+    let usb = list
+        .iter()
+        .any(|d| d.kind == Kind::Usb && d.name.is_none())
+        .then(|| load(USB_IDS))
+        .flatten();
+    for d in list.iter_mut() {
+        let text = match (d.kind, d.name.is_none()) {
+            (Kind::Pci, _) => pci.as_deref(),
+            (Kind::Usb, true) => usb.as_deref(),
+            _ => None,
+        };
+        let ids = d.model.as_deref().and_then(|m| {
+            let mut p = m.splitn(3, ':').skip(1);
+            Some((p.next()?.to_string(), p.next()?.to_string()))
+        });
+        if let (Some(text), Some((v, p))) = (text, ids) {
+            if let Some(n) = lookup(text, &v, &p) {
+                d.name = Some(n);
+            }
+        }
+    }
 }
 
 /// Every USB device and PCI function with a `power/control` file.
@@ -372,6 +490,42 @@ mod tests {
         assert!(get("pci:0000:00:16.0").excluded.is_some());
         assert_eq!(get("pci:0000:01:00.0").what, "network");
         assert_eq!(get("pci:0000:01:00.0").address, "0000:01:00.0");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn names_devices_from_the_id_databases() {
+        let ids = "# pci.ids\n8086  Intel Corporation\n\ta0ed  Tiger Lake-LP USB 3.2 Gen 2x1 xHCI Host Controller\n\t\t1043 1b2c  Subsystem\n10ec  Realtek Semiconductor Co., Ltd.\n\tc821  RTL8821CE 802.11ac PCIe Wireless Network Adapter\n1002  Advanced Micro Devices, Inc. [AMD/ATI]\n\t1638  Cezanne [Radeon Vega Series / Radeon Vega Mobile Series]\nC 00  Unclassified device\n";
+        assert_eq!(
+            lookup(ids, "8086", "a0ed").as_deref(),
+            Some("Intel Tiger Lake-LP USB 3.2 Gen 2x1 xHCI Host Controller")
+        );
+        assert_eq!(
+            lookup(ids, "10ec", "c821").as_deref(),
+            Some("Realtek RTL8821CE 802.11ac PCIe Wireless Network Adapter")
+        );
+        assert_eq!(
+            lookup(ids, "1002", "1638").as_deref(),
+            Some("AMD Radeon Vega Series / Radeon Vega Mobile Series")
+        );
+        assert_eq!(lookup(ids, "8086", "ffff"), None);
+
+        let dir = std::env::temp_dir().join(format!("dynamis-devnames-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        fixture::pci(&dir, "0000:00:14.0", "0x0c0330", "on", "xhci_hcd");
+        let d = dir.join("sys/bus/pci/devices/0000:00:14.0");
+        std::fs::write(d.join("vendor"), "0x8086\n").unwrap();
+        std::fs::write(d.join("device"), "0xa0ed\n").unwrap();
+        std::fs::create_dir_all(dir.join("usr/share/hwdata")).unwrap();
+        std::fs::write(dir.join("usr/share/hwdata/pci.ids"), ids).unwrap();
+        let root = SysRoot::at(&dir);
+        let mut list = scan(&root);
+        assert_eq!(list[0].name, None);
+        add_friendly_names(&root, &mut list);
+        assert_eq!(
+            list[0].name.as_deref(),
+            Some("Intel Tiger Lake-LP USB 3.2 Gen 2x1 xHCI Host Controller")
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
