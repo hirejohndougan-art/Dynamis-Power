@@ -1,0 +1,11 @@
+{
+  "name": "Gaming, and running hot",
+  "about": "Games get full speed on mains power, balanced on battery; heat caps at balanced until it has cooled well down.",
+  "steps": [
+    { "t": 0,   "set": { "on_ac": true, "battery_pct": 90, "game_running": true, "cpu_busy_pct": 60, "max_temp_c": 70 }, "expect": "performance", "workload": "gaming" },
+    { "t": 100, "set": { "max_temp_c": 90 }, "expect": "balanced" },
+    { "t": 200, "set": { "max_temp_c": 80 }, "expect": "balanced" },
+    { "t": 300, "set": { "max_temp_c": 70 }, "expect": "performance" },
+    { "t": 400, "set": { "on_ac": false }, "expect": "balanced" }
+  ]
+}

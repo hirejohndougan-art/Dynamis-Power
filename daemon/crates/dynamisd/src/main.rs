@@ -23,7 +23,10 @@ use dynamis_core::engine::DEFAULT_STATE_DIR;
 use dynamis_core::SysRoot;
 use futures_lite::StreamExt;
 
-use crate::bus::{HadessProfiles, Service, UPowerProfiles, BUS_NAMES, OBJECTS};
+use crate::bus::{
+    DynamisPower, HadessProfiles, Service, Ticker, UPowerProfiles, BUS_NAMES, OBJECTS, OWN_NAME,
+    OWN_PATH,
+};
 use crate::core::Core;
 
 #[derive(Parser)]
@@ -35,6 +38,9 @@ struct Args {
     /// Keep state here instead of /var/lib/dynamis-power.
     #[arg(long, value_name = "DIR", hide = true)]
     state_dir: Option<PathBuf>,
+    /// Seconds between auto-mode readings (four times longer while idle).
+    #[arg(long, default_value_t = 15.0, hide = true)]
+    tick_secs: f64,
     /// Use the session bus and skip polkit (testing only; needs --root, so it
     /// can never change the real system without polkit).
     #[arg(long, hide = true)]
@@ -83,6 +89,8 @@ async fn run(args: Args) -> Result<(), String> {
     let svc = Service {
         core: Arc::new(Mutex::new(core)),
         polkit: !args.session,
+        ticker: Arc::new(Ticker::default()),
+        epoch: std::time::Instant::now(),
     };
 
     // Claim the bus names *before* applying anything, so a second copy (or
@@ -97,8 +105,10 @@ async fn run(args: Args) -> Result<(), String> {
     let conn = builder
         .serve_at(OBJECTS[0].0, UPowerProfiles(svc.clone()))
         .serve_at(OBJECTS[1].0, HadessProfiles(svc.clone()))
+        .serve_at(OWN_PATH, DynamisPower(svc.clone()))
         .name(BUS_NAMES[0])
         .name(BUS_NAMES[1])
+        .name(OWN_NAME)
         .replace_existing_names(false)
         .allow_name_replacements(false)
         .build()
@@ -123,6 +133,7 @@ async fn run(args: Args) -> Result<(), String> {
         }
     }
     eprintln!("dynamisd: ready");
+    spawn_auto_thread(conn.clone(), svc.clone(), args.tick_secs);
 
     // Holds end when the app that made them leaves the bus. This loop is also
     // what keeps the service running; it sleeps between messages.
@@ -138,11 +149,11 @@ async fn run(args: Args) -> Result<(), String> {
         if args.new_owner().is_some() || !args.name().starts_with(':') {
             continue;
         }
-        let released = svc
-            .core
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .release_owner(args.name());
+        let released = {
+            let mut core = svc.core.lock().unwrap_or_else(|p| p.into_inner());
+            core.session_gone(args.name());
+            core.release_owner(args.name())
+        };
         if !released.is_empty() {
             for cookie in released {
                 bus::emit_released(&conn, cookie).await;
@@ -151,4 +162,34 @@ async fn run(args: Args) -> Result<(), String> {
         }
     }
     Err("lost the D-Bus connection".into())
+}
+
+/// Auto mode's readings run on their own thread. While auto mode is off the
+/// thread sleeps until woken, so the daemon still never wakes up on its own.
+fn spawn_auto_thread(conn: zbus::Connection, svc: Service, tick_secs: f64) {
+    let base = std::time::Duration::from_secs_f64(tick_secs.clamp(0.2, 600.0));
+    std::thread::spawn(move || {
+        let mut last_said = String::new();
+        loop {
+            let (enabled, interval) = {
+                let c = svc.core.lock().unwrap_or_else(|p| p.into_inner());
+                (c.auto.enabled, c.auto_interval(base))
+            };
+            svc.ticker.wait(enabled.then_some(interval));
+            let now = svc.epoch.elapsed().as_secs_f64();
+            let (changed, said) = {
+                let mut c = svc.core.lock().unwrap_or_else(|p| p.into_inner());
+                let changed = c.auto_tick(now);
+                (changed, c.auto_status().1)
+            };
+            // Signal only real changes, so listeners are not woken every tick.
+            if changed {
+                zbus::block_on(bus::notify(&conn, &svc));
+            }
+            if changed || said != last_said {
+                zbus::block_on(bus::notify_auto(&conn, &svc));
+                last_said = said;
+            }
+        }
+    });
 }

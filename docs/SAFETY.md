@@ -79,4 +79,13 @@ Phase 2 also adds:
 | Safe mode after unclean shutdowns | Three boots in a row that follow a freeze, crash or power cut switch safe mode on. It stays on until a person runs `dynamis safe-mode off`, so a setting that causes freezes cannot cycle back on. Code: `boots.rs` |
 | Bounded journal | The journal rotates at 1 MB, keeping one previous file |
 
-Not built, by decision: the systemd watchdog, and the change rate limit until automatic changes exist ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: pre-flight checks (battery floor, no call or full-screen video) with automatic experiments in phase 4, and dropping capabilities to the minimum after the real-hardware test.
+Phase 3 (auto mode) adds:
+
+| Rail | How |
+| --- | --- |
+| Change rate limit | At most 12 automatic switches an hour, at least 60 s apart, with hysteresis on every threshold. Only urgent changes (charger, critical battery, a call, coming back to the laptop) skip it |
+| People win | A profile picked by hand pauses auto mode until the charger is plugged in or out; app holds always win |
+| Same safety path | Auto mode only switches between the three standard profiles, through the same engine, journal and quirk checks as any other change |
+| Off by default | Auto mode does nothing until switched on |
+
+Not built, by decision: the systemd watchdog ([decision 0010](decisions/0010-no-systemd-watchdog-yet.md)). Still to come: pre-flight checks (battery floor, no call or full-screen video) with automatic experiments in phase 4, and dropping capabilities to the minimum after the real-hardware test.

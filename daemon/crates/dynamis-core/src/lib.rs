@@ -8,7 +8,9 @@
 //! directories instead of the real `/sys` and `/proc`. The only write path is
 //! the private `writer` module, called only by [`engine::Engine`].
 
+pub mod auto;
 pub mod boots;
+pub mod context;
 pub mod engine;
 pub mod fs;
 pub mod gauge;

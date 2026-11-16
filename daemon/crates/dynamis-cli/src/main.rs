@@ -3,6 +3,7 @@
 //! Most commands only read. `set`, `restore` and `unblock` change settings,
 //! always through the engine's safety checks (see `changes.rs`).
 
+mod auto_cmd;
 mod changes;
 
 use std::fs::File;
@@ -132,6 +133,15 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Show, switch on or switch off auto mode: the service picks the profile
+    /// from what the laptop is doing.
+    Auto {
+        #[arg(value_enum, default_value_t = SafeModeAction::Status)]
+        action: SafeModeAction,
+        /// Talk to a test service on the session bus.
+        #[arg(long, hide = true)]
+        session_bus: bool,
+    },
     /// Show, switch on or switch off safe mode (no setting is changed while it
     /// is on; restore still works).
     SafeMode {
@@ -203,6 +213,17 @@ fn main() {
         ),
         Command::Restore => changes::cmd_restore(&root, &state),
         Command::Journal { last, json } => changes::cmd_journal(&root, &state, last, json),
+        Command::Auto {
+            action,
+            session_bus,
+        } => auto_cmd::cmd_auto(
+            match action {
+                SafeModeAction::Status => None,
+                SafeModeAction::On => Some(true),
+                SafeModeAction::Off => Some(false),
+            },
+            session_bus,
+        ),
         Command::SafeMode { action } => changes::cmd_safe_mode(
             &root,
             &state,

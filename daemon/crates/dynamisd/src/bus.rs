@@ -13,7 +13,8 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use dynamis_core::profiles::{self, Profile};
 use zbus::fdo;
@@ -22,7 +23,7 @@ use zbus::names::InterfaceName;
 use zbus::object_server::SignalEmitter;
 use zbus::{Connection, OwnedVariant, Str, Variant};
 
-use crate::core::Core;
+use crate::core::{Core, SessionReport};
 
 pub type Shared = Arc<Mutex<Core>>;
 
@@ -41,6 +42,12 @@ pub const OBJECTS: [(&str, &str); 2] = [
 /// Polkit actions, defined in dist/net.dynamis.power.policy.
 const ACTION_SWITCH: &str = "net.dynamis.power.switch-profile";
 const ACTION_HOLD: &str = "net.dynamis.power.hold-profile";
+const ACTION_REPORT: &str = "net.dynamis.power.report-session";
+
+/// Dynamis Power's own interface: auto mode, and reports from the session agent.
+pub const OWN_NAME: &str = "net.dynamis.Power";
+pub const OWN_PATH: &str = "/net/dynamis/Power";
+pub const OWN_IFACE: &str = "net.dynamis.Power1";
 
 /// Shared by both interface objects.
 #[derive(Clone)]
@@ -48,6 +55,44 @@ pub struct Service {
     pub core: Shared,
     /// Ask polkit before changes. Off only for tests on a private session bus.
     pub polkit: bool,
+    /// Wakes the auto-mode thread early (a session report, auto mode switched on).
+    pub ticker: Arc<Ticker>,
+    /// The clock auto mode measures time with.
+    pub epoch: Instant,
+}
+
+/// Lets D-Bus handlers wake the auto-mode thread without waiting for its
+/// next reading.
+#[derive(Default)]
+pub struct Ticker {
+    woken: Mutex<bool>,
+    cv: Condvar,
+}
+
+impl Ticker {
+    pub fn poke(&self) {
+        *self.woken.lock().unwrap_or_else(|p| p.into_inner()) = true;
+        self.cv.notify_one();
+    }
+
+    /// Sleep until poked, or until `timeout` passes (`None`: until poked).
+    /// This is the only place the daemon waits on a timer, and only while
+    /// auto mode is on.
+    pub fn wait(&self, timeout: Option<Duration>) {
+        let mut woken = self.woken.lock().unwrap_or_else(|p| p.into_inner());
+        if !*woken {
+            woken = match timeout {
+                Some(t) => {
+                    self.cv
+                        .wait_timeout(woken, t)
+                        .unwrap_or_else(|p| p.into_inner())
+                        .0
+                }
+                None => self.cv.wait(woken).unwrap_or_else(|p| p.into_inner()),
+            };
+        }
+        *woken = false;
+    }
 }
 
 impl Service {
@@ -310,5 +355,117 @@ async fn polkit_allows(conn: &Connection, sender: &str, action: &str) -> bool {
             eprintln!("dynamisd: polkit check for {action} failed: {e}");
             false
         }
+    }
+}
+
+/// `net.dynamis.Power1`: what the app (later) and `dynamis auto` use.
+pub struct DynamisPower(pub Service);
+
+#[zbus::interface(name = "net.dynamis.Power1")]
+impl DynamisPower {
+    /// Whether auto mode chooses the profile.
+    #[zbus(property(emits_changed_signal = "false"))]
+    fn auto_mode(&self) -> bool {
+        self.0.lock().auto.enabled
+    }
+
+    #[zbus(property)]
+    async fn set_auto_mode(
+        &mut self,
+        on: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Option<Header<'_>>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, hdr.as_ref(), ACTION_SWITCH).await?;
+        let now = self.0.epoch.elapsed().as_secs_f64();
+        self.0
+            .lock()
+            .set_auto(on, now)
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        notify_auto(conn, &self.0).await;
+        Ok(())
+    }
+
+    /// The detected workload class (`light_interactive`, `video`, …), or
+    /// empty while auto mode is off.
+    #[zbus(property(emits_changed_signal = "false"))]
+    fn workload(&self) -> String {
+        self.0
+            .lock()
+            .auto_status()
+            .0
+            .map(|w| {
+                serde_json::to_value(w)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default()
+    }
+
+    /// One plain-language line on what auto mode is doing and why.
+    #[zbus(property(emits_changed_signal = "false"))]
+    fn auto_reason(&self) -> String {
+        self.0.lock().auto_status().1
+    }
+
+    /// Called by the session agent when something in the desktop session
+    /// changes. Keys: media_playing, screen_inhibited, game_running,
+    /// screen_locked, user_idle (booleans). Unknown keys are ignored.
+    async fn report_session(
+        &self,
+        report: HashMap<String, OwnedVariant>,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        let sender = self.0.check(conn, Some(&hdr), ACTION_REPORT).await?;
+        let flag = |k: &str| {
+            report
+                .get(k)
+                .and_then(|v| bool::try_from(&**v).ok())
+                .unwrap_or(false)
+        };
+        let r = SessionReport {
+            media_playing: flag("media_playing"),
+            screen_inhibited: flag("screen_inhibited"),
+            game_running: flag("game_running"),
+            screen_locked: flag("screen_locked"),
+            user_idle: flag("user_idle"),
+        };
+        self.0.lock().report_session(&sender, r);
+        self.0.ticker.poke();
+        Ok(())
+    }
+}
+
+/// Signal changes to auto mode's properties.
+pub async fn notify_auto(conn: &Connection, svc: &Service) {
+    let (enabled, (workload, reason)) = {
+        let c = svc.lock();
+        (c.auto.enabled, c.auto_status())
+    };
+    let workload = workload
+        .and_then(|w| serde_json::to_value(w).ok())
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default();
+    let result = async {
+        let emitter = SignalEmitter::new(conn, OWN_PATH)?;
+        let changed = HashMap::from([
+            ("AutoMode", Variant::from(enabled)),
+            ("Workload", Variant::from(workload.as_str())),
+            ("AutoReason", Variant::from(reason.as_str())),
+        ]);
+        fdo::Properties::properties_changed(
+            &emitter,
+            InterfaceName::try_from(OWN_IFACE)?,
+            changed,
+            Cow::Borrowed(&[]),
+        )
+        .await
+    }
+    .await;
+    if let Err(e) = result {
+        eprintln!("dynamisd: could not signal an auto-mode change: {e}");
     }
 }

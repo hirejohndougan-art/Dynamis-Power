@@ -11,6 +11,7 @@ state=/var/lib/dynamis-power
 [ "$(id -u)" -eq 0 ] || { echo "Run with sudo: sudo $0"; exit 1; }
 
 systemctl disable --now dynamisd dynamis-sync.timer 2>/dev/null || true
+systemctl --global disable dynamis-agent.service 2>/dev/null || true
 
 if [ -x /usr/local/bin/dynamis ]; then
     echo "Restoring original settings..."
@@ -18,6 +19,7 @@ if [ -x /usr/local/bin/dynamis ]; then
 fi
 
 rm -f /usr/local/bin/dynamis /usr/local/libexec/dynamisd /usr/local/libexec/dynamis-sync \
+      /usr/local/libexec/dynamis-agent /etc/systemd/user/dynamis-agent.service \
       /etc/systemd/system/dynamisd.service \
       /etc/systemd/system/dynamis-sync.service /etc/systemd/system/dynamis-sync.timer \
       /etc/dbus-1/system.d/net.dynamis.power.conf \

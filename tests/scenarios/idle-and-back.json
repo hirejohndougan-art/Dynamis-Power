@@ -1,0 +1,11 @@
+{
+  "name": "Walking away and coming back",
+  "about": "A locked or idle laptop saves power; coming back restores the profile instantly, without waiting out the dwell time.",
+  "steps": [
+    { "t": 0,   "set": { "on_ac": true, "battery_pct": 100, "cpu_busy_pct": 5 }, "expect": "balanced" },
+    { "t": 120, "set": { "screen_locked": true }, "expect": "power-saver", "workload": "idle" },
+    { "t": 125, "set": { "screen_locked": false }, "expect": "balanced", "workload": "light_interactive" },
+    { "t": 300, "set": { "user_idle": true, "net_mb_s": 5 }, "expect": "balanced", "workload": "background_transfer" },
+    { "t": 400, "set": { "net_mb_s": 0 }, "expect": "power-saver", "workload": "idle" }
+  ]
+}

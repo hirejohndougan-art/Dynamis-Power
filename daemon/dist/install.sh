@@ -3,9 +3,12 @@
 # `cargo build --release`:   sudo ./dist/install.sh
 #
 # What it does (it shows this list and asks before doing anything):
-#   - copies `dynamis` to /usr/local/bin, `dynamisd` and `dynamis-sync` to
-#     /usr/local/libexec
+#   - copies `dynamis` to /usr/local/bin, and `dynamisd`, `dynamis-sync` and
+#     `dynamis-agent` to /usr/local/libexec
 #   - installs the systemd units, the D-Bus policy and the polkit actions
+#   - enables the session agent for every user (it tells auto mode whether
+#     media is playing or the screen is locked; auto mode itself stays off
+#     until switched on with `dynamis auto on`)
 #   - enables a daily check for the signed quirk list (run as an unprivileged
 #     user; the only part that uses the network)
 #   - stops and masks power-profiles-daemon / tuned-ppd if they are enabled,
@@ -21,7 +24,7 @@ bin="$here/../target/release"
 state=/var/lib/dynamis-power
 
 [ "$(id -u)" -eq 0 ] || { echo "Run with sudo: sudo $0"; exit 1; }
-for f in "$bin/dynamis" "$bin/dynamisd" "$bin/dynamis-sync"; do
+for f in "$bin/dynamis" "$bin/dynamisd" "$bin/dynamis-sync" "$bin/dynamis-agent"; do
     [ -x "$f" ] || { echo "Missing $f. Build first: cargo build --release"; exit 1; }
 done
 
@@ -33,7 +36,8 @@ for svc in power-profiles-daemon tuned-ppd; do
 done
 
 echo "This will:"
-echo "  - install dynamis to /usr/local/bin, dynamisd and dynamis-sync to /usr/local/libexec"
+echo "  - install dynamis to /usr/local/bin; dynamisd, dynamis-sync and dynamis-agent to /usr/local/libexec"
+echo "  - start a small session agent at each login (auto mode stays off until: dynamis auto on)"
 echo "  - install the services, a D-Bus policy and polkit actions"
 echo "  - check daily for a signed list of settings known to break some laptops"
 [ -n "$others" ] && echo "  - stop and mask:$others (uninstall.sh turns them back on)"
@@ -45,6 +49,8 @@ case "$answer" in y|Y|yes) ;; *) echo "Nothing changed."; exit 0 ;; esac
 install -Dm755 "$bin/dynamis" /usr/local/bin/dynamis
 install -Dm755 "$bin/dynamisd" /usr/local/libexec/dynamisd
 install -Dm755 "$bin/dynamis-sync" /usr/local/libexec/dynamis-sync
+install -Dm755 "$bin/dynamis-agent" /usr/local/libexec/dynamis-agent
+install -Dm644 "$here/dynamis-agent.service" /etc/systemd/user/dynamis-agent.service
 install -Dm644 "$here/dynamisd.service" /etc/systemd/system/dynamisd.service
 install -Dm644 "$here/dynamis-sync.service" /etc/systemd/system/dynamis-sync.service
 install -Dm644 "$here/dynamis-sync.timer" /etc/systemd/system/dynamis-sync.timer
@@ -65,10 +71,13 @@ systemctl reload dbus 2>/dev/null || systemctl reload dbus-broker 2>/dev/null ||
 systemctl daemon-reload
 systemctl enable --now dynamisd
 systemctl enable --now dynamis-sync.timer
+# For every user, from their next login.
+systemctl --global enable dynamis-agent.service
 
 echo
 echo "Installed. Check it with:  powerprofilesctl  (or the battery icon in your panel)"
 echo "Logs:                      journalctl -u dynamisd"
 echo "Undo all changes:          sudo dynamis restore"
 echo "Safe mode:                 sudo dynamis safe-mode on|off"
+echo "Auto mode:                 dynamis auto on   (log out and in once first, to start the session agent)"
 echo "Remove completely:         sudo $here/uninstall.sh"

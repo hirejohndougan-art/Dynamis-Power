@@ -31,4 +31,13 @@
       <allow_active>yes</allow_active>
     </defaults>
   </action>
+  <action id="net.dynamis.power.report-session">
+    <description>Tell Dynamis Power what the desktop session is doing</description>
+    <message>Authentication is required to report session activity to Dynamis Power.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
 </policyconfig>

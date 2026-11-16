@@ -1,0 +1,13 @@
+{
+  "name": "Unplugging and the battery running down",
+  "about": "Plugging in or out switches at once; low battery saves power with hysteresis; critical battery always saves.",
+  "steps": [
+    { "t": 0,    "set": { "on_ac": true, "battery_pct": 80, "cpu_busy_pct": 10 }, "expect": "balanced", "workload": "light_interactive" },
+    { "t": 10,   "set": { "on_ac": false }, "expect": "balanced" },
+    { "t": 600,  "set": { "battery_pct": 31 }, "expect": "balanced" },
+    { "t": 700,  "set": { "battery_pct": 29 }, "expect": "power-saver" },
+    { "t": 800,  "set": { "battery_pct": 32 }, "expect": "power-saver" },
+    { "t": 900,  "set": { "battery_pct": 14 }, "expect": "power-saver" },
+    { "t": 905,  "set": { "on_ac": true }, "expect": "balanced" }
+  ]
+}

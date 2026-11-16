@@ -9,16 +9,17 @@
 //! Learned settings (phase 4 onwards) will build on top of these; nothing here
 //! learns anything.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::engine::{Engine, EngineError, Request};
 use crate::fs::SysRoot;
 use crate::settings::{self, Allowed, Probe};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Profile {
     PowerSaver,
+    #[default]
     Balanced,
     Performance,
 }

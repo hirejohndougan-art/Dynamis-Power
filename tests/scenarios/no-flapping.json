@@ -1,0 +1,10 @@
+{
+  "name": "Media starting and stopping every minute for two hours",
+  "about": "Non-urgent switches are rate-limited to 12 an hour, so the profile cannot flap.",
+  "prefs": { "on_battery": "power-saver" },
+  "steps": [
+    { "t": 0, "set": { "on_ac": false, "battery_pct": 90, "cpu_busy_pct": 10 }, "expect": "power-saver" },
+    { "t": 70, "set": { "media_playing": true }, "repeat": { "every": 70, "times": 102, "toggle": "media_playing" } }
+  ],
+  "max_switches": 25
+}

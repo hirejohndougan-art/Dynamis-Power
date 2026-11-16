@@ -1,0 +1,16 @@
+{
+  "name": "Compiling code",
+  "about": "Heavy work for 30 s on mains power gets full speed; a short spike does not; it ends with hysteresis; on battery it stays balanced.",
+  "steps": [
+    { "t": 0,   "set": { "on_ac": true, "battery_pct": 90, "cpu_busy_pct": 95 }, "expect": "balanced", "workload": "bursty_interactive" },
+    { "t": 15,  "set": { "cpu_busy_pct": 20 }, "expect": "balanced" },
+    { "t": 100, "set": { "cpu_busy_pct": 95 }, "expect": "balanced" },
+    { "t": 115, "expect": "balanced" },
+    { "t": 130, "expect": "performance", "workload": "sustained_compute" },
+    { "t": 145, "set": { "cpu_busy_pct": 55 }, "expect": "performance", "workload": "sustained_compute" },
+    { "t": 160, "set": { "cpu_busy_pct": 10 }, "expect": "performance", "workload": "light_interactive" },
+    { "t": 200, "expect": "balanced" },
+    { "t": 300, "set": { "on_ac": false, "cpu_busy_pct": 95 }, "expect": "balanced" },
+    { "t": 340, "expect": "balanced", "workload": "sustained_compute" }
+  ]
+}

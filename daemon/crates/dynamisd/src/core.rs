@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 
+use dynamis_core::auto::{Auto, Context, Prefs, Step, Workload};
+use dynamis_core::context::Sampler;
 use dynamis_core::engine::{Engine, EngineError};
 use dynamis_core::profiles::{self, Profile};
 use dynamis_core::SysRoot;
@@ -20,6 +22,42 @@ use serde::{Deserialize, Serialize};
 
 /// Version of `profile.json`.
 const PROFILE_FILE_VERSION: u32 = 1;
+/// Version of `auto.json`.
+const AUTO_FILE_VERSION: u32 = 1;
+
+/// What the session agent last reported. Cleared when the agent leaves the bus.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SessionReport {
+    pub media_playing: bool,
+    pub screen_inhibited: bool,
+    pub game_running: bool,
+    pub screen_locked: bool,
+    pub user_idle: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavedAuto {
+    v: u32,
+    enabled: bool,
+    #[serde(default)]
+    prefs: Prefs,
+}
+
+/// Auto mode's state inside the daemon.
+#[derive(Default)]
+pub struct AutoState {
+    pub enabled: bool,
+    rules: Auto,
+    sampler: Sampler,
+    session: SessionReport,
+    session_owner: Option<String>,
+    /// Set when a person picked a profile by hand while auto mode was on:
+    /// auto mode then waits until the charger is plugged in or out (the value
+    /// here is the charger state at the time).
+    paused_on_ac: Option<bool>,
+    last: Option<Step>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hold {
@@ -37,6 +75,7 @@ pub struct Core {
     chosen: Profile,
     holds: BTreeMap<u32, Hold>,
     next_cookie: u32,
+    pub auto: AutoState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -55,6 +94,14 @@ impl Core {
             .and_then(|t| serde_json::from_str::<SavedProfile>(&t).ok())
             .and_then(|s| Profile::parse(&s.profile))
             .filter(|p| available.contains(p));
+        let saved_auto = fs::read_to_string(state_dir.join("auto.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<SavedAuto>(&t).ok());
+        let auto = AutoState {
+            enabled: saved_auto.as_ref().is_some_and(|a| a.enabled),
+            rules: Auto::new(saved_auto.map(|a| a.prefs).unwrap_or_default()),
+            ..AutoState::default()
+        };
         Core {
             root,
             state_dir,
@@ -62,6 +109,7 @@ impl Core {
             chosen: saved.unwrap_or(Profile::Balanced),
             holds: BTreeMap::new(),
             next_cookie: 1,
+            auto,
         }
     }
 
@@ -102,6 +150,10 @@ impl Core {
             return Err(e);
         }
         self.save()?;
+        if self.auto.enabled {
+            let on_ac = self.auto.sampler.read(&self.root, 0.0).on_ac;
+            self.auto.paused_on_ac = Some(on_ac);
+        }
         Ok(before.1.into_keys().collect())
     }
 
@@ -205,22 +257,127 @@ impl Core {
         Ok(())
     }
 
+    // --- Auto mode ---------------------------------------------------------
+
+    /// Switch auto mode on or off, and remember the choice.
+    pub fn set_auto(&mut self, on: bool, now: f64) -> Result<(), String> {
+        self.auto.enabled = on;
+        self.auto.paused_on_ac = None;
+        if on {
+            // Start from what is active, so the first decision is a real one.
+            self.auto.rules = Auto::new(self.auto.rules.prefs.clone());
+            self.auto.rules.set_current(self.active(), now - 3600.0);
+        }
+        let saved = SavedAuto {
+            v: AUTO_FILE_VERSION,
+            enabled: on,
+            prefs: self.auto.rules.prefs.clone(),
+        };
+        write_atomic(
+            &self.state_dir.join("auto.json"),
+            &serde_json::to_string(&saved).map_err(|e| e.to_string())?,
+        )
+    }
+
+    pub fn report_session(&mut self, owner: &str, report: SessionReport) {
+        self.auto.session = report;
+        self.auto.session_owner = Some(owner.to_string());
+    }
+
+    /// The session agent left the bus: forget what it said.
+    pub fn session_gone(&mut self, owner: &str) {
+        if self.auto.session_owner.as_deref() == Some(owner) {
+            self.auto.session = SessionReport::default();
+            self.auto.session_owner = None;
+        }
+    }
+
+    /// One auto-mode reading. Returns true if the profile changed.
+    pub fn auto_tick(&mut self, now: f64) -> bool {
+        if !self.auto.enabled {
+            return false;
+        }
+        let mut ctx: Context = self.auto.sampler.read(&self.root, now);
+        let s = &self.auto.session;
+        ctx.media_playing = s.media_playing;
+        ctx.screen_inhibited = s.screen_inhibited;
+        ctx.game_running = s.game_running;
+        ctx.screen_locked = s.screen_locked;
+        ctx.user_idle = s.user_idle;
+
+        if let Some(was) = self.auto.paused_on_ac {
+            if was == ctx.on_ac {
+                // Keep reading so the explanation stays current, but do not act.
+                let mut probe = self.auto.rules.clone();
+                self.auto.last = Some(probe.step(now, &ctx, &self.available));
+                return false;
+            }
+            self.auto.paused_on_ac = None;
+            self.auto.rules.set_current(self.chosen, now - 3600.0);
+        }
+
+        let step = self.auto.rules.step(now, &ctx, &self.available);
+        let switch = step.switch_to.filter(|p| *p != self.chosen);
+        self.auto.last = Some(step.clone());
+        let Some(p) = switch else { return false };
+        let before = self.active();
+        self.chosen = p;
+        if let Err(e) = self.apply_active(&format!("auto: {}", step.decision.reason)) {
+            eprintln!("dynamisd: auto mode: {e}");
+        }
+        self.active() != before
+    }
+
+    /// The workload auto mode sees, and one line on what it is doing.
+    pub fn auto_status(&self) -> (Option<Workload>, String) {
+        if !self.auto.enabled {
+            return (None, "Auto mode is off".into());
+        }
+        let Some(last) = &self.auto.last else {
+            return (None, "Auto mode is starting".into());
+        };
+        let mut line = last.decision.reason.clone();
+        if self.auto.paused_on_ac.is_some() {
+            line = "You picked a mode by hand; auto mode resumes when the charger is plugged in or out".into();
+        } else if !self.holds.is_empty() {
+            line = format!("{line} (an app is holding {})", self.active().as_str());
+        } else if let Some(w) = &last.waiting {
+            line = format!("{line} ({w})");
+        }
+        (Some(last.decision.workload), line)
+    }
+
+    /// How long to wait before the next reading: longer while idle, to cost
+    /// less when nothing is happening.
+    pub fn auto_interval(&self, base: Duration) -> Duration {
+        match &self.auto.last {
+            Some(s) if s.decision.workload == Workload::Idle => base * 4,
+            _ => base,
+        }
+    }
+
     fn save(&self) -> Result<(), String> {
-        let path = self.state_dir.join("profile.json");
-        let tmp = path.with_extension("tmp");
         let text = serde_json::to_string(&SavedProfile {
             v: PROFILE_FILE_VERSION,
             profile: self.chosen.as_str().into(),
         })
         .map_err(|e| e.to_string())?;
-        let write = || -> std::io::Result<()> {
-            let mut f = fs::File::create(&tmp)?;
-            f.write_all(text.as_bytes())?;
-            f.sync_all()?;
-            fs::rename(&tmp, &path)
-        };
-        write().map_err(|e| format!("could not save the chosen profile: {e}"))
+        write_atomic(&self.state_dir.join("profile.json"), &text)
     }
+}
+
+fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
+    let tmp = path.with_extension("tmp");
+    let write = || -> std::io::Result<()> {
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+        fs::rename(&tmp, path)
+    };
+    write().map_err(|e| format!("could not save {}: {e}", path.display()))
 }
 
 /// Open the engine, waiting briefly if `dynamis` on the command line is

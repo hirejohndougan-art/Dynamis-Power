@@ -1,0 +1,8 @@
+{
+  "name": "A machine without a performance profile",
+  "about": "When the machine only offers power-saver and balanced, demanding work uses balanced.",
+  "available": ["power-saver", "balanced"],
+  "steps": [
+    { "t": 0,  "set": { "on_ac": true, "battery_pct": 90, "game_running": true }, "expect": "balanced", "workload": "gaming" }
+  ]
+}

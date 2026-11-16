@@ -1,0 +1,17 @@
+[Unit]
+Description=Dynamis Power session agent (tells auto mode what the desktop is doing)
+Documentation=https://github.com/hirejohndougan-art/Dynamis-Power
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+# Runs as the logged-in person, never as root. Event-driven: it sleeps until
+# the desktop announces a change.
+ExecStart=/usr/local/libexec/dynamis-agent
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+MemoryMax=32M
+
+[Install]
+WantedBy=graphical-session.target

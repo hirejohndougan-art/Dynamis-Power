@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/dynamis-core", "crates/dynamis-cli", "crates/dynamisd", "crates/dynamis-sync", "crates/dynamis-quirktool"]
+members = ["crates/dynamis-core", "crates/dynamis-cli", "crates/dynamisd", "crates/dynamis-sync", "crates/dynamis-quirktool", "crates/dynamis-agent"]
 
 [workspace.package]
 version = "0.1.0"

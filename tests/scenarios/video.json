@@ -1,0 +1,11 @@
+{
+  "name": "Watching video",
+  "about": "Video counts as use even when nobody touches the keyboard; on a low battery it saves power.",
+  "prefs": { "on_battery": "power-saver" },
+  "steps": [
+    { "t": 0,   "set": { "on_ac": false, "battery_pct": 80, "cpu_busy_pct": 20 }, "expect": "power-saver" },
+    { "t": 100, "set": { "media_playing": true, "screen_inhibited": true }, "expect": "balanced", "workload": "video" },
+    { "t": 400, "set": { "user_idle": true }, "expect": "balanced", "workload": "video" },
+    { "t": 900, "set": { "battery_pct": 25 }, "expect": "power-saver", "workload": "video" }
+  ]
+}

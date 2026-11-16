@@ -26,11 +26,14 @@ daemon/
       src/health.rs          watches the kernel log, stalls and temperature during a trial
       src/quirks.rs          built-in and signed downloaded quirk lists
       src/boots.rs           counts unclean shutdowns for automatic safe mode
+      src/auto.rs            auto mode's rules (pure; replayed by tests/scenarios/)
+      src/context.rs         auto mode's system readings: charger, battery, CPU, network, microphone
       quirks/builtin.json    the built-in quirk list
     dynamis-cli/             the `dynamis` command
     dynamis-sync/            downloads the signed quirk list (unprivileged; the only network use)
     dynamis-quirktool/       maintainers only: signing keys and signing the quirk list
-    dynamisd/                the system service: standard power-profiles D-Bus interface
+    dynamis-agent/           per-user session agent: media, screen lock, games (for auto mode)
+    dynamisd/                the system service: standard power-profiles D-Bus interface, auto mode
       src/core.rs            chosen profile, holds, applying (no D-Bus; unit-tested)
       src/bus.rs             the D-Bus objects and polkit checks
       tests/dbus.rs          end-to-end test on a private bus and a fixture copy
@@ -123,7 +126,19 @@ sudo ./dist/uninstall.sh      # restores every setting and turns power-profiles-
 - The profile you choose is remembered across reboots and re-applied at start.
 - `sudo dynamis restore` puts the original values back at any time, with or without the service.
 - The service refuses to start if power-profiles-daemon or tuned-ppd is running, before touching anything. `install.sh` stops and masks them, and `uninstall.sh` turns them back on.
-- If a change was interrupted (a freeze, a power cut), the service undoes it at start and blocks that setting. `sudo dynamis journal` shows it; `sudo dynamis unblock <id>` allows it again.
+- If a change was interrupted (a freeze, a power cut), the service undoes it at start and blocks that setting.
+
+### Auto mode
+
+```sh
+dynamis auto on        # the service picks the profile from what you are doing
+dynamis auto           # what it sees and why: "Workload: video — Playing media: keeping it smooth"
+dynamis auto off
+```
+
+- Off until you switch it on. Picking a mode in the panel pauses it until the charger is plugged in or out.
+- Media, screen lock and games are reported by `dynamis-agent`, which starts at login (log out and in once after installing).
+- The rules and every scenario they are tested against are in `crates/dynamis-core/src/auto.rs` and `../tests/scenarios/`. To add a case, copy a scenario file. `sudo dynamis journal` shows it; `sudo dynamis unblock <id>` allows it again.
 
 ### Log columns
 

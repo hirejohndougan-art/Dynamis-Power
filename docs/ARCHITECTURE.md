@@ -50,9 +50,9 @@ dynamis set cpu.epp balance_power --trial 60
 | Component | Runs as | Job | Code |
 | --- | --- | --- | --- |
 | `dynamisd` | root, systemd service | Reads sensors, applies settings, runs both loops, keeps the journal | `daemon/` |
-| Session agent | each logged-in user | Reports focused app, media playback, camera and microphone use, idle state | `daemon/` (separate binary, planned) |
-| `dynamis-sync` | unprivileged system user | All network traffic: quirk list, shared summaries, opt-in uploads | `daemon/` (separate binary, planned) |
-| `dynamisctl` | user | Command line: status, reports, profile switch, revert | `daemon/` (planned) |
+| `dynamis-agent` **(built)** | each logged-in user | Reports five facts for auto mode: media playing, screen locked, screen-dimming inhibited, game running, idle. Event-driven. Focused app comes in phase 6 | `daemon/crates/dynamis-agent/` |
+| `dynamis-sync` **(built for the quirk list)** | unprivileged throwaway user | All network traffic: quirk list now; shared summaries and opt-in uploads later | `daemon/crates/dynamis-sync/` |
+| `dynamis` **(built)** | user (root for changes) | Command line: inventory, status, logs, settings, restore, journal, quirks, safe mode, auto mode | `daemon/crates/dynamis-cli/` |
 | App | user, on demand | Dashboard and controls | `gui/` |
 | Results schema | — | Format of shared results | `schema/` |
 | Submission service | Cloudflare Worker | Receives opt-in results, validates, stores, publishes summaries | separate repository (planned) |
@@ -85,7 +85,7 @@ The setting `id` is permanent. Renaming one breaks journals, learned data and sh
 
 ## The two loops
 
-- **Fast loop (seconds):** reacts to context — charger, battery level, video playing, a call starting — and picks the profile. Rule-based and predictable.
+- **Fast loop (seconds):** reacts to context — charger, battery level, video playing, a call starting — and picks the profile. Rule-based and predictable. **Built in phase 3** as auto mode: `dynamis-core/src/auto.rs` (rules), `context.rs` (system readings), the auto thread in `dynamisd`, and `dynamis-agent` (session readings). See [decision 0011](decisions/0011-auto-mode-rules-and-session-agent.md).
 - **Slow loop (days):** the learner. Tries one small change at a time when conditions allow, measures it, keeps or reverts it. See [DESIGN.md](DESIGN.md).
 
 ## Data on disk
@@ -102,6 +102,7 @@ The setting `id` is permanent. Renaming one breaks journals, learned data and sh
 | `/var/lib/dynamis-power/running`, `unclean-boots.json` **(built)** | Unclean-shutdown detection | Text; JSON, `"v": 1` |
 | `/var/lib/dynamis-power/quirk-serial` **(built)** | Highest downloaded quirk list serial accepted | Text |
 | `/var/lib/dynamis-power-sync/quirks.json`, `.sig` **(built)** | Downloaded quirk list, written by the unprivileged helper | JSON `"v": 1`, ed25519 signature in hex |
+| `/var/lib/dynamis-power/auto.json` **(built)** | Whether auto mode is on, and its preferences | JSON, `"v": 1` |
 | `/var/lib/dynamis-power/profile.json` **(built)** | The profile the user last chose | JSON, `"v": 1` |
 | `/var/lib/dynamis-power/replaced-services` **(built)** | Services `install.sh` turned off, for uninstall | Text, one per line |
 | `/var/lib/dynamis-power/state.db` | Samples, experiment records, learned settings | SQLite, versioned with migrations |

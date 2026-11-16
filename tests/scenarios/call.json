@@ -1,0 +1,10 @@
+{
+  "name": "A video call on battery",
+  "about": "A call gets steady performance at once, even when the person prefers power-saver on battery.",
+  "prefs": { "on_battery": "power-saver" },
+  "steps": [
+    { "t": 0,   "set": { "on_ac": false, "battery_pct": 70, "cpu_busy_pct": 15 }, "expect": "power-saver" },
+    { "t": 5,   "set": { "mic_in_use": true, "cpu_busy_pct": 45 }, "expect": "balanced", "workload": "call" },
+    { "t": 600, "set": { "mic_in_use": false, "cpu_busy_pct": 10 }, "expect": "power-saver" }
+  ]
+}

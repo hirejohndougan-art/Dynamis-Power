@@ -98,6 +98,19 @@ This step **changes settings**, so do it only after the read-only test above loo
 5. Check `sudo dynamis quirks` and `systemctl list-timers dynamis-sync.timer`: the quirk list check should be scheduled.
 6. Uninstall with `sudo ./dist/uninstall.sh`. `powerprofilesctl` should then show power-profiles-daemon's own driver again.
 
+### Auto mode (phase 3)
+
+After installing, log out and back in once (this starts the session agent), then:
+
+1. `dynamis auto on`, then `dynamis auto` every so often while you do different things. It should say what it sees:
+   - browsing → light use
+   - a video → playing media
+   - a video call → on a call
+   - locking the screen → nobody is using the laptop (check from another computer over SSH, or just look at `sudo dynamis journal` afterwards)
+   - unplugging → on battery, at once
+2. Pick a mode in the panel: `dynamis auto` should say it is paused until the charger changes.
+3. Anything that looks wrong: note what you were doing and what `dynamis auto` said, and add it to a bug report. It can become a new scenario file.
+
 Report anything odd in a bug report with `sudo dynamis journal --last 100` attached.
 
 **On a laptop that already freezes** (like the project's VivoBook), a freeze during these steps does not prove Dynamis Power caused it. After the reboot, check `sudo dynamis journal`: a `recover` line means a change was in progress at the time; no such line means nothing was being changed.

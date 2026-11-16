@@ -2,6 +2,7 @@
 //! fixture, and a client talking the standard power-profiles interface.
 //! Skipped (with a note) when `dbus-daemon` is not installed.
 
+use std::collections::HashMap;
 use std::fs;
 
 use futures_lite::StreamExt;
@@ -72,7 +73,12 @@ impl Env {
     }
 
     fn daemon(&self, state: &str) -> Child {
+        self.daemon_with(state, &[])
+    }
+
+    fn daemon_with(&self, state: &str, extra: &[&str]) -> Child {
         Command::new(env!("CARGO_BIN_EXE_dynamisd"))
+            .args(extra)
             .args(["--session", "--root"])
             .arg(self.dir.join("root"))
             .arg("--state-dir")
@@ -243,4 +249,139 @@ fn choice_survives_restart() {
         );
     });
     assert_eq!(env.epp(), "performance");
+}
+
+/// Wait (without blocking the client's connection) until `check` passes.
+async fn eventually<F: AsyncFnMut() -> bool>(what: &str, mut check: F) {
+    let start = Instant::now();
+    while !check().await {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "timed out waiting for {what}"
+        );
+        // A short pause; replies keep arriving because each check is a call.
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn auto_mode_follows_the_situation() {
+    let Some(env) = Env::new("auto") else { return };
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    let root = env.dir.join("root");
+    let set = |rel: &str, v: &str| fs::write(root.join(rel), v).unwrap();
+
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let own = proxy(&conn, "net.dynamis.Power", "/net/dynamis/Power").await;
+        let own = zbus::Proxy::new(
+            &conn,
+            "net.dynamis.Power",
+            "/net/dynamis/Power",
+            "net.dynamis.Power1",
+        )
+        .await
+        .unwrap_or(own);
+        let ppd = proxy(&conn, DEST, PATH).await;
+        let reason = || async {
+            // Read without the cache, straight from the daemon.
+            let props =
+                zbus::fdo::PropertiesProxy::new(&conn, "net.dynamis.Power", "/net/dynamis/Power")
+                    .await
+                    .unwrap();
+            let v = props
+                .get("net.dynamis.Power1".try_into().unwrap(), "AutoReason")
+                .await
+                .unwrap();
+            String::try_from(v).unwrap()
+        };
+
+        assert!(!own.get_property::<bool>("AutoMode").await.unwrap());
+        own.set_property("AutoMode", true).await.unwrap();
+        eventually("first decision", async || {
+            reason().await.contains("On battery")
+        })
+        .await;
+
+        // The session agent reports a locked screen: power-saver.
+        let agent = env.client().await;
+        let report = |locked: bool| {
+            HashMap::from([(
+                "screen_locked".to_string(),
+                zbus::OwnedVariant::from(locked),
+            )])
+        };
+        let ap = zbus::Proxy::new(
+            &agent,
+            "net.dynamis.Power",
+            "/net/dynamis/Power",
+            "net.dynamis.Power1",
+        )
+        .await
+        .unwrap();
+        ap.call::<_, _, ()>("ReportSession", &(report(true),))
+            .await
+            .unwrap();
+        eventually("power-saver when locked", async || env.epp() == "power").await;
+
+        // Unlocking is urgent: straight back.
+        ap.call::<_, _, ()>("ReportSession", &(report(false),))
+            .await
+            .unwrap();
+        eventually("balanced after unlock", async || {
+            env.epp() == "balance_performance"
+        })
+        .await;
+
+        // Battery critical: power-saver at once.
+        set("sys/class/power_supply/BAT0/capacity", "10");
+        eventually("power-saver at 10%", async || env.epp() == "power").await;
+
+        // Picking a mode by hand pauses auto mode...
+        ppd.set_property("ActiveProfile", "performance")
+            .await
+            .unwrap();
+        eventually("manual performance", async || env.epp() == "performance").await;
+        eventually("paused", async || reason().await.contains("by hand")).await;
+        std::thread::sleep(Duration::from_millis(600));
+        assert_eq!(
+            env.epp(),
+            "performance",
+            "auto mode must not undo a manual choice"
+        );
+
+        // ...until the charger is plugged in.
+        set("sys/class/power_supply/AC0/online", "1");
+        set("sys/class/power_supply/BAT0/status", "Charging");
+        eventually("resumed on mains", async || {
+            env.epp() == "balance_performance"
+        })
+        .await;
+        eventually("plugged-in reason", async || {
+            reason().await.contains("Plugged in")
+        })
+        .await;
+
+        // Locking again right after a switch is not urgent: auto mode waits
+        // out its dwell time instead of flapping.
+        ap.call::<_, _, ()>("ReportSession", &(report(true),))
+            .await
+            .unwrap();
+        eventually("dwell", async || {
+            let r = reason().await;
+            r.contains("Nobody is using") && r.contains("waiting")
+        })
+        .await;
+        assert_eq!(env.epp(), "balance_performance");
+
+        // The agent leaving the bus clears what it said.
+        drop(ap);
+        drop(agent);
+        eventually("agent gone", async || reason().await.contains("Plugged in")).await;
+
+        own.set_property("AutoMode", false).await.unwrap();
+        eventually("off", async || reason().await.contains("off")).await;
+    });
+    assert!(env.dir.join("state/auto.json").exists());
 }
