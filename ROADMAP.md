@@ -34,11 +34,12 @@ The desktop app and `.deb` packages for it and the service (part of phase 8) wer
 Found on the VivoBook E410MA: Longer battery and Faster are hidden, so the mode choice, per-app modes, the panel icon menu and the welcome show only Balanced. A mode today changes only the processor's speed preference (EPP) and the firmware power mode (platform profile), and a mode is offered only when it would change something. Budget and older processors (Gemini Lake Celerons such as the N4020, older Intel chips, AMD and others on `acpi-cpufreq`) often have neither.
 
 - [ ] Confirm on the VivoBook what it offers: `ls /sys/devices/system/cpu/cpufreq/policy0/`, `cat /sys/firmware/acpi/platform_profile_choices`, `cat /sys/devices/system/cpu/intel_pstate/status`. Add it as a fixture under `tests/fixtures/` (a copy of the real tree, no serial numbers)
-- [ ] Fallback levers per mode, used only when EPP and the platform profile are missing, each through its own probed setting plugin: Longer battery → turbo boost off and a lower speed limit (or a lower maximum frequency where there is no speed limit); Balanced → turbo on, full speed; Faster → turbo on, full speed and the most eager governor the driver offers
-- [ ] Make modes and learning agree: learning tunes turbo and the speed limit (phase 5), so on such laptops the mode sets the starting point and learning tunes on top for battery, with tuning results kept per mode (as they already are per speed preference); restoring and forgetting put back the mode's value, not a stale one
-- [ ] Advanced → Profiles: show the fallback levers for each mode so they can be chosen there too
-- [ ] Say why when a mode cannot be offered ("this laptop has no controls for it"), instead of hiding it silently
-- [ ] Scenario and engine tests on the new fixture; then try it on the VivoBook
+- [x] Fallback levers per mode, used only when EPP and the platform profile are missing, each through its own probed setting plugin: Longer battery → turbo boost off and a lower speed limit (or a lower maximum frequency where there is no speed limit); Balanced → turbo on, full speed; Faster → turbo on, full speed and the most eager governor the driver offers
+- [x] Make modes and learning agree: learning tunes turbo and the speed limit (phase 5), so on such laptops the mode sets the starting point and learning tunes on top for battery, with tuning results kept per mode (as they already are per speed preference); restoring and forgetting put back the mode's value, not a stale one
+- [x] Advanced → Profiles: show the fallback levers for each mode so they can be chosen there too
+- [x] Say why when a mode cannot be offered ("this laptop has no controls for it"), instead of hiding it silently
+- [x] Engine tests on a copy of the synthetic laptop without a speed preference ([decision 0016](docs/decisions/0016-mode-levers-without-epp.md))
+- [ ] Try it on the VivoBook
 
 ## To do: fully replace TLP
 
@@ -50,22 +51,23 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 - [ ] Runtime power management for idle PCI devices, with a per-driver "never" list *(in SETTINGS: `pci.runtime_pm`)*
 - [ ] Wi-Fi power saving on battery *(in SETTINGS: `wifi.power_save`)*; must respect the built-in quirk for the RTL8821CE and similar chips
 - [ ] Wake-on-LAN off
-- [ ] Sound controller power saving as well as the codec (TLP's controller option)
-- [ ] Discrete and integrated GPU: runtime power-down of a second GPU *(in SETTINGS: `gpu.dgpu_runtime_pm`)*, Intel GPU frequency limits *(in SETTINGS: `gpu.max_freq`)*, AMD GPU power level
+- [x] Sound controller power saving as well as the codec (`audio.controller_power`)
+- [ ] Discrete and integrated GPU: runtime power-down of a second GPU *(in SETTINGS: `gpu.dgpu_runtime_pm`)*, Intel GPU frequency limits *(in SETTINGS: `gpu.max_freq`; needs real hardware to learn how the driver rounds)*, AMD GPU power level *(done: `gpu.amd_power_level`)*
 
 **Storage**
 
 - [ ] SATA link power *(in SETTINGS: `storage.sata_alpm`; "minimum power" stays opt-in)*
 - [ ] AHCI controller runtime power management
 - [ ] Hard disk power level (APM) and spin-down time, for laptops with spinning disks
-- [ ] I/O scheduler *(in SETTINGS: `storage.io_scheduler`)*
+- [x] I/O scheduler (`storage.io_scheduler`)
 
 **Processor**
 
-- [ ] Minimum performance level (`min_perf_pct`), alongside the maximum already built
-- [ ] Minimum and maximum frequency for drivers without performance levels (AMD and other cpufreq drivers)
-- [ ] HWP dynamic boost (Intel)
-- [ ] Scaling governor where the driver offers a choice, without fighting the speed preference
+- [x] Minimum performance level (`cpu.min_perf_pct`)
+- [x] Maximum frequency for drivers without performance levels (`cpu.max_freq`, where the driver lists its frequencies)
+- [ ] Minimum frequency for those drivers
+- [x] HWP dynamic boost (`cpu.hwp_dynamic_boost`)
+- [x] Scaling governor where the driver offers a choice (`cpu.governor`; modes use it only without a speed preference)
 
 **Radios**
 
@@ -74,13 +76,13 @@ Goal: anything TLP manages, Dynamis Power manages too, so TLP can be removed wit
 
 **Battery**
 
-- [ ] Charge start threshold (begin charging only below a level), alongside the stop threshold already built
+- [x] Charge start threshold (`battery.charge_start`)
 - [ ] Vendor charge controls where the standard file is missing (ThinkPad, ASUS, Dell, Huawei, LG, Samsung, Sony, System76 and others), each probed, never guessed
 - [ ] "Charge fully once" and battery recalibration on request (TLP's `fullcharge` and `recalibrate`)
 
 **System**
 
-- [ ] Sleep type on battery (`s2idle` or `deep`), offered only where the firmware supports both
+- [x] Sleep type (`system.mem_sleep`, risky: needs an explicit yes; offered only where both exist)
 - [ ] Re-apply settings after resume from sleep, and to devices plugged in later (USB, Thunderbolt), as TLP does
 - [ ] A mode to use at boot before auto mode decides, and an option to ignore a power supply that reports wrongly (TLP's `TLP_DEFAULT_MODE` and `TLP_PS_IGNORE`)
 - [ ] A full diagnostic report like `tlp-stat`, building on `dynamis status`, `inventory` and `hardware-report`

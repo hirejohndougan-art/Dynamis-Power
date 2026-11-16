@@ -117,6 +117,14 @@ After installing, log out and back in once (this starts the session agent), then
 2. **The gate: does it beat stock Balanced?** On a fully charged battery, with the same brightness and the same light activity (for example a looping video or a fixed set of web pages), run `sudo ./scripts/phase1-test.sh 60` twice: once with `dynamis learn on` and once after `dynamis learn off` (which puts every learned setting back). Compare the average whole-system power in the two reports. Phase 4 passes if the learned settings use measurably less power with no rise in lag.
 3. Send both `phase1-results-….tar.gz` files and the output of `dynamis learned --json`.
 
+### Modes on laptops without a speed preference
+
+On the VivoBook (and any laptop where Modes used to show only Balanced):
+
+1. Send the output of `ls /sys/devices/system/cpu/cpufreq/policy0/`, `cat /sys/firmware/acpi/platform_profile_choices` and `cat /sys/devices/system/cpu/intel_pstate/status`.
+2. Modes should now offer Longer battery, Balanced and Faster. Pick each and check: `cat /sys/devices/system/cpu/intel_pstate/no_turbo /sys/devices/system/cpu/intel_pstate/max_perf_pct /sys/devices/system/cpu/cpufreq/policy0/scaling_governor` should read `1 60 powersave` for Longer battery, `0 100 powersave` for Balanced and `0 100 performance` for Faster.
+3. Compare power on battery between Longer battery and Balanced with the same light use (`sudo dynamis gauge`).
+
 ### Tuning together (phase 5) and its gate
 
 1. Leave learning on. Once every setting has been tested on its own, `dynamis learn` shows tests of `cpu.turbo` and `cpu.max_perf_pct` again, one step at a time. `dynamis learned` lists each result with what it was tested together with.

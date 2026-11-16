@@ -33,6 +33,8 @@ export interface Status {
     charge_limit: number | null;
   };
   safe_mode: string | null;
+  /** Modes this laptop cannot offer, and why (plain language). */
+  missing_modes?: { profile: Profile; why: string }[];
   /** Developer: changes are journaled as "would" and not made. */
   dry_run?: boolean;
   pending: { id: string; label: string; to: string; trial: boolean } | null;

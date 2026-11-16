@@ -27,12 +27,28 @@ const ALLOWED_PREFIXES: &[&str] = &[
 const CGROUP_PREFIX: &str = "/sys/fs/cgroup/user.slice/";
 const CGROUP_FILE: &str = "/cpu.weight";
 
+/// Directories where only one kind of file may be written: (prefix, the
+/// only file name allowed at the end).
+const ONE_FILE_ONLY: &[(&str, &str)] = &[
+    ("/sys/block/", "/queue/scheduler"),
+    (
+        "/sys/class/drm/",
+        "/device/power_dpm_force_performance_level",
+    ),
+];
+
 fn allowed(path: &str) -> bool {
     if path.contains("..") {
         return false;
     }
     if path.starts_with(CGROUP_PREFIX) {
         return path.ends_with(CGROUP_FILE);
+    }
+    if let Some((_, end)) = ONE_FILE_ONLY.iter().find(|(p, _)| path.starts_with(p)) {
+        return path.ends_with(end);
+    }
+    if path == "/sys/power/mem_sleep" {
+        return true;
     }
     ALLOWED_PREFIXES.iter().any(|p| path.starts_with(p))
 }
@@ -72,6 +88,9 @@ mod tests {
             "/sys/fs/cgroup/user.slice/app.scope/cgroup.freeze",
             "/sys/fs/cgroup/user.slice/app.scope/cpu.max",
             "/sys/fs/cgroup/system.slice/sshd.service/cpu.weight",
+            "/sys/block/sda/queue/read_ahead_kb",
+            "/sys/class/drm/card0/device/power_state",
+            "/sys/power/state",
         ] {
             let err = write_all(
                 &root,

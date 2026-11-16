@@ -62,6 +62,123 @@ impl Profile {
             ],
         }
     }
+
+    /// For laptops with neither a speed preference nor a firmware power mode
+    /// (budget and older processors): turbo, the speed limit or top
+    /// frequency, and the governor. `pct:N` means the lowest frequency the
+    /// driver lists that is at least N% of the top one.
+    fn fallback(self) -> &'static [(&'static str, &'static [&'static str])] {
+        // Every mode sets every lever, so switching modes always undoes the
+        // last one's choices.
+        const CALM: &[&str] = &["powersave", "schedutil", "ondemand", "conservative"];
+        match self {
+            Profile::PowerSaver => &[
+                ("cpu.turbo", &["off"]),
+                ("cpu.max_perf_pct", &["60"]),
+                ("cpu.max_freq", &["pct:60"]),
+                ("cpu.governor", CALM),
+            ],
+            Profile::Balanced => &[
+                ("cpu.turbo", &["on"]),
+                ("cpu.max_perf_pct", &["100"]),
+                ("cpu.max_freq", &["pct:100"]),
+                ("cpu.governor", CALM),
+            ],
+            Profile::Performance => &[
+                ("cpu.turbo", &["on"]),
+                ("cpu.max_perf_pct", &["100"]),
+                ("cpu.max_freq", &["pct:100"]),
+                ("cpu.governor", &["performance"]),
+            ],
+        }
+    }
+
+    /// The settings this profile uses on this machine: the usual two, or the
+    /// fallback when neither exists.
+    fn levers(self, root: &SysRoot) -> &'static [(&'static str, &'static [&'static str])] {
+        if uses_fallback(root) {
+            self.fallback()
+        } else {
+            self.wishes()
+        }
+    }
+}
+
+/// Whether this machine lacks both usual mode controls (the speed
+/// preference and the firmware power mode), so modes use the fallback.
+pub fn uses_fallback(root: &SysRoot) -> bool {
+    ["cpu.epp", "platform.profile"].iter().all(|id| {
+        settings::by_id(id).is_none_or(|s| !matches!(s.probe(root), Probe::Supported { .. }))
+    })
+}
+
+/// Why a mode is not offered here, for the app to say so.
+pub fn missing(root: &SysRoot) -> Vec<(Profile, &'static str)> {
+    let offered = available(root);
+    Profile::ALL
+        .into_iter()
+        .filter(|p| !offered.contains(p))
+        .map(|p| {
+            (
+                p,
+                if plan(root, p).is_empty() {
+                    "this laptop has no controls for it"
+                } else {
+                    "on this laptop it would be the same as Balanced"
+                },
+            )
+        })
+        .collect()
+}
+
+/// The values a setting offers, as a list (ranges become steps of 10).
+fn offered(root: &SysRoot, id: &str) -> Option<Vec<String>> {
+    let Probe::Supported { allowed } = settings::by_id(id)?.probe(root) else {
+        return None;
+    };
+    Some(match allowed {
+        Allowed::Choices { values } => values,
+        Allowed::OnOff => vec!["on".into(), "off".into()],
+        Allowed::Range { min, max, .. } => {
+            let mut v: Vec<String> = (0..=10)
+                .map(|i| i * 10)
+                .filter(|n| *n >= min && *n <= max)
+                .map(|n| n.to_string())
+                .collect();
+            if v.is_empty() {
+                v.push(max.to_string());
+            }
+            v
+        }
+    })
+}
+
+/// The first wish this machine accepts.
+fn pick(root: &SysRoot, id: &str, wanted: &[&str]) -> Option<String> {
+    let Probe::Supported { allowed } = settings::by_id(id)?.probe(root) else {
+        return None;
+    };
+    for w in wanted {
+        if let Some(pct) = w.strip_prefix("pct:").and_then(|p| p.parse::<u64>().ok()) {
+            // Numeric choices only: the lowest one at least pct% of the top.
+            let Allowed::Choices { values } = &allowed else {
+                continue;
+            };
+            let mut nums: Vec<u64> = values.iter().filter_map(|v| v.parse().ok()).collect();
+            nums.sort_unstable();
+            let Some(top) = nums.last().copied() else {
+                continue;
+            };
+            if let Some(n) = nums.iter().find(|n| **n * 100 >= top * pct) {
+                return Some(n.to_string());
+            }
+            continue;
+        }
+        if let Ok(v) = allowed.check(w) {
+            return Some(v);
+        }
+    }
+    None
 }
 
 /// A person's own choices for what a profile sets (Advanced → Profiles):
@@ -104,22 +221,17 @@ impl Overrides {
 /// The settings a profile may set here, with the values offered for each.
 pub fn editable(root: &SysRoot, profile: Profile) -> Vec<(&'static str, Vec<String>)> {
     profile
-        .wishes()
+        .levers(root)
         .iter()
         .filter_map(|(id, _)| choices(root, profile, id).map(|c| (*id, c)))
         .collect()
 }
 
 fn choices(root: &SysRoot, profile: Profile, id: &str) -> Option<Vec<String>> {
-    if !profile.wishes().iter().any(|(w, _)| *w == id) {
+    if !profile.levers(root).iter().any(|(w, _)| *w == id) {
         return None;
     }
-    match settings::by_id(id)?.probe(root) {
-        Probe::Supported {
-            allowed: Allowed::Choices { values },
-        } => Some(values),
-        _ => None,
-    }
+    offered(root, id)
 }
 
 /// One setting value a profile would apply on this machine.
@@ -138,14 +250,8 @@ pub fn plan(root: &SysRoot, profile: Profile) -> Vec<Step> {
 pub fn plan_with(root: &SysRoot, profile: Profile, ov: &Overrides) -> Vec<Step> {
     let mine = ov.profiles.get(&profile);
     let mut steps = Vec::new();
-    for (id, wanted) in profile.wishes() {
-        let Some(s) = settings::by_id(id) else {
-            continue;
-        };
-        let Probe::Supported {
-            allowed: Allowed::Choices { values },
-        } = s.probe(root)
-        else {
+    for (id, wanted) in profile.levers(root) {
+        let Some(values) = offered(root, id) else {
             continue;
         };
         if let Some(v) = mine.and_then(|m| m.get(*id)).filter(|v| values.contains(v)) {
@@ -153,11 +259,8 @@ pub fn plan_with(root: &SysRoot, profile: Profile, ov: &Overrides) -> Vec<Step> 
                 id,
                 value: v.clone(),
             });
-        } else if let Some(v) = wanted.iter().find(|w| values.iter().any(|v| v == *w)) {
-            steps.push(Step {
-                id,
-                value: (*v).to_string(),
-            });
+        } else if let Some(v) = pick(root, id, wanted) {
+            steps.push(Step { id, value: v });
         }
     }
     steps
@@ -188,7 +291,7 @@ pub fn drivers(root: &SysRoot) -> (Option<String>, Option<String>) {
         .into_iter()
         .flat_map(|p| plan(root, p))
         .collect();
-    let cpu = all.iter().any(|s| s.id == "cpu.epp").then(|| {
+    let cpu = all.iter().any(|s| s.id.starts_with("cpu.")).then(|| {
         root.read_string("/sys/devices/system/cpu/cpufreq/policy0/scaling_driver")
             .unwrap_or_else(|_| "cpufreq".into())
     });

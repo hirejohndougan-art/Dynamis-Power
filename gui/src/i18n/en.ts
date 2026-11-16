@@ -336,6 +336,9 @@ export const en = {
   // Modes
   modes_title: "Modes",
   modes_current: "In use",
+  modes_missing: "{mode} is not available: {why}.",
+  modes_why_no_controls: "this laptop has no controls for it",
+  modes_why_same: "on this laptop it would be the same as Balanced",
   modes_use: "Use this",
   modes_auto_heading: "Automatic choice",
   modes_auto_intro: "When Choose automatically is on, these decide what it picks for ordinary use. Calls, video, games and heavy work are handled for you.",

@@ -257,6 +257,13 @@ impl Core {
             .into_iter()
             .filter(|r| r.setting == setting || (tuned_together && tune::in_group(&r.setting)))
             .collect();
+        // Where the values tuned together go back to (the mode's own value
+        // where the mode sets them); worked out before the records go.
+        let base = if tuned_together {
+            self.tune_base()
+        } else {
+            None
+        };
         let before = self.learn.records.len();
         // Values tuned together depend on each other: forgetting one
         // forgets the set.
@@ -267,7 +274,11 @@ impl Core {
             return Ok(false);
         }
         for r in learned {
-            self.apply_value(&r.setting, &r.baseline, "learned setting forgotten", None)?;
+            let to = base
+                .as_ref()
+                .and_then(|b| b.get(&r.setting))
+                .unwrap_or(&r.baseline);
+            self.apply_value(&r.setting, to, "learned setting forgotten", None)?;
         }
         self.save_records()?;
         Ok(true)
@@ -332,7 +343,7 @@ impl Core {
     /// Current values of the settings tuned together and of the power
     /// mode's own settings (those this machine has).
     fn tune_state(&self) -> State {
-        tune::GROUP
+        let mut state: State = tune::GROUP
             .iter()
             .chain(tune::CONTEXT)
             .filter_map(|id| {
@@ -340,7 +351,27 @@ impl Core {
                 let v = s.read(&self.root).ok()?;
                 (v != "mixed").then(|| (id.to_string(), v))
             })
-            .collect()
+            .collect();
+        if dynamis_core::profiles::uses_fallback(&self.root) {
+            state.insert("mode".into(), self.active().as_str().into());
+        }
+        state
+    }
+
+    /// Where the values tuned together go back to when nothing is learned
+    /// for this mode, or on mains: what the mode itself sets, if it sets
+    /// them (laptops without a speed preference), else the values from
+    /// before any tuning.
+    fn tune_base(&self) -> Option<State> {
+        let mut base = tune::original(&self.learn.records)?;
+        for step in
+            dynamis_core::profiles::plan_with(&self.root, self.active(), &self.profile_overrides)
+        {
+            if tune::in_group(step.id) {
+                base.insert(step.id.to_string(), step.value);
+            }
+        }
+        Some(base)
     }
 
     /// The next experiment, and the tuned values to record with it.
@@ -706,7 +737,7 @@ impl Core {
         }
         // Values tuned together: the best for this power mode on battery,
         // otherwise (mains, or nothing learned for this mode) the original.
-        if let Some(orig) = tune::original(&self.learn.records) {
+        if let Some(orig) = self.tune_base() {
             let best = tune::learned(&self.learn.records, &ctx).filter(|_| want);
             for (id, o) in &orig {
                 let (v, why) = match best.as_ref().and_then(|b| b.get(id)) {

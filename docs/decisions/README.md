@@ -19,6 +19,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0013](0013-app-shares-not-caps.md) | Apps get a bigger or smaller share, never a cap or a freeze |
 | [0014](0014-tuning-together-one-step-at-a-time.md) | Tune interacting settings together, one step at a time |
 | [0015](0015-prediction-by-feedback-and-habits.md) | "Last until" steers by feedback; habits are simple and kept in UTC |
+| [0016](0016-mode-levers-without-epp.md) | Modes use turbo, the speed limit and the governor where there is no speed preference |
 
 ## Adding a record
 

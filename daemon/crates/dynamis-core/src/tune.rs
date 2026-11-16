@@ -38,7 +38,10 @@ use crate::calibrate::{Record, Verdict};
 /// Settings tuned together.
 pub const GROUP: &[&str] = &["cpu.turbo", "cpu.max_perf_pct"];
 /// The power mode's settings: recorded with every result, never changed here.
-pub const CONTEXT: &[&str] = &["cpu.epp", "platform.profile"];
+/// `mode` is the mode itself, recorded on laptops where the mode sets turbo
+/// and the speed limit directly (no speed preference or firmware mode), so
+/// what is learned stays per mode there too.
+pub const CONTEXT: &[&str] = &["cpu.epp", "platform.profile", "mode"];
 /// Kept steps allowed per power-mode context: a backstop, not a target.
 pub const MAX_KEEPS: usize = 12;
 

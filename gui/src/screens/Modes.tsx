@@ -54,6 +54,19 @@ export function Modes(props: { status: Status; refresh: () => void }) {
         ))}
       </div>
 
+      {(s.missing_modes ?? []).length > 0 && (
+        <div className="stack">
+          {(s.missing_modes ?? []).map((m) => (
+            <p key={m.profile} className="notice notice-info">
+              {t("modes_missing", {
+                mode: profileName(m.profile),
+                why: m.why.includes("no controls") ? t("modes_why_no_controls") : t("modes_why_same"),
+              })}
+            </p>
+          ))}
+        </div>
+      )}
+
       <section className="card" aria-labelledby="auto-heading">
         <div className="row spread">
           <h2 id="auto-heading">{t("modes_auto_heading")}</h2>

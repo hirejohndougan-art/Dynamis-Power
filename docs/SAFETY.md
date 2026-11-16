@@ -108,6 +108,14 @@ Phase 5 (tuning together) adds:
 | Bounded search | One grid step at a time, inside the setting's own limits (speed limit never below 30%; the grid stops at 50%), at most 12 kept steps per power mode |
 | Per power mode | Results only count for the power mode they were measured under; another mode starts from the original values |
 
+Settings toward replacing TLP add:
+
+| Rail | How |
+| --- | --- |
+| One file per new directory | The writer accepts under `/sys/block` only `queue/scheduler`, under `/sys/class/drm` only the AMD power level, and under `/sys/power` only `mem_sleep` (never `state`, which would put the laptop to sleep) |
+| Limits on the new settings | Charge start 40–95% and below the charge limit; top frequency never below 30% of the fastest; governors never `userspace`; AMD power level only `auto`, `low`, `high` |
+| Sleep type needs a yes | `system.mem_sleep` is Risky: some firmware wakes badly from one kind of sleep |
+
 Phase 7 (prediction) adds:
 
 | Rail | How |

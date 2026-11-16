@@ -17,14 +17,30 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &CpuEpp,
         &CpuTurbo,
         &CpuMaxPerfPct,
+        &CpuMinPerfPct,
+        &CpuMaxFreq,
+        &CpuGovernor,
+        &CpuHwpDynamicBoost,
         &PlatformProfile,
         &VmSwappiness,
         &VmDirtyWriteback,
         &KernelNmiWatchdog,
         &AudioPowerSave,
+        &AudioControllerPower,
         &PcieAspm,
+        &StorageIoScheduler,
+        &GpuAmdPowerLevel,
         &BatteryChargeLimit,
+        &BatteryChargeStart,
+        &SystemMemSleep,
     ]
+}
+
+/// The active entry of a "choice [active] choice" kernel file. A file
+/// holding one bare word (what a test copy holds after a write) is that word.
+fn bracket_active(s: &str) -> Option<String> {
+    let (active, all) = parse_bracketed(s);
+    active.or_else(|| (all.len() == 1).then(|| all[0].clone()))
 }
 
 fn unsupported(reason: impl Into<String>) -> Probe {
@@ -415,7 +431,7 @@ impl Setting for PcieAspm {
     }
     fn read(&self, root: &SysRoot) -> ReadResult<String> {
         let s = root.read_string(ASPM)?;
-        parse_bracketed(&s).0.ok_or(ReadError::Invalid(s))
+        bracket_active(&s).ok_or(ReadError::Invalid(s))
     }
     fn plan(&self, _root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
         Ok(vec![Write {
@@ -469,6 +485,469 @@ impl Setting for BatteryChargeLimit {
         let path = Self::path(root).ok_or("no charge limit control")?;
         Ok(vec![Write {
             path,
+            contents: value.into(),
+        }])
+    }
+}
+
+// --- Added for replacing TLP (batch 1) ---------------------------------------
+
+/// A yes/no kernel value that may be written as `1`/`0` or `Y`/`N`.
+fn onoff_file(root: &SysRoot, path: &str) -> ReadResult<String> {
+    Ok(match root.read_string(path)?.as_str() {
+        "1" | "Y" | "y" => "on",
+        _ => "off",
+    }
+    .into())
+}
+
+pub struct CpuMinPerfPct;
+
+impl Setting for CpuMinPerfPct {
+    fn id(&self) -> &'static str {
+        "cpu.min_perf_pct"
+    }
+    fn label(&self) -> &'static str {
+        "CPU lowest speed"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        // Up to the current speed limit: the driver refuses a floor above it.
+        let max = root
+            .read_u64(&format!("{PSTATE}/max_perf_pct"))
+            .map(|v| v as i64)
+            .unwrap_or(100);
+        single_file_range(root, &format!("{PSTATE}/min_perf_pct"), 0, max, "%")
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        root.read_string(&format!("{PSTATE}/min_perf_pct"))
+    }
+    fn plan(&self, _root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(vec![Write {
+            path: format!("{PSTATE}/min_perf_pct"),
+            contents: value.into(),
+        }])
+    }
+}
+
+/// Highest CPU frequency, for drivers without a speed limit in percent
+/// (`acpi-cpufreq` and others). Offered only where the driver lists its
+/// frequencies, so the value read back is exactly the value written.
+pub struct CpuMaxFreq;
+
+impl CpuMaxFreq {
+    fn choices(root: &SysRoot) -> Option<Vec<String>> {
+        let p0 = policies(root).into_iter().next()?;
+        let list = root
+            .read_string(&format!("{p0}/scaling_available_frequencies"))
+            .ok()?;
+        let mut khz: Vec<u64> = list
+            .split_whitespace()
+            .filter_map(|v| v.parse().ok())
+            .collect();
+        khz.sort_unstable();
+        khz.dedup();
+        // Never below 30% of the top speed, as with the speed limit.
+        let top = *khz.last()?;
+        let values: Vec<String> = khz
+            .into_iter()
+            .filter(|f| *f * 10 >= top * 3)
+            .map(|f| (f / 1000).to_string())
+            .collect();
+        (values.len() > 1).then_some(values)
+    }
+}
+
+impl Setting for CpuMaxFreq {
+    fn id(&self) -> &'static str {
+        "cpu.max_freq"
+    }
+    fn label(&self) -> &'static str {
+        "CPU top speed (MHz)"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if root.exists(&format!("{PSTATE}/max_perf_pct")) {
+            return unsupported("this CPU uses the speed limit instead");
+        }
+        match Self::choices(root) {
+            Some(values) => Probe::Supported {
+                allowed: Allowed::Choices { values },
+            },
+            None => unsupported("this CPU driver lists no frequencies"),
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let v = read_all_policies(root, "scaling_max_freq")?;
+        Ok(match v.parse::<u64>() {
+            Ok(khz) => (khz / 1000).to_string(),
+            Err(_) => v,
+        })
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let mhz: u64 = value
+            .parse()
+            .map_err(|_| format!("'{value}' is not a number"))?;
+        Ok(policies(root)
+            .into_iter()
+            .map(|p| Write {
+                path: format!("{p}/scaling_max_freq"),
+                contents: (mhz * 1000).to_string(),
+            })
+            .collect())
+    }
+}
+
+pub struct CpuGovernor;
+
+impl Setting for CpuGovernor {
+    fn id(&self) -> &'static str {
+        "cpu.governor"
+    }
+    fn label(&self) -> &'static str {
+        "CPU governor"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        let Some(p0) = policies(root).into_iter().next() else {
+            return unsupported("no CPU frequency control");
+        };
+        match root.read_string(&format!("{p0}/scaling_available_governors")) {
+            Ok(list) => {
+                // "userspace" hands control to another program; never offered.
+                let values: Vec<String> = list
+                    .split_whitespace()
+                    .filter(|g| *g != "userspace")
+                    .map(String::from)
+                    .collect();
+                if values.len() < 2 {
+                    return unsupported("only one governor here");
+                }
+                Probe::Supported {
+                    allowed: Allowed::Choices { values },
+                }
+            }
+            Err(ReadError::Missing) => unsupported("no governor choice here"),
+            Err(e) => unsupported(e.to_string()),
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        read_all_policies(root, "scaling_governor")
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(policies(root)
+            .into_iter()
+            .map(|p| Write {
+                path: format!("{p}/scaling_governor"),
+                contents: value.into(),
+            })
+            .collect())
+    }
+}
+
+pub struct CpuHwpDynamicBoost;
+
+impl Setting for CpuHwpDynamicBoost {
+    fn id(&self) -> &'static str {
+        "cpu.hwp_dynamic_boost"
+    }
+    fn label(&self) -> &'static str {
+        "Quick speed-up after waiting for the disk"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        match root.read_string(&format!("{PSTATE}/hwp_dynamic_boost")) {
+            Ok(_) => Probe::Supported {
+                allowed: Allowed::OnOff,
+            },
+            Err(ReadError::Missing) => unsupported("not offered by this CPU"),
+            Err(e) => unsupported(e.to_string()),
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        onoff_file(root, &format!("{PSTATE}/hwp_dynamic_boost"))
+    }
+    fn plan(&self, _root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(vec![Write {
+            path: format!("{PSTATE}/hwp_dynamic_boost"),
+            contents: if value == "on" { "1" } else { "0" }.into(),
+        }])
+    }
+}
+
+const SND_CONTROLLER: &str = "/sys/module/snd_hda_intel/parameters/power_save_controller";
+
+pub struct AudioControllerPower;
+
+impl Setting for AudioControllerPower {
+    fn id(&self) -> &'static str {
+        "audio.controller_power"
+    }
+    fn label(&self) -> &'static str {
+        "Sound controller sleep"
+    }
+    fn risk(&self) -> RiskTier {
+        // As with the sound chip: a pop when sound starts, on some hardware.
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        match root.read_string(SND_CONTROLLER) {
+            Ok(_) => Probe::Supported {
+                allowed: Allowed::OnOff,
+            },
+            Err(ReadError::Missing) => unsupported("not offered by this sound driver"),
+            Err(e) => unsupported(e.to_string()),
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        onoff_file(root, SND_CONTROLLER)
+    }
+    fn plan(&self, _root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(vec![Write {
+            path: SND_CONTROLLER.into(),
+            contents: if value == "on" { "Y" } else { "N" }.into(),
+        }])
+    }
+}
+
+/// The disk I/O scheduler, for every real disk at once.
+pub struct StorageIoScheduler;
+
+impl StorageIoScheduler {
+    fn disks(root: &SysRoot) -> Vec<String> {
+        root.list_dir("/sys/block")
+            .into_iter()
+            .filter(|d| {
+                !["loop", "ram", "zram", "dm-", "md", "sr"]
+                    .iter()
+                    .any(|p| d.starts_with(p))
+            })
+            .map(|d| format!("/sys/block/{d}/queue/scheduler"))
+            .filter(|p| root.exists(p))
+            .collect()
+    }
+}
+
+impl Setting for StorageIoScheduler {
+    fn id(&self) -> &'static str {
+        "storage.io_scheduler"
+    }
+    fn label(&self) -> &'static str {
+        "Disk scheduler"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        let disks = Self::disks(root);
+        let mut common: Option<Vec<String>> = None;
+        for d in &disks {
+            let Ok(text) = root.read_string(d) else {
+                continue;
+            };
+            let all = parse_bracketed(&text).1;
+            common = Some(match common {
+                None => all,
+                Some(c) => c.into_iter().filter(|v| all.contains(v)).collect(),
+            });
+        }
+        match common {
+            Some(values) if values.len() > 1 => Probe::Supported {
+                allowed: Allowed::Choices { values },
+            },
+            _ => unsupported("no disk with a choice of scheduler"),
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let mut vals = Vec::new();
+        for d in Self::disks(root) {
+            let s = root.read_string(&d)?;
+            vals.push(bracket_active(&s).ok_or(ReadError::Invalid(s))?);
+        }
+        match vals.first() {
+            None => Err(ReadError::Missing),
+            Some(f) if vals.iter().all(|v| v == f) => Ok(f.clone()),
+            Some(_) => Ok("mixed".into()),
+        }
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(Self::disks(root)
+            .into_iter()
+            .map(|path| Write {
+                path,
+                contents: value.into(),
+            })
+            .collect())
+    }
+}
+
+/// AMD graphics power level (`auto`, `low`, `high`).
+pub struct GpuAmdPowerLevel;
+
+impl GpuAmdPowerLevel {
+    fn paths(root: &SysRoot) -> Vec<String> {
+        root.list_dir("/sys/class/drm")
+            .into_iter()
+            .filter(|c| c.starts_with("card") && !c.contains('-'))
+            .map(|c| format!("/sys/class/drm/{c}/device/power_dpm_force_performance_level"))
+            .filter(|p| root.exists(p))
+            .collect()
+    }
+}
+
+impl Setting for GpuAmdPowerLevel {
+    fn id(&self) -> &'static str {
+        "gpu.amd_power_level"
+    }
+    fn label(&self) -> &'static str {
+        "AMD graphics power level"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if Self::paths(root).is_empty() {
+            return unsupported("no AMD graphics here");
+        }
+        // The manual and profiling levels need further files; not offered.
+        Probe::Supported {
+            allowed: Allowed::Choices {
+                values: vec!["auto".into(), "low".into(), "high".into()],
+            },
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let mut vals = Vec::new();
+        for p in Self::paths(root) {
+            vals.push(root.read_string(&p)?);
+        }
+        match vals.first() {
+            None => Err(ReadError::Missing),
+            Some(f) if vals.iter().all(|v| v == f) => Ok(f.clone()),
+            Some(_) => Ok("mixed".into()),
+        }
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(Self::paths(root)
+            .into_iter()
+            .map(|path| Write {
+                path,
+                contents: value.into(),
+            })
+            .collect())
+    }
+}
+
+/// Start charging only below this level (the other half of the charge limit).
+pub struct BatteryChargeStart;
+
+impl BatteryChargeStart {
+    fn path(root: &SysRoot) -> Option<String> {
+        root.list_dir("/sys/class/power_supply")
+            .into_iter()
+            .filter(|n| n.starts_with("BAT"))
+            .map(|n| format!("/sys/class/power_supply/{n}/charge_control_start_threshold"))
+            .find(|p| root.exists(p))
+    }
+}
+
+impl Setting for BatteryChargeStart {
+    fn id(&self) -> &'static str {
+        "battery.charge_start"
+    }
+    fn label(&self) -> &'static str {
+        "Start charging below"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Safe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        match Self::path(root) {
+            // At least 40%, so a plugged-in laptop never sits nearly empty.
+            Some(_) => Probe::Supported {
+                allowed: Allowed::Range {
+                    min: 40,
+                    max: 95,
+                    unit: "%",
+                },
+            },
+            None => unsupported("this battery has no charge start control"),
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        root.read_string(&Self::path(root).ok_or(ReadError::Missing)?)
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let path = Self::path(root).ok_or("no charge start control")?;
+        // The battery refuses a start at or above the stop level.
+        if let Some(stop) = BatteryChargeLimit::path(root).and_then(|p| root.read_u64(&p).ok()) {
+            let start: u64 = value
+                .parse()
+                .map_err(|_| format!("'{value}' is not a number"))?;
+            if start >= stop {
+                return Err(format!(
+                    "start ({start}%) must be below the charge limit ({stop}%)"
+                ));
+            }
+        }
+        Ok(vec![Write {
+            path,
+            contents: value.into(),
+        }])
+    }
+}
+
+const MEM_SLEEP: &str = "/sys/power/mem_sleep";
+
+/// Which kind of sleep the laptop uses. Some firmware wakes badly from one
+/// kind, so this is offered only where both exist, and only after a yes.
+pub struct SystemMemSleep;
+
+impl Setting for SystemMemSleep {
+    fn id(&self) -> &'static str {
+        "system.mem_sleep"
+    }
+    fn label(&self) -> &'static str {
+        "Sleep type"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::Risky
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        match root.read_string(MEM_SLEEP) {
+            Ok(text) => {
+                let all = parse_bracketed(&text).1;
+                let values: Vec<String> = ["s2idle", "deep"]
+                    .iter()
+                    .filter(|v| all.iter().any(|a| a == *v))
+                    .map(|v| v.to_string())
+                    .collect();
+                if values.len() < 2 {
+                    return unsupported("only one sleep type here");
+                }
+                Probe::Supported {
+                    allowed: Allowed::Choices { values },
+                }
+            }
+            Err(ReadError::Missing) => unsupported("not offered by this kernel"),
+            Err(e) => unsupported(e.to_string()),
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let s = root.read_string(MEM_SLEEP)?;
+        bracket_active(&s).ok_or(ReadError::Invalid(s))
+    }
+    fn plan(&self, _root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(vec![Write {
+            path: MEM_SLEEP.into(),
             contents: value.into(),
         }])
     }

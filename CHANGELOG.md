@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- Modes on laptops without a speed preference or firmware power mode (such as the VivoBook's Celeron N4020): Longer battery and Faster now use turbo, the speed limit (or top frequency) and the governor; learning tunes per mode there; the Modes screen says why a mode is missing. Decision record 0016.
+- New settings toward replacing TLP: `cpu.min_perf_pct`, `cpu.max_freq`, `cpu.governor`, `cpu.hwp_dynamic_boost`, `audio.controller_power`, `storage.io_scheduler`, `gpu.amd_power_level`, `battery.charge_start`, `system.mem_sleep` (risky). The writer allows only the scheduler file under `/sys/block`, only the AMD power level under `/sys/class/drm`, and only `/sys/power/mem_sleep` under `/sys/power`.
+
 - Learning in the main menu: progress as a percentage of the tests this laptop needs (with a bar, the stage, and tests and quiet battery time left), what was kept with Forget, and the tests so far. Home shows the percentage too. Service: `learning.progress` in `Status`.
 
 - Advanced: Profiles (what each mode sets here, standard values, export and import), Sensors (live power, processor power, deep sleep, speed, waiting, temperatures), System (versions, the service's own use, other power tools, desktop and updates), Developer (dry run, TLP/TuneD advisor, raw data, restore). Service: `Profiles`, `SetProfileOverrides`, `Sensors`, `System`, `Advise`, `SetDryRun`, `dry_run` in `Status`; engine dry-run mode (`would` entries); `advisor.rs`; cpuidle sensor. Home shows a notice while dry run is on.

@@ -469,6 +469,13 @@ mod profiles {
     fn nothing_to_tune_means_balanced_only() {
         let sb = Sandbox::new();
         fs::remove_dir_all(sb.dir.join("root/sys/devices/system/cpu/cpufreq")).unwrap();
+        // Turbo and the speed limit still give Longer battery something to
+        // do; Faster would be the same as Balanced (no governor choice).
+        assert_eq!(
+            profiles::available(&sb.root()),
+            [Profile::PowerSaver, Profile::Balanced]
+        );
+        fs::remove_dir_all(sb.dir.join("root/sys/devices/system/cpu/intel_pstate")).unwrap();
         assert_eq!(profiles::available(&sb.root()), [Profile::Balanced]);
     }
 
@@ -899,6 +906,244 @@ mod app_weights {
         assert!(
             !procs.iter().any(|p| p.pid == 1004),
             "kernel threads skipped"
+        );
+    }
+}
+
+mod tlp_batch1 {
+    //! Settings added to replace TLP (batch 1): each sets, reads back, and
+    //! comes back with restore, on a copy of the fixture.
+    use super::*;
+
+    fn set_and_restore(sb: &Sandbox, id: &str, value: &str, risky: bool) {
+        let mut e = sb.engine();
+        let before = settings::by_id(id).unwrap().read(&sb.root()).unwrap();
+        let r = e
+            .apply(&Request {
+                allow_risky: risky,
+                ..req(id, value)
+            })
+            .unwrap_or_else(|err| panic!("{id} = {value}: {err}"));
+        assert!(matches!(r, Outcome::Changed { .. }), "{id}: {r:?}");
+        assert_eq!(
+            settings::by_id(id).unwrap().read(&sb.root()).unwrap(),
+            value
+        );
+        e.restore().unwrap();
+        assert_eq!(
+            settings::by_id(id).unwrap().read(&sb.root()).unwrap(),
+            before,
+            "{id} restored"
+        );
+    }
+
+    #[test]
+    fn processor_settings() {
+        let sb = Sandbox::new();
+        set_and_restore(&sb, "cpu.governor", "performance", false);
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/cpufreq/policy1/scaling_governor"),
+            "powersave"
+        );
+        set_and_restore(&sb, "cpu.min_perf_pct", "50", false);
+        assert!(sb.engine().apply(&req("cpu.min_perf_pct", "101")).is_err());
+        set_and_restore(&sb, "cpu.hwp_dynamic_boost", "on", false);
+        // There is a speed limit in percent here, so no top frequency.
+        assert!(matches!(
+            settings::by_id("cpu.max_freq").unwrap().probe(&sb.root()),
+            Probe::Unsupported { .. }
+        ));
+    }
+
+    #[test]
+    fn top_frequency_where_there_is_no_speed_limit() {
+        let sb = Sandbox::new();
+        let pstate = sb.dir.join("root/sys/devices/system/cpu/intel_pstate");
+        fs::remove_dir_all(&pstate).unwrap();
+        for p in ["policy0", "policy1"] {
+            fs::write(
+                sb.dir.join(format!(
+                    "root/sys/devices/system/cpu/cpufreq/{p}/scaling_available_frequencies"
+                )),
+                "2800000 2400000 2000000 1600000 1200000 800000",
+            )
+            .unwrap();
+        }
+        let Probe::Supported {
+            allowed: Allowed::Choices { values },
+        } = settings::by_id("cpu.max_freq").unwrap().probe(&sb.root())
+        else {
+            panic!("max_freq not offered")
+        };
+        assert_eq!(
+            values,
+            ["1200", "1600", "2000", "2400", "2800"],
+            "30% floor"
+        );
+        set_and_restore(&sb, "cpu.max_freq", "1600", false);
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"),
+            "2800000"
+        );
+    }
+
+    #[test]
+    fn devices_and_storage() {
+        let sb = Sandbox::new();
+        set_and_restore(&sb, "audio.controller_power", "off", false);
+        set_and_restore(&sb, "storage.io_scheduler", "none", false);
+        // zram is never touched.
+        let card = sb.dir.join("root/sys/class/drm/card1/device");
+        fs::create_dir_all(&card).unwrap();
+        fs::write(card.join("power_dpm_force_performance_level"), "auto").unwrap();
+        set_and_restore(&sb, "gpu.amd_power_level", "low", false);
+        assert!(sb
+            .engine()
+            .apply(&req("gpu.amd_power_level", "manual"))
+            .is_err());
+    }
+
+    #[test]
+    fn battery_and_sleep() {
+        let sb = Sandbox::new();
+        let bat = sb.dir.join("root/sys/class/power_supply/BAT0");
+        fs::write(bat.join("charge_control_end_threshold"), "80").unwrap();
+        fs::write(bat.join("charge_control_start_threshold"), "75").unwrap();
+        set_and_restore(&sb, "battery.charge_start", "60", false);
+        let err = sb
+            .engine()
+            .apply(&req("battery.charge_start", "85"))
+            .unwrap_err();
+        assert!(err.to_string().contains("below the charge limit"), "{err}");
+
+        // Sleep type is risky: refused without an explicit yes.
+        assert!(matches!(
+            sb.engine().apply(&req("system.mem_sleep", "s2idle")),
+            Err(EngineError::NeedsOptIn(_))
+        ));
+        set_and_restore(&sb, "system.mem_sleep", "s2idle", true);
+    }
+}
+
+mod modes_without_epp {
+    //! Laptops with no speed preference and no firmware power mode (budget
+    //! and older processors, such as the VivoBook's Celeron N4020): the
+    //! modes use turbo, the speed limit and the governor instead.
+    use super::*;
+    use dynamis_core::profiles::{self, Profile};
+
+    /// The synthetic laptop with its speed preference taken away.
+    fn budget_laptop() -> Sandbox {
+        let sb = Sandbox::new();
+        for p in ["policy0", "policy1"] {
+            for f in [
+                "energy_performance_preference",
+                "energy_performance_available_preferences",
+            ] {
+                fs::remove_file(
+                    sb.dir
+                        .join(format!("root/sys/devices/system/cpu/cpufreq/{p}/{f}")),
+                )
+                .unwrap();
+            }
+        }
+        let _ = fs::remove_file(sb.dir.join("root/sys/firmware/acpi/platform_profile"));
+        let _ = fs::remove_file(
+            sb.dir
+                .join("root/sys/firmware/acpi/platform_profile_choices"),
+        );
+        sb
+    }
+
+    fn values(steps: &[profiles::Step]) -> Vec<(String, String)> {
+        steps
+            .iter()
+            .map(|s| (s.id.to_string(), s.value.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn all_three_modes_mean_something() {
+        let sb = budget_laptop();
+        let root = sb.root();
+        assert!(profiles::uses_fallback(&root));
+        assert_eq!(profiles::available(&root), Profile::ALL);
+        assert!(profiles::missing(&root).is_empty());
+        let saver = values(&profiles::plan(&root, Profile::PowerSaver));
+        assert!(
+            saver.contains(&("cpu.turbo".into(), "off".into())),
+            "{saver:?}"
+        );
+        assert!(saver.contains(&("cpu.max_perf_pct".into(), "60".into())));
+        assert!(saver.contains(&("cpu.governor".into(), "powersave".into())));
+        let fast = values(&profiles::plan(&root, Profile::Performance));
+        assert!(fast.contains(&("cpu.governor".into(), "performance".into())));
+        assert!(fast.contains(&("cpu.turbo".into(), "on".into())));
+
+        // Switching applies them, and back again.
+        let mut e = sb.engine();
+        profiles::apply(&mut e, &root, Profile::PowerSaver, "test");
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/intel_pstate/no_turbo"),
+            "1"
+        );
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/intel_pstate/max_perf_pct"),
+            "60"
+        );
+        profiles::apply(&mut e, &root, Profile::Performance, "test");
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/cpufreq/policy0/scaling_governor"),
+            "performance"
+        );
+        profiles::apply(&mut e, &root, Profile::Balanced, "test");
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/intel_pstate/no_turbo"),
+            "0"
+        );
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/intel_pstate/max_perf_pct"),
+            "100"
+        );
+        assert_eq!(
+            sb.file("/sys/devices/system/cpu/cpufreq/policy0/scaling_governor"),
+            "powersave"
+        );
+        // Advanced → Profiles can choose these too.
+        let ed = profiles::editable(&root, Profile::PowerSaver);
+        let limit = ed.iter().find(|(id, _)| *id == "cpu.max_perf_pct").unwrap();
+        assert!(limit.1.contains(&"50".to_string()));
+    }
+
+    #[test]
+    fn the_usual_controls_win_where_they_exist() {
+        let sb = Sandbox::new();
+        assert!(!profiles::uses_fallback(&sb.root()));
+        assert!(profiles::plan(&sb.root(), Profile::PowerSaver)
+            .iter()
+            .all(|s| s.id == "cpu.epp" || s.id == "platform.profile"));
+    }
+
+    #[test]
+    fn says_why_a_mode_is_missing() {
+        let sb = budget_laptop();
+        // Nothing left to change: no turbo, no speed limit, one governor.
+        fs::remove_dir_all(sb.dir.join("root/sys/devices/system/cpu/intel_pstate")).unwrap();
+        for p in ["policy0", "policy1"] {
+            fs::write(
+                sb.dir.join(format!(
+                    "root/sys/devices/system/cpu/cpufreq/{p}/scaling_available_governors"
+                )),
+                "schedutil",
+            )
+            .unwrap();
+        }
+        assert_eq!(profiles::available(&sb.root()), [Profile::Balanced]);
+        let why = profiles::missing(&sb.root());
+        assert_eq!(why.len(), 2);
+        assert!(
+            why.iter().all(|(_, w)| w.contains("no controls")),
+            "{why:?}"
         );
     }
 }
