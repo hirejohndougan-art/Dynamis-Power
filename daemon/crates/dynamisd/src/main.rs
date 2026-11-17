@@ -22,6 +22,7 @@ mod devices;
 mod fullcharge;
 mod habits;
 mod kept;
+mod kernelwatch;
 mod learn;
 mod learnnow;
 mod outside;

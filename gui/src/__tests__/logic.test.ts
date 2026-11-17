@@ -13,6 +13,10 @@ describe("activity", () => {
     expect(describeEntry(e({ event: "revert", reason: "calibration health check: GPU hang" }))?.category).toBe("problems");
     expect(describeEntry(e({ event: "recover" }))?.category).toBe("problems");
     expect(describeEntry(e({ event: "quirk" }))?.category).toBe("rollbacks");
+    const k = describeEntry(e({ event: "kernel", id: "sound", reason: "azx_get_response timeout; undone and blocked: audio.power_save" }));
+    expect(k?.title).toBe("The kernel reported trouble with sound");
+    expect(k?.category).toBe("problems");
+    expect(describeEntry(e({ event: "problem", id: "wifi", reason: "blocked: wifi.power_save" }))?.category).toBe("problems");
   });
   it("hides technical entries and no-op changes", () => {
     expect(describeEntry(e({ event: "start" }))).toBeNull();

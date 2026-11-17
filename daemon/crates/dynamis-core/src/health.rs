@@ -171,6 +171,20 @@ impl Monitor {
             .collect()
     }
 
+    /// Kernel log records since the last read, as (priority, message): the
+    /// low three bits of the priority are the level, the rest the facility
+    /// (0 = the kernel itself; programs that write to the log use others).
+    pub fn kernel_records(&mut self) -> Vec<(u32, String)> {
+        self.new_kernel_lines()
+            .into_iter()
+            .filter_map(|r| {
+                let (meta, message) = r.split_once(';')?;
+                let prio: u32 = meta.split(',').next()?.parse().ok()?;
+                Some((prio, message.trim().to_string()))
+            })
+            .collect()
+    }
+
     fn new_kernel_lines(&mut self) -> Vec<String> {
         let Some(f) = self.kmsg.as_mut() else {
             return Vec::new();

@@ -378,6 +378,7 @@ export function mockBackend(): Backend {
       suggestion,
       hotter: null,
       trouble,
+      kernel_watch: true,
       learning_strict: learningStrict,
       unclean,
       full_charge: { supported: true, active: fullCharge !== null, restore_to: fullCharge, ended: fullChargeEnded },

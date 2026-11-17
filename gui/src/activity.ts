@@ -1,7 +1,7 @@
 // Turning journal entries into plain-language Activity items.
 import type { JournalEntry } from "./backend";
 import { appName } from "./apps";
-import { t, valueName } from "./i18n";
+import { t, valueName, type Key } from "./i18n";
 
 export type Category = "auto" | "mine" | "tests" | "rollbacks" | "problems";
 
@@ -91,6 +91,8 @@ export function describe(e: JournalEntry): Item | null {
       return item(t(e.to === "off" ? "ev_radio_off" : "ev_radio_on", { name: e.label || e.id }), reason, reason === "restore" ? "rollbacks" : "auto");
     case "import":
       return item(t("ev_import"), reason, "mine");
+    case "kernel":
+      return item(t("ev_kernel", { what: t(`kernel_kind_${e.id}` as Key) }), reason, "problems");
     case "problem":
       return item(t("ev_problem"), reason, "problems");
     case "brightness":

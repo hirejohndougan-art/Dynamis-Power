@@ -16,7 +16,7 @@
 use std::path::Path;
 
 use dynamis_core::devices::{PCI_DIR, USB_DIR};
-use dynamis_core::engine::Undone;
+use dynamis_core::engine::{Engine, Undone};
 use dynamis_core::{settings, trouble, SysRoot};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -62,8 +62,27 @@ fn group_ids(undone: &[Undone]) -> Vec<String> {
     ids
 }
 
+/// Put a setting (or group: devices, radios) back to the laptop's own value,
+/// then block it on this laptop.
+pub fn put_back_and_block(engine: &mut Engine, id: &str, reason: &str) -> Result<(), String> {
+    let put_back = match id {
+        "usb.autosuspend" | "pci.runtime_pm" => engine.restore_device_power().map(|_| ()),
+        "radios" => engine.restore_radios().map(|_| ()),
+        _ => engine.restore_one(id).map(|_| ()),
+    };
+    if let Err(e) = put_back {
+        eprintln!("dynamisd: putting {id} back: {e}");
+    }
+    if !engine.blocked().contains_key(id) {
+        engine
+            .block_with_reason(id, reason)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// The words used in the journal for each kind.
-fn what(kind: &str) -> &'static str {
+pub fn what(kind: &str) -> &'static str {
     match kind {
         "wifi" => "Wi-Fi",
         "bluetooth" => "Bluetooth",
@@ -175,22 +194,7 @@ impl Trouble {
                 if !changed_now && !undone.contains(&id) {
                     continue;
                 }
-                // Back to the laptop's own value first, then blocked.
-                let put_back = match id.as_str() {
-                    "usb.autosuspend" | "pci.runtime_pm" => {
-                        engine.restore_device_power().map(|_| ())
-                    }
-                    "radios" => engine.restore_radios().map(|_| ()),
-                    _ => engine.restore_one(&id).map(|_| ()),
-                };
-                if let Err(e) = put_back {
-                    eprintln!("dynamisd: something stopped working: {id}: {e}");
-                }
-                if !engine.blocked().contains_key(&id) {
-                    engine
-                        .block_by_person(&id, &reason)
-                        .map_err(|e| e.to_string())?;
-                }
+                put_back_and_block(&mut engine, &id, &reason)?;
                 blocked.push(id);
             }
         }

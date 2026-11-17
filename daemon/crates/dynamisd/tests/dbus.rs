@@ -2387,3 +2387,58 @@ fn something_stopped_working_undoes_then_blocks_only_what_could_cause_it() {
         assert_eq!(r["blocked"].as_array().unwrap().len(), 0, "{r}");
     });
 }
+
+#[test]
+fn kernel_trouble_right_after_a_change_undoes_and_blocks_it() {
+    let Some(env) = Env::new("kwatch") else {
+        return;
+    };
+    fs::create_dir_all(env.dir.join("root/dev")).unwrap();
+    fs::write(env.dir.join("root/dev/kmsg"), "").unwrap();
+    let _d = Guard(env.daemon_with("state", &["--tick-secs", "0.2"]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        assert_eq!(c.status().await.unwrap()["kernel_watch"], true);
+        // Readings happen while automatic choice is on.
+        c.set_auto(true).await.unwrap();
+        c.set_setting("audio.power_save", "7", false).await.unwrap();
+        use std::io::Write;
+        let mut f = fs::OpenOptions::new()
+            .append(true)
+            .open(env.dir.join("root/dev/kmsg"))
+            .unwrap();
+        writeln!(
+            f,
+            "3,1,1,-;snd_hda_intel 0000:00:1f.3: azx_get_response timeout, switching to polling mode"
+        )
+        .unwrap();
+        let blocked = |s: &serde_json::Value| {
+            s.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["id"] == "audio.power_save")
+                .unwrap()["blocked"]
+                .clone()
+        };
+        let start = std::time::Instant::now();
+        loop {
+            let s = c.settings().await.unwrap();
+            if let Some(why) = blocked(&s).as_str() {
+                assert!(why.contains("kernel reported trouble with sound"), "{why}");
+                break;
+            }
+            assert!(start.elapsed() < Duration::from_secs(10), "not blocked");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let journal = c.journal(20).await.unwrap();
+        assert!(journal
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["event"] == "kernel" && e["id"] == "sound"));
+    });
+}

@@ -110,6 +110,8 @@ pub struct Core {
     pub relief: crate::relief::Relief,
     /// Modes picked by hand, for suggestions.
     pub habits: crate::habits::Habits,
+    /// The kernel log, watched on every reading.
+    pub kernel: crate::kernelwatch::KernelWatch,
     /// "Something stopped working": the open question, if any.
     pub trouble: crate::trouble::Trouble,
     /// Temperature at light use, month by month ("runs hotter").
@@ -158,6 +160,7 @@ impl Core {
         let brightness = crate::brightness::BrightnessState::load(&state_dir);
         let recal = crate::recal::Recal::load(&root, &state_dir);
         let state_dir_for_radios = state_dir.clone();
+        let root_for_kernel = root.clone();
         let relief = crate::relief::Relief::load(&state_dir, unix_now());
         let profile_overrides = fs::read_to_string(state_dir.join("profiles.json"))
             .ok()
@@ -208,6 +211,7 @@ impl Core {
                 .unwrap_or_default(),
             heat_unsaved: 0,
             habits: crate::habits::Habits::load(&state_dir_for_radios),
+            kernel: crate::kernelwatch::KernelWatch::start(&root_for_kernel),
             trouble: crate::trouble::Trouble::load(&state_dir_for_radios, unix_now() as u64),
         };
         let on = core.relief.active(unix_now());
@@ -513,6 +517,7 @@ impl Core {
     pub fn after_resume(&mut self) {
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
         self.sleeptest.on_resume(&root, &dir, unix_now());
+        self.kernel.after_wake(unix_now() as u64);
         self.outside
             .quiet_until(unix_now() + crate::outside::AFTER_WAKE_S);
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
@@ -726,6 +731,13 @@ impl Core {
         // Prediction first: "Last until" can change what is allowed.
         let unix = unix_now();
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        // Trouble in the kernel log right after a change undoes that change.
+        let busy = self.learn.testing() || self.sleeptest.running();
+        let kernel_acted = !self
+            .kernel
+            .check(&root, &dir, unix as u64, busy)
+            .blocked
+            .is_empty();
         self.kept.tick(&root, &dir, unix);
         // Another tool changing our settings: after the second time in a day
         // the setting is left to it, and no longer kept either.
@@ -813,7 +825,8 @@ impl Core {
             }
         }
 
-        let changed = (self.auto.enabled && self.auto_step(now, &ctx)) || target_changed;
+        let changed =
+            (self.auto.enabled && self.auto_step(now, &ctx)) || target_changed || kernel_acted;
         // Devices follow the charger, the mode and plugging.
         let want = self.devices_save(ctx.on_ac);
         let (root, dir) = (self.root.clone(), self.state_dir.clone());

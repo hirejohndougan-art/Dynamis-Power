@@ -276,6 +276,8 @@ function SafetyTab(props: { status: Status; rows: SettingRow[]; run: Run }) {
       <Switch checked={!!props.status.safe_mode} label={t("safety_safe_mode")} onChange={(on) => props.run(() => backend.setSafeMode(on).then(() => undefined))} />
       <p className="muted small">{t("safety_safe_mode_desc")}</p>
 
+      <h2 style={{ marginTop: 12 }}>{t("safety_kernel")}</h2>
+      <p className="muted small">{t(props.status.kernel_watch === false ? "safety_kernel_off" : "safety_kernel_on")}</p>
       <h2 style={{ marginTop: 12 }}>{t("safety_quirks")}</h2>
       {quirks.length === 0 ? (
         <p className="muted">{t("safety_quirks_none")}</p>

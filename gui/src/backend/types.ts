@@ -43,6 +43,8 @@ export interface Status {
   unclean?: Unclean;
   /** "Charge fully once". */
   full_charge?: { supported: boolean; active: boolean; restore_to: string | null; ended: string | null };
+  /** Whether the kernel log is watched (it needs root). */
+  kernel_watch?: boolean;
   /** "Something stopped working": the last hour was undone; waiting for what broke. */
   trouble?: Trouble | null;
   /** A rule offered from the modes picked by hand; nothing changes before a yes. */

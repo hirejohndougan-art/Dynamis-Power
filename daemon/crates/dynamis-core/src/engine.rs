@@ -1345,8 +1345,9 @@ impl Engine {
         Ok(out)
     }
 
-    /// Block a setting because the person said it broke something.
-    pub fn block_by_person(&mut self, id: &str, reason: &str) -> Result<()> {
+    /// Block a setting on this laptop: the person said it broke something,
+    /// or the kernel reported trouble right after it was changed.
+    pub fn block_with_reason(&mut self, id: &str, reason: &str) -> Result<()> {
         self.block(id, reason)
     }
 
