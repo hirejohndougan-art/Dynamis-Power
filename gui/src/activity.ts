@@ -91,6 +91,8 @@ export function describe(e: JournalEntry): Item | null {
       return item(t(e.to === "off" ? "ev_radio_off" : "ev_radio_on", { name: e.label || e.id }), reason, reason === "restore" ? "rollbacks" : "auto");
     case "import":
       return item(t("ev_import"), reason, "mine");
+    case "last-until":
+      return item(t("ev_lu_stopped"), reason, "mine");
     case "system-update":
       return item(t("ev_system_update"), reason, "auto");
     case "vanished":

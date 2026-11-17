@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Battery panel icon**: the panel icon is a battery filled to the charge in the power mode's colour (red at 20% or less, a bolt while charging), updated when UPower reports a change; the percentage shows beside it on panels that show text.
+- **Changing mode while making it last**: on the Dashboard, picking Balanced or Faster while *Make it last* is on asks "Stop making it last?" first; picking them in the panel menu or the desktop's power slider stops it (the menu says so) instead of being silently held back. Longer battery keeps it going.
+
 - **Graphics speed during video**: graphics speed tests now judge lag by whether the graphics chip keeps up (fully busy at its speed limit, from Intel RC6 residency or AMD busy percent; `sensors/gpu.rs`), and video gets its own graphics speed where that can be read.
 - **Turbo and the speed limit learned again** after kernel or firmware updates and 120 days on: their old results stop counting and they are tuned again from the power mode's own values. Learning says so.
 

@@ -13,6 +13,33 @@ const MODE_COLOUR: Record<string, string> = {
   off: "#757575",
 };
 
+const BATTERY_FILL: Record<string, string> = {
+  "power-saver": "#43a047",
+  balanced: "#ffef00",
+  performance: "#f57c00",
+  off: "#9e9e9e",
+};
+
+/** The panel icon as the agent draws it (dynamis-agent/src/tray.rs): a
+ * battery filled to the charge in the mode's colour (red at 20% or less),
+ * a bolt while charging, and the percentage beside it. */
+function TrayBattery(props: { mode: string; pct: number; charging: boolean }) {
+  const fill = props.pct <= 20 && !props.charging ? "#e53935" : BATTERY_FILL[props.mode] ?? BATTERY_FILL.off;
+  const w = (21.8 * props.pct) / 100;
+  return (
+    <span className="tray-battery">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2.6" y="8.1" width="23.3" height="15.8" rx="2.6" fill="none" stroke="#151515" strokeOpacity="0.55" strokeWidth="4.2" />
+        <rect x="2.6" y="8.1" width="23.3" height="15.8" rx="2.6" fill="none" stroke="#f5f5f5" strokeWidth="2.2" />
+        <rect x="27" y="12" width="3.5" height="8" rx="1" fill="#f5f5f5" />
+        {props.pct > 0 && <rect x="4.9" y="10.4" width={Math.max(1, w)} height="11.2" rx="1" fill={fill} />}
+        {props.charging && <path d="M16.5 9.5 10.5 17h4l-1.5 5.5 6.5-8h-4z" fill="#1a1a1a" stroke="#f5f5f5" strokeWidth="0.9" />}
+      </svg>
+      <span className="tray-pct">{props.pct}%</span>
+    </span>
+  );
+}
+
 /** The same logo the panel icon draws (dynamis-agent/src/tray.rs). */
 function TrayLogo(props: { mode: string }) {
   return (
@@ -77,6 +104,7 @@ function TrayMenu(props: { status: Status; onOpen: () => void; onClose: () => vo
         <button key={p} type="button" role="menuitemradio" aria-checked={s.profile === p} disabled={locked} onClick={() => act(() => backend.setProfile(p))}>
           <span className="tray-mark" aria-hidden="true">{s.profile === p ? "●" : ""}</span>
           {profileName(p)}
+          {s.last_until && p !== "power-saver" && s.profile !== p && <span className="muted small">&nbsp;(stops Make it last)</span>}
         </button>
       ))}
       <div className="tray-sep" role="separator" />
@@ -255,7 +283,11 @@ export function Demo() {
                   setMenuOpen(true);
                 }}
               >
-                <TrayLogo mode={mode} />
+                {status?.power.has_battery && status.power.battery_pct != null ? (
+                  <TrayBattery mode={mode} pct={Math.round(status.power.battery_pct)} charging={!!status.power.charging} />
+                ) : (
+                  <TrayLogo mode={mode} />
+                )}
               </button>
               {menuOpen && status && (
                 <TrayMenu

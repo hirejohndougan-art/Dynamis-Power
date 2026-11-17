@@ -236,6 +236,18 @@ export function mockBackend(): Backend {
   };
   let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [], off_when_docked: [] };
   let learnHeavy = false;
+  // The battery drains slowly on battery and fills when "plugged in", so
+  // the panel icon's fill moves as in real use.
+  let battery = { pct: 79, at: now(), mains: false };
+  const batteryPct = () => {
+    const t = now();
+    const mains = prefs.power_source === "mains";
+    const limit = Number(values["battery.charge_limit"]) || 100;
+    const dt = t - battery.at;
+    const pct = battery.mains ? Math.min(limit, battery.pct + dt / 6) : Math.max(5, battery.pct - dt / 45);
+    battery = { pct, at: t, mains };
+    return Math.round(pct);
+  };
   // "Something stopped working".
   let trouble: Trouble | null = null;
   const KINDS: TroubleKind[] = ["wifi", "bluetooth", "sound", "input", "screen", "storage", "sleep", "freeze", "other"];
@@ -374,7 +386,7 @@ export function mockBackend(): Backend {
         })(),
       },
       power: {
-        on_ac: prefs.power_source === "mains", has_battery: true, temp_c: Math.round(48 + Math.random() * 3), battery_pct: 79, charging: false,
+        on_ac: prefs.power_source === "mains", has_battery: true, temp_c: Math.round(48 + Math.random() * 3), battery_pct: batteryPct(), charging: prefs.power_source === "mains" && batteryPct() < Number(values["battery.charge_limit"]),
         watts: Math.round((watts + screenExtraW()) * 100) / 100, hours_left: Math.round((31.2 / (watts + screenExtraW())) * 10) / 10, hours_to_full: null,
         health_pct: 90.5, cycles: 212, design_wh: 42, full_wh: 38, charge_limit: Number(values["battery.charge_limit"]),
       },
@@ -405,6 +417,7 @@ export function mockBackend(): Backend {
     learned: async () => delay({ records, learned: kept(), display: status().display }),
     setProfile: async (p) => {
       refuse();
+      if (target && p !== "power-saver") target = null;
       const before = profile;
       relief = null;
       profile = p;

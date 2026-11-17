@@ -294,7 +294,25 @@ impl Core {
         if !self.available.contains(&p) {
             return Err(format!("'{}' is not available on this machine", p.as_str()));
         }
+        // "Make it last" holds the mode back; picking a faster mode by hand
+        // (the app asks first; the panel menu says so; the desktop's slider
+        // is an explicit choice too) stops it rather than being ignored.
+        let ends_lasting = self.predict.target.is_some() && rank(p) > rank(Profile::PowerSaver);
         let before = (self.chosen, std::mem::take(&mut self.holds));
+        if ends_lasting {
+            let dir = self.state_dir.clone();
+            if let Err(e) = self.predict.set_target(None, unix_now(), &dir) {
+                self.holds = before.1;
+                return Err(e);
+            }
+            if let Ok(e) = open_engine(&self.root, &self.state_dir) {
+                let _ = e.note(
+                    "last-until",
+                    "stop",
+                    &format!("you chose {} by hand", p.as_str()),
+                );
+            }
+        }
         // A mode picked by hand is the person's word: it ends "It feels slow".
         if self.relief.until.is_some() {
             self.end_relief();
@@ -1011,6 +1029,28 @@ mod tests {
         let mut heavy = core;
         heavy.learn.heavy = true;
         assert!(heavy.next_plan(&engine, false, Activity::Heavy).is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn picking_a_faster_mode_by_hand_stops_making_it_last() {
+        let (dir, mut c) = sandbox("lasting");
+        let state = c.state_dir.clone();
+        let now = unix_now();
+        c.predict
+            .set_target(Some(now + 4.0 * 3600.0), now, &state)
+            .unwrap();
+        // Longer battery goes with making it last: it carries on.
+        c.choose(Profile::PowerSaver).unwrap();
+        assert!(c.predict.target.is_some());
+        // Faster stops it, and says so in Activity.
+        c.choose(Profile::Performance).unwrap();
+        assert!(c.predict.target.is_none());
+        assert_eq!(c.active(), Profile::Performance);
+        let j = open_engine(&c.root, &state).unwrap().journal(5);
+        assert!(j
+            .iter()
+            .any(|e| e.event == "last-until" && e.reason.contains("performance")));
         let _ = fs::remove_dir_all(&dir);
     }
 

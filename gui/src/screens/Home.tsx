@@ -145,6 +145,8 @@ export function Home(props: { status: Status; watts: number[]; temps?: number[];
     journal.reload();
   });
   const [restoring, setRestoring] = useState(false);
+  // A faster mode while "Make it last" is on: ask before stopping it.
+  const [stopLasting, setStopLasting] = useState<Profile | null>(null);
   const trouble = useTrouble(s, run);
 
   const last = (journal.data ?? []).map(describe).find((i) => i !== null) ?? null;
@@ -242,7 +244,7 @@ export function Home(props: { status: Status; watts: number[]; temps?: number[];
               aria-checked={s.profile === p}
               className="segment"
               disabled={!!s.safe_mode}
-              onClick={() => run(() => backend.setProfile(p))}
+              onClick={() => (s.last_until && p !== "power-saver" && p !== s.profile ? setStopLasting(p) : run(() => backend.setProfile(p)))}
             >
               <span className="segment-title">{profileName(p)}</span>
               <span className="muted small">{t(`profile_${p.replace("-", "_")}_desc` as "profile_balanced_desc")}</span>
@@ -251,6 +253,35 @@ export function Home(props: { status: Status; watts: number[]; temps?: number[];
         </div>
         <p className="muted small">{t("mode_auto_desc")}</p>
         <FeelsSlow status={s} run={run} />
+        {stopLasting && s.last_until && (
+          <Dialog
+            open
+            onClose={() => setStopLasting(null)}
+            title={t("lu_stop_title")}
+            actions={
+              <>
+                <button type="button" className="btn" onClick={() => setStopLasting(null)}>{t("lu_stop_keep")}</button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    const p = stopLasting;
+                    setStopLasting(null);
+                    run(async () => {
+                      await backend.setTarget(0);
+                      await backend.setProfile(p);
+                      return t("lu_stopped", { mode: profileName(p) });
+                    });
+                  }}
+                >
+                  {t("lu_stop_switch", { mode: profileName(stopLasting) })}
+                </button>
+              </>
+            }
+          >
+            <p>{t("lu_stop_desc", { time: clock(s.last_until.until), mode: profileName(stopLasting) })}</p>
+          </Dialog>
+        )}
       </section>
 
       <div className="grid">

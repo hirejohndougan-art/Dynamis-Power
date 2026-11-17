@@ -29,6 +29,7 @@ const EN: &[(&str, &str)] = &[
     ("tray_feels_slow_end", "Back to normal settings"),
     ("tray_something_broke", "Something stopped working…"),
     ("tray_report", "Report a problem…"),
+    ("tray_stops_lasting", "stops Make it last"),
     ("tray_auto_reason", "Chosen automatically: {reason}"),
     (
         "tray_relief",

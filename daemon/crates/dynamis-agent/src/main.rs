@@ -20,8 +20,9 @@
 //! The service turns the process ID into an app name itself, on this
 //! computer, for the Apps screen and per-app modes.
 //!
-//! It also shows the **panel icon** (see `tray.rs`): the power mode at a
-//! glance, and a menu to change it, switch auto mode, make the battery last,
+//! It also shows the **panel icon** (see `tray.rs`): a battery filled to the
+//! charge in the power mode's colour (updated when UPower reports a change),
+//! with the percentage beside it where the panel shows text, and a menu to change it, switch auto mode, make the battery last,
 //! or open the app. It starts at every login, so the icon is always there
 //! without the app running. "Hide this icon" in its menu (or the app's
 //! setting) turns it off; that choice is kept in
@@ -287,11 +288,26 @@ async fn run(args: Args) -> zbus::Result<()> {
         let (name, _, new): (String, String, String) = m.body().deserialize().ok()?;
         (name == "org.kde.StatusNotifierWatcher" && !new.is_empty()).then_some(Event::PanelStarted)
     });
+    // The battery icon follows the charge: UPower announces each change of
+    // the laptop's combined battery, so the icon updates without polling.
+    let battery_changed = MessageStream::for_match_rule(
+        MatchRule::builder()
+            .msg_type(Type::Signal)
+            .interface("org.freedesktop.DBus.Properties")
+            .member("PropertiesChanged")
+            .path("/org/freedesktop/UPower/devices/DisplayDevice")
+            .build()?,
+        &report_bus,
+        None,
+    )
+    .await?
+    .map(|_| Event::BatteryChanged);
     let mut events = Box::pin(
         events
             .or(service_appeared)
             .or(service_changed)
-            .or(panel_appeared),
+            .or(panel_appeared)
+            .or(battery_changed),
     );
 
     if !args.no_tray {
@@ -342,6 +358,12 @@ async fn run(args: Args) -> zbus::Result<()> {
                     tray::refresh(&session, &t.shared).await;
                 }
             }
+            Some(Event::BatteryChanged) => {
+                force = false;
+                if let Some(t) = TRAY.get() {
+                    tray::refresh(&session, &t.shared).await;
+                }
+            }
             Some(Event::PanelStarted) => {
                 force = false;
                 if let Some(t) = TRAY.get().filter(|_| tray_wanted()) {
@@ -358,6 +380,7 @@ enum Event {
     Session,
     ServiceStarted,
     ServiceChanged,
+    BatteryChanged,
     PanelStarted,
 }
 

@@ -111,9 +111,9 @@ Advanced always shows the technical details (setting IDs, raw kernel values, all
 
 **Built.** An icon next to the clock (StatusNotifierItem with a DBusMenu menu, drawn by the session agent `dynamis-agent`), shown from login on every desktop that supports panel icons (KDE Plasma, Xfce, Cinnamon, MATE, Budgie; GNOME with the AppIndicator extension, which Ubuntu ships on).
 
-- The icon is the app's logo, coloured by mode (green Longer battery, canary yellow Balanced with a dark bolt, orange Faster, grey when the service is not running or safe mode is on). The tooltip says the mode, battery level and time left.
+- On a laptop the icon is a **battery filled to its charge**, the fill in the mode's colour (green Longer battery, canary yellow Balanced, orange Faster, grey when the service is not running or safe mode is on), red at 20% or less, with a bolt while charging. It follows the charge as UPower reports it, without polling. Panels that show text beside an icon (GNOME with the AppIndicator extension) also show the percentage. Without a battery, the app's logo coloured by mode. The tooltip says the mode, battery level and time left.
 - **Left click** opens the app.
-- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *It feels slow*; *Something stopped working…* (undoes the last hour and opens the app to ask what stopped working; works in safe mode too); *Report a problem…* (opens the app with that dialog); *Open Dynamis Power*; *Hide this icon*.
+- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio; while *Make it last* is on, Balanced and Faster say "(stops Make it last)"); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *It feels slow*; *Something stopped working…* (undoes the last hour and opens the app to ask what stopped working; works in safe mode too); *Report a problem…* (opens the app with that dialog); *Open Dynamis Power*; *Hide this icon*.
 - Every change goes to the service exactly as the app sends it (polkit, safe mode and every rail apply). In safe mode the controls are greyed out.
 - *Hide this icon*, or the switch on Modes, turns it off; the choice is remembered per person.
 

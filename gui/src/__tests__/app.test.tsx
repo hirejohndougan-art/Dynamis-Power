@@ -510,4 +510,22 @@ describe("the app with the stand-in backend", () => {
     await waitFor(() => expect(screen.getByRole("switch", { name: "Also learn during heavy work" }).getAttribute("aria-checked")).toBe("true"));
     await backend.setLearnHeavy(false);
   });
+  it("asks before a faster mode stops Make it last", async () => {
+    await backend.setProfile("power-saver");
+    await backend.setTarget(Date.now() / 1000 + 4 * 3600);
+    window.location.hash = "#home";
+    render(<App />);
+    const faster = await screen.findByRole("radio", { name: /Faster/ }, { timeout: 4000 });
+    await act(async () => fireEvent.click(faster));
+    const dialog = await screen.findByRole("dialog", { name: "Stop making it last?", hidden: true });
+    // Keep: nothing changes.
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Keep making it last", hidden: true })));
+    expect((await backend.status()).last_until).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("radio", { name: /Faster/ })));
+    const again = await screen.findByRole("dialog", { name: "Stop making it last?", hidden: true });
+    await act(async () => fireEvent.click(within(again).getByRole("button", { name: "Stop and switch to Faster", hidden: true })));
+    await waitFor(async () => expect((await backend.status()).profile).toBe("performance"));
+    expect((await backend.status()).last_until).toBeFalsy();
+    await backend.setProfile("balanced");
+  });
 });

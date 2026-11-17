@@ -20,7 +20,7 @@ body { background: var(--desk); }
 .panel-glyph { opacity: 0.7; }
 .panel-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
 .tray-wrap { position: relative; }
-.tray-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.tray-icon { display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 4px; color: inherit; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
 .tray-icon:hover, .tray-icon[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
 .tray-icon:focus-visible { outline: 2px solid #ffef00; outline-offset: 1px; }
 .tray-menu { position: absolute; right: 0; top: 38px; min-width: 260px; max-width: calc(100vw - 32px); padding: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
@@ -43,3 +43,5 @@ body { background: var(--desk); }
   .window { margin: 12px 16px; }
   .window-body .shell { min-height: 0; }
 }
+.tray-battery { display: inline-flex; align-items: center; gap: 2px; }
+.tray-pct { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }

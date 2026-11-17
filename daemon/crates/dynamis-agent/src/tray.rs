@@ -124,9 +124,15 @@ pub fn menu(status: Option<&Value>) -> Vec<Entry> {
         (id::PERFORMANCE, "performance", "mode_performance"),
     ] {
         if offered.contains(&name) {
+            // Picking a faster mode stops "Make it last": say so.
+            let label = if !st["last_until"].is_null() && name != "power-saver" && profile != name {
+                format!("{} ({})", s(key), s("tray_stops_lasting"))
+            } else {
+                s(key).to_string()
+            };
             out.push(Entry {
                 enabled: !locked,
-                ..e(pid, 0, s(key).into(), Kind::Radio(profile == name))
+                ..e(pid, 0, label, Kind::Radio(profile == name))
             });
         }
     }
@@ -404,7 +410,10 @@ impl Shared {
         let mut cur = self.status.lock().unwrap_or_else(|p| p.into_inner());
         // Battery level and watts change all the time; compare what the menu
         // and icon show.
-        let shown = |v: &Option<Value>| v.as_ref().map(|v| (menu(Some(v)), mode_of(v).to_string()));
+        let shown = |v: &Option<Value>| {
+            v.as_ref()
+                .map(|v| (menu(Some(v)), mode_of(v).to_string(), battery_of(v)))
+        };
         let changed = shown(&cur) != shown(&fresh);
         *cur = fresh;
         if changed {
@@ -566,6 +575,195 @@ fn open_app_with(args: &[&str]) {
 
 // --- The icon ---------------------------------------------------------------
 
+/// What the icon shows: on a laptop, a battery filled to its charge, in the
+/// power mode's colour (red at 20% or less), with a bolt while charging; on
+/// a computer without a battery (or before the service answers), the logo.
+pub fn icon_for(st: Option<&Value>) -> Pixmaps {
+    let mode = st.map_or("off", mode_of);
+    match st.and_then(battery_of) {
+        Some((pct, charging)) => battery_pixmaps(mode, pct, charging),
+        None => pixmaps(mode),
+    }
+}
+
+/// Battery percent (rounded) and whether it is charging, if there is one.
+fn battery_of(st: &Value) -> Option<(u8, bool)> {
+    let p = &st["power"];
+    if p["has_battery"].as_bool() != Some(true) {
+        return None;
+    }
+    let pct = p["battery_pct"].as_f64()?.round().clamp(0.0, 100.0) as u8;
+    Some((pct, p["charging"].as_bool() == Some(true)))
+}
+
+/// The text panels that show one next to the icon (GNOME with the
+/// AppIndicator extension) put beside it: "79%".
+pub fn label_for(st: Option<&Value>) -> String {
+    st.and_then(battery_of)
+        .map(|(pct, _)| format!("{pct}%"))
+        .unwrap_or_default()
+}
+
+fn mode_rgb(mode: &str) -> (f64, f64, f64) {
+    let (r, g, b) = match mode {
+        "power-saver" => (0x43, 0xa0, 0x47),
+        "performance" => (0xf5, 0x7c, 0x00),
+        "off" => (0x9e, 0x9e, 0x9e),
+        _ => (0xff, 0xef, 0x00),
+    };
+    (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)
+}
+
+pub fn battery_pixmaps(mode: &str, pct: u8, charging: bool) -> Pixmaps {
+    let fill = if pct <= 20 && !charging {
+        (
+            0xe5 as f64 / 255.0,
+            0x39 as f64 / 255.0,
+            0x35 as f64 / 255.0,
+        )
+    } else {
+        mode_rgb(mode)
+    };
+    [16, 22, 24, 32, 48]
+        .iter()
+        .map(|&n| (n, n, draw_battery(n as usize, pct, charging, fill)))
+        .collect()
+}
+
+/// A battery drawn in 32×32 units with 4×4 supersampling: a light outline
+/// with a dark edge on both sides (so it shows on light and dark panels),
+/// the fill from the left to the charge, and a bolt while charging.
+fn draw_battery(n: usize, pct: u8, charging: bool, fill: (f64, f64, f64)) -> Vec<u8> {
+    // Inside a rounded rectangle.
+    let rr = |x: f64, y: f64, x0: f64, y0: f64, x1: f64, y1: f64, r: f64| {
+        if x < x0 || x > x1 || y < y0 || y > y1 {
+            return false;
+        }
+        let cx = x.clamp(x0 + r, x1 - r);
+        let cy = y.clamp(y0 + r, y1 - r);
+        (x - cx).powi(2) + (y - cy).powi(2) <= r * r
+    };
+    let (bx0, by0, bx1, by1, br) = (1.5, 7.0, 27.0, 25.0, 3.5);
+    let stroke = 2.2;
+    let outer = |x: f64, y: f64, grow: f64| {
+        rr(
+            x,
+            y,
+            bx0 - grow,
+            by0 - grow,
+            bx1 + grow,
+            by1 + grow,
+            br + grow,
+        ) || rr(
+            x,
+            y,
+            27.0 - grow,
+            12.5 - grow,
+            30.5 + grow,
+            19.5 + grow,
+            1.0 + grow,
+        )
+    };
+    let inner = |x: f64, y: f64, shrink: f64| {
+        let s = stroke + shrink;
+        rr(x, y, bx0 + s, by0 + s, bx1 - s, by1 - s, (br - s).max(0.5))
+    };
+    let (fx0, fx1) = (bx0 + stroke + 1.2, bx1 - stroke - 1.2);
+    let fx = fx0 + (fx1 - fx0) * pct as f64 / 100.0;
+    let in_fill = |x: f64, y: f64| {
+        pct > 0
+            && rr(
+                x,
+                y,
+                fx0,
+                by0 + stroke + 1.2,
+                fx.max(fx0 + 1.0),
+                by1 - stroke - 1.2,
+                1.0,
+            )
+    };
+    let bolt = [
+        (16.5, 9.5),
+        (10.5, 17.0),
+        (14.5, 17.0),
+        (13.0, 22.5),
+        (19.5, 14.5),
+        (15.5, 14.5),
+    ];
+    let in_poly = |x: f64, y: f64, scale: f64| {
+        let (cx, cy) = (15.0, 16.0);
+        let mut c = false;
+        let mut j = bolt.len() - 1;
+        for i in 0..bolt.len() {
+            let p = |k: usize| (cx + (bolt[k].0 - cx) * scale, cy + (bolt[k].1 - cy) * scale);
+            let ((xi, yi), (xj, yj)) = (p(i), p(j));
+            if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
+                c = !c;
+            }
+            j = i;
+        }
+        c
+    };
+    // Layers, back to front: (colour, alpha, coverage test).
+    let dark = (0.08, 0.08, 0.08);
+    let light = (0.96, 0.96, 0.96);
+    let mut out = Vec::with_capacity(n * n * 4);
+    let ss = 4usize;
+    for py in 0..n {
+        for px in 0..n {
+            // Premultiplied colour and alpha, composited "over".
+            let (mut r, mut g, mut b, mut a) = (0.0, 0.0, 0.0, 0.0);
+            let mut over = |c: (f64, f64, f64), alpha: f64| {
+                r = c.0 * alpha + r * (1.0 - alpha);
+                g = c.1 * alpha + g * (1.0 - alpha);
+                b = c.2 * alpha + b * (1.0 - alpha);
+                a = alpha + a * (1.0 - alpha);
+            };
+            let mut cov = [0u32; 6];
+            for sy in 0..ss {
+                for sx in 0..ss {
+                    let x = (px as f64 + (sx as f64 + 0.5) / ss as f64) * 32.0 / n as f64;
+                    let y = (py as f64 + (sy as f64 + 0.5) / ss as f64) * 32.0 / n as f64;
+                    let o = outer(x, y, 0.0);
+                    let i = inner(x, y, 0.0);
+                    // The dark edge: just outside the outline and just inside.
+                    if (outer(x, y, 1.0) && !o) || (i && !inner(x, y, 1.0)) {
+                        cov[0] += 1;
+                    }
+                    if o && !i {
+                        cov[1] += 1;
+                    }
+                    if in_fill(x, y) {
+                        cov[2] += 1;
+                    }
+                    if charging && in_poly(x, y, 1.35) {
+                        cov[3] += 1;
+                    }
+                    if charging && in_poly(x, y, 1.0) {
+                        cov[4] += 1;
+                    }
+                }
+            }
+            let t = (ss * ss) as f64;
+            over(dark, 0.55 * cov[0] as f64 / t);
+            over(light, cov[1] as f64 / t);
+            over(fill, cov[2] as f64 / t);
+            over(light, cov[3] as f64 / t);
+            over((0.1, 0.1, 0.1), cov[4] as f64 / t);
+            // Back to straight (not premultiplied) ARGB bytes.
+            let to = |c: f64| {
+                if a > 0.0 {
+                    (c / a * 255.0).round().clamp(0.0, 255.0) as u8
+                } else {
+                    0
+                }
+            };
+            out.extend_from_slice(&[(a * 255.0).round() as u8, to(r), to(g), to(b)]);
+        }
+    }
+    out
+}
+
 /// ARGB32 (network byte order) pixmaps of the app's logo, coloured by mode.
 pub fn pixmaps(mode: &str) -> Pixmaps {
     let (r, g, b) = match mode {
@@ -674,8 +872,17 @@ impl Item {
     }
     #[zbus(property)]
     fn icon_pixmap(&self) -> Pixmaps {
-        let st = self.0.status();
-        pixmaps(st.as_ref().map_or("off", mode_of))
+        icon_for(self.0.status().as_ref())
+    }
+    /// Text beside the icon on panels that show it (GNOME's AppIndicator
+    /// extension): the battery percentage. Others ignore it.
+    #[zbus(property, name = "XAyatanaLabel")]
+    fn label(&self) -> String {
+        label_for(self.0.status().as_ref())
+    }
+    #[zbus(property, name = "XAyatanaLabelGuide")]
+    fn label_guide(&self) -> String {
+        "100%".into()
     }
     #[zbus(property)]
     fn tool_tip(&self) -> (String, Pixmaps, String, String) {
@@ -820,6 +1027,13 @@ pub async fn refresh(session: &Connection, shared: &Shared) -> bool {
         let item = SignalEmitter::new(session, ITEM_PATH)?;
         item.emit("org.kde.StatusNotifierItem", "NewIcon", &())
             .await?;
+        let label = label_for(shared.status().as_ref());
+        item.emit(
+            "org.kde.StatusNotifierItem",
+            "XAyatanaNewLabel",
+            &(label.as_str(), "100%"),
+        )
+        .await?;
         item.emit("org.kde.StatusNotifierItem", "NewToolTip", &())
             .await
     }
@@ -979,6 +1193,62 @@ mod tests {
         assert_eq!(l.children.len(), m.iter().filter(|e| e.parent == 0).count());
         let sub = node(&m, id::LAST, -1).unwrap();
         assert_eq!(sub.signature().to_string(), "(ia{sv}av)");
+    }
+
+    #[test]
+    fn icon_is_a_battery_filled_to_the_charge() {
+        let mut st = status();
+        st["power"]["has_battery"] = true.into();
+        st["power"]["battery_pct"] = 79.0.into();
+        st["power"]["charging"] = false.into();
+        assert_eq!(label_for(Some(&st)), "79%");
+        let p = icon_for(Some(&st));
+        let (w, _, data) = &p[3]; // 32×32: one pixel per unit
+        assert_eq!(*w, 32);
+        let at = |x: usize, y: usize| data[(y * 32 + x) * 4..(y * 32 + x) * 4 + 4].to_vec();
+        // Filled near the left, empty near the right at 79%: compare the
+        // middle row at 15% and 95% across the inside.
+        let left = at(7, 16);
+        let right = at(21, 16);
+        assert!(left[0] > 200, "filled: {left:?}");
+        assert!(right[0] < 60, "empty: {right:?}");
+        // Corner transparent; outline light.
+        assert_eq!(at(0, 0)[0], 0);
+        assert!(at(14, 8)[1] > 200, "outline {:?}", at(14, 8));
+        // Low and not charging: red fill.
+        let low = battery_pixmaps("balanced", 15, false);
+        let px = &low[3].2[(16 * 32 + 6) * 4..(16 * 32 + 6) * 4 + 4];
+        assert!(px[1] > 200 && px[2] < 100, "red: {px:?}");
+        // Charging: a dark bolt in the middle.
+        let ch = battery_pixmaps("balanced", 50, true);
+        let mid = &ch[3].2[(16 * 32 + 15) * 4..(16 * 32 + 15) * 4 + 4];
+        assert!(mid[1] < 80, "bolt: {mid:?}");
+        // No battery: the logo.
+        st["power"]["has_battery"] = false.into();
+        assert_eq!(icon_for(Some(&st)), pixmaps("balanced"));
+        assert_eq!(label_for(Some(&st)), "");
+    }
+
+    /// Writes raw ARGB icons for a look by eye:
+    /// `DYNAMIS_ICON_OUT=/tmp/icons cargo test -p dynamis-agent preview -- --ignored`.
+    #[test]
+    #[ignore]
+    fn preview() {
+        let Ok(dir) = std::env::var("DYNAMIS_ICON_OUT") else {
+            return;
+        };
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, mode, pct, ch) in [
+            ("balanced-79", "balanced", 79, false),
+            ("saver-45", "power-saver", 45, false),
+            ("faster-100", "performance", 100, false),
+            ("low-12", "balanced", 12, false),
+            ("charging-50", "balanced", 50, true),
+        ] {
+            for (n, _, data) in battery_pixmaps(mode, pct, ch) {
+                std::fs::write(format!("{dir}/{name}-{n}.argb"), data).unwrap();
+            }
+        }
     }
 
     #[test]
