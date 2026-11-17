@@ -6,6 +6,8 @@ import react from "@vitejs/plugin-react";
 // file by scripts/inline-demo.mjs, for sharing as a single page.
 export default defineConfig({
   plugins: [react()],
+  // The demo runs on the stand-in backend.
+  define: { __STAND_IN__: "true" },
   build: {
     target: "es2021",
     outDir: "demo-dist",

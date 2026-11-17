@@ -1,17 +1,23 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { backend } from "./backend";
 import { Logo } from "./components";
 import { useStatus } from "./hooks";
 import { t } from "./i18n";
-import { Activity } from "./screens/Activity";
-import { Advanced, TABS, type Tab } from "./screens/Advanced";
-import { Apps } from "./screens/Apps";
-import { Battery } from "./screens/Battery";
-import { Devices } from "./screens/Devices";
 import { Home } from "./screens/Home";
-import { Learning } from "./screens/Learning";
-import { Modes } from "./screens/Modes";
+import { TABS, type Tab } from "./screens/advancedTabs";
 import { Welcome, welcomed } from "./screens/Welcome";
+
+// Only the Dashboard is read when the window opens; every other screen's
+// code is loaded the first time it is shown. On a slow laptop that halves
+// the script read before the first screen appears.
+const Activity = lazy(() => import("./screens/Activity").then((m) => ({ default: m.Activity })));
+const Advanced = lazy(() => import("./screens/Advanced").then((m) => ({ default: m.Advanced })));
+const Apps = lazy(() => import("./screens/Apps").then((m) => ({ default: m.Apps })));
+const Battery = lazy(() => import("./screens/Battery").then((m) => ({ default: m.Battery })));
+const Devices = lazy(() => import("./screens/Devices").then((m) => ({ default: m.Devices })));
+const Learning = lazy(() => import("./screens/Learning").then((m) => ({ default: m.Learning })));
+const Modes = lazy(() => import("./screens/Modes").then((m) => ({ default: m.Modes })));
+
 
 type Screen = "home" | "modes" | "apps" | "battery" | "devices" | "learning" | "activity" | "advanced";
 
@@ -80,6 +86,7 @@ export function App() {
         </a>
       </nav>
       <main className="main" tabIndex={-1}>
+        <Suspense fallback={<p className="muted" role="status">{t("loading")}</p>}>
         {error && !status ? (
           <div className="card" role="alert">
             <h2>{t("error_title")}</h2>
@@ -105,6 +112,7 @@ export function App() {
         ) : (
           <Advanced key={sub} status={status} refresh={refresh} initialTab={TABS.includes(sub as Tab) ? (sub as Tab) : "settings"} />
         )}
+        </Suspense>
       </main>
     </div>
   );

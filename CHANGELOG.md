@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **The app opens faster on slow laptops**: the window shows the page colour and sidebar before any script is read (no blank white window), only the Dashboard's code is loaded at open (other screens load when first shown), and the installed app no longer carries the demo's stand-in backend. The script read at open is 228 KB instead of 329 KB.
+
 - The session helper puts the desktop back (indexing, refresh rate, style) when it is stopped at logout, not only at the next login.
 
 - **Advice from readings** on the Dashboard: *Videos may be decoded the slow way* (processor busy, graphics chip idle during a video) with how to turn on hardware decoding, and *The screen uses a lot of the battery* with where to shorten the desktop's dim and screen-off times. Each can be dismissed for 30 days (`DismissTip`, `tips` in `Status`).

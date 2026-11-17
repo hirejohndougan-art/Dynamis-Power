@@ -5,9 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>Dynamis Power</title>
+    <!-- First paint, before any script is read: the page colour and an empty
+         sidebar, so the window is never a blank white rectangle while a slow
+         computer loads the app. Only the product name; no other text. -->
+    <style>
+      html, body { margin: 0; background: #f5f6f4; }
+      .boot { display: flex; min-height: 100vh; font: 600 16px Inter, "Noto Sans", Cantarell, system-ui, sans-serif; color: #1b1d1f; }
+      .boot-side { flex: 0 0 220px; box-sizing: border-box; background: #ffffff; border-right: 1px solid #e2e4e0; padding: 24px 24px; display: flex; gap: 10px; align-items: center; align-self: stretch; }
+      .boot-side svg { flex: 0 0 auto; }
+      .boot-side span { align-self: center; }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #151718; }
+        .boot { color: #eceeed; }
+        .boot-side { background: #1d2022; border-right-color: #2f3436; }
+      }
+      @media (max-width: 640px) { .boot { flex-direction: column; } .boot-side { flex: none; border-right: 0; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot" aria-busy="true"><div class="boot-side" style="align-items: flex-start"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="8" fill="#ffef00"></rect><path d="M15.5 6 9 15.5h5l-1.5 6.5L19 12.5h-5z" fill="#1b1d1f"></path></svg><span style="line-height: 28px">Dynamis Power</span></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

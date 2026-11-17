@@ -6,8 +6,8 @@ import { t, valueName } from "../i18n";
 import { DeveloperTab, ProfilesTab, SensorsTab, SystemTab } from "./AdvancedMore";
 import { RestoreDialog } from "./Home";
 
-export const TABS = ["settings", "learning", "profiles", "sensors", "safety", "system", "developer"] as const;
-export type Tab = (typeof TABS)[number];
+import { TABS, type Tab } from "./advancedTabs";
+export { TABS, type Tab };
 
 export function Advanced(props: { status: Status; refresh: () => void; initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(props.initialTab ?? "settings");
