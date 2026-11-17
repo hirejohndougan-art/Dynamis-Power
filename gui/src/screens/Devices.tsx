@@ -1,4 +1,4 @@
-import { backend, type DeviceInfo, type DevicePolicy, type DevicesInfo, type RadioKind, type RadiosInfo, type Status } from "../backend";
+import { backend, type DesktopPolicy, type DeviceInfo, type DevicePolicy, type DevicesInfo, type RadioKind, type RadiosInfo, type Status } from "../backend";
 import { useState } from "react";
 import { Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
@@ -16,6 +16,7 @@ export function Devices(props: { status: Status; refresh: () => void }) {
       <p className="muted">{t("dev_intro")}</p>
       <DeviceLists locked={!!props.status.safe_mode} run={run} />
       <Radios locked={!!props.status.safe_mode} hasBattery={props.status.power.has_battery} run={run} />
+      {props.status.power.has_battery && props.status.desktop && <DesktopCard status={props.status} run={run} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
   );
@@ -190,6 +191,14 @@ function Radios(props: { locked: boolean; hasBattery: boolean; run: (a: () => Pr
                 onChange={(on) => set({ ...d.policy, off_on_battery: toggle(d.policy.off_on_battery, k, on) })}
               />
             ))}
+        {props.hasBattery && kinds.includes("bluetooth") && !d.policy.off_on_battery.includes("bluetooth") && (
+          <Switch
+            checked={!!d.policy.bluetooth_off_when_unused}
+            disabled={props.locked}
+            label={t("radio_bt_unused")}
+            onChange={(on) => set({ ...d.policy, bluetooth_off_when_unused: on })}
+          />
+        )}
         {props.hasBattery && (d.keyboard_lights ?? 0) > 0 && (
           <Switch
             checked={!!d.policy.keyboard_light_off_on_battery}
@@ -239,6 +248,53 @@ function Radios(props: { locked: boolean; hasBattery: boolean; run: (a: () => Pr
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+/** Acting through the desktop on battery (decision 0027): the session
+ * helper pauses file indexing, lowers a fast screen's refresh rate, or uses
+ * the dark style, and puts each back when plugged in. */
+function DesktopCard(props: { status: Status; run: (a: () => Promise<string | void>) => void }) {
+  const d = props.status.desktop!;
+  const f = d.found;
+  const locked = !!props.status.safe_mode;
+  const set = (change: Partial<DesktopPolicy>) => props.run(() => backend.setDesktopPolicy({ ...d.policy, ...change }));
+  const fast = f?.refresh_hz != null && f.low_hz != null && f.refresh_hz > f.low_hz + 1;
+  return (
+    <section className="card" aria-labelledby="desk-heading">
+      <h2 id="desk-heading">{t("desk_heading")}</h2>
+      <p className="muted">{t("desk_intro")}</p>
+      {!f ? (
+        <p className="notice notice-info">{t("desk_no_helper")}</p>
+      ) : f.desktop === "other" ? (
+        <p className="notice notice-info">{t("desk_other")}</p>
+      ) : null}
+      <div className="stack" style={{ gap: 8 }}>
+        {(!f || f.indexer) && (
+          <>
+            <Switch checked={d.policy.pause_indexing} disabled={locked} label={t("desk_indexing")} onChange={(v) => set({ pause_indexing: v })} />
+            <p className="muted small">{t("desk_indexing_desc")}</p>
+          </>
+        )}
+        {fast && (
+          <>
+            <Switch
+              checked={d.policy.lower_refresh}
+              disabled={locked}
+              label={t("desk_refresh", { from: Math.round(f!.refresh_hz!), to: Math.round(f!.low_hz!) })}
+              onChange={(v) => set({ lower_refresh: v })}
+            />
+            <p className="muted small">{t("desk_refresh_desc")}</p>
+          </>
+        )}
+        {f?.can_style && (
+          <>
+            <Switch checked={d.policy.dark_style} disabled={locked} label={t("desk_dark")} onChange={(v) => set({ dark_style: v })} />
+            <p className="muted small">{t(d.oled ? "desk_dark_oled" : "desk_dark_desc")}</p>
+          </>
+        )}
+      </div>
     </section>
   );
 }

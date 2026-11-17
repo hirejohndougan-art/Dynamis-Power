@@ -21,6 +21,7 @@ pub mod deepidle;
 pub mod devices;
 pub mod diag;
 pub mod display;
+pub mod edid;
 pub mod engine;
 pub mod fs;
 pub mod gauge;

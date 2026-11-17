@@ -87,6 +87,15 @@ pub fn wired_up(root: &SysRoot) -> bool {
 /// Whether the laptop is in a dock (TLP's dock detection, simplified): an
 /// ACPI dock station reporting `docked`, or a Thunderbolt device that calls
 /// itself a dock.
+/// Bluetooth connections open now: each one is a `hciN:handle` entry in
+/// `/sys/class/bluetooth`, so no Bluetooth daemon needs asking.
+pub fn bluetooth_connections(root: &SysRoot) -> usize {
+    root.list_dir("/sys/class/bluetooth")
+        .into_iter()
+        .filter(|n| n.starts_with("hci") && n.contains(':'))
+        .count()
+}
+
 pub fn docked(root: &SysRoot) -> bool {
     let acpi = root
         .list_dir("/sys/devices/platform")
@@ -149,6 +158,16 @@ pub mod fixture {
     }
 
     /// An ACPI dock station, docked or not.
+    /// A Bluetooth connection (`connected`) or none.
+    pub fn bt_connection(root: &Path, connected: bool) {
+        let d = root.join("sys/class/bluetooth/hci0:3585");
+        if connected {
+            std::fs::create_dir_all(&d).unwrap();
+        } else {
+            let _ = std::fs::remove_dir_all(&d);
+        }
+    }
+
     pub fn dock(root: &Path, docked: bool) {
         let d = root.join("sys/devices/platform/dock.0");
         std::fs::create_dir_all(&d).unwrap();

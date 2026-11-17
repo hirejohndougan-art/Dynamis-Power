@@ -29,12 +29,15 @@
 //! `~/.config/dynamis-power/agent.json`.
 //!
 //! It also passes the brightness the service set for a mode on to KDE
-//! Plasma, which keeps its own (see `brightness.rs`).
+//! Plasma, which keeps its own (see `brightness.rs`), and acts through the
+//! desktop on battery when the service asks: pausing file indexing, a lower
+//! refresh rate, the dark style (see `desktop.rs`, decision 0027).
 //!
 //! Only one agent runs per session: a second copy (for example started both
 //! by systemd and by the desktop's autostart) sees the first and exits.
 
 mod brightness;
+mod desktop;
 mod strings;
 mod tray;
 
@@ -326,6 +329,9 @@ async fn run(args: Args) -> zbus::Result<()> {
     let mut force = true;
     let mut bright = brightness::Follower::default();
     bright.check(&report_bus, &session, args.verbose).await;
+    let mut desk = desktop::Desktop::new(args.verbose);
+    desk.start(&session, &report_bus).await;
+    desk.sync(&session, &report_bus).await;
     loop {
         let now = Facts {
             focused_pid: focus.load(Ordering::Relaxed),
@@ -347,6 +353,8 @@ async fn run(args: Args) -> zbus::Result<()> {
         match events.next().await {
             Some(Event::ServiceStarted) => {
                 force = true;
+                desk.start(&session, &report_bus).await;
+                desk.sync(&session, &report_bus).await;
                 if let Some(t) = TRAY.get() {
                     tray::refresh(&session, &t.shared).await;
                 }
@@ -354,12 +362,15 @@ async fn run(args: Args) -> zbus::Result<()> {
             Some(Event::ServiceChanged) => {
                 force = false;
                 bright.check(&report_bus, &session, args.verbose).await;
+                desk.sync(&session, &report_bus).await;
                 if let Some(t) = TRAY.get() {
                     tray::refresh(&session, &t.shared).await;
                 }
             }
             Some(Event::BatteryChanged) => {
                 force = false;
+                // Plugging in or unplugging changes what the service wants.
+                desk.sync(&session, &report_bus).await;
                 if let Some(t) = TRAY.get() {
                     tray::refresh(&session, &t.shared).await;
                 }

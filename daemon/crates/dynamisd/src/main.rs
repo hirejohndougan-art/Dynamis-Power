@@ -19,6 +19,7 @@ mod conflicts;
 mod core;
 mod crash;
 mod deepidle;
+mod desktop;
 mod devices;
 mod fullcharge;
 mod habits;

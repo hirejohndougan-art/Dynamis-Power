@@ -48,7 +48,14 @@ pub struct RadioPolicy {
     /// The keyboard light off on battery, back when plugged in.
     #[serde(default)]
     pub keyboard_light_off_on_battery: bool,
+    /// Bluetooth off on battery once nothing has been connected for
+    /// `BT_QUIET_S`; back when plugged in.
+    #[serde(default)]
+    pub bluetooth_off_when_unused: bool,
 }
+
+/// How long Bluetooth must go unused on battery before the rule acts.
+pub const BT_QUIET_S: f64 = 600.0;
 
 impl RadioPolicy {
     fn check(&mut self) -> Result<(), String> {
@@ -76,6 +83,7 @@ impl RadioPolicy {
             || self.wifi_off_when_wired
             || !self.off_when_docked.is_empty()
             || self.keyboard_light_off_on_battery
+            || self.bluetooth_off_when_unused
     }
 }
 
@@ -92,6 +100,11 @@ pub struct RadiosState {
     /// The kinds the rules wanted off at the last look; `None` before the
     /// first look.
     last: Option<BTreeSet<String>>,
+    /// Since when Bluetooth has been on with nothing connected, on battery.
+    bt_quiet_since: Option<f64>,
+    /// The unused-Bluetooth rule switched it off (until plugged in, or the
+    /// person turns it back on).
+    bt_idle_off: bool,
 }
 
 impl RadiosState {
@@ -101,7 +114,10 @@ impl RadiosState {
             .and_then(|t| serde_json::from_str::<Saved>(&t).ok())
             .map(|s| s.policy)
             .unwrap_or_default();
-        RadiosState { policy, last: None }
+        RadiosState {
+            policy,
+            ..RadiosState::default()
+        }
     }
 
     pub fn needs_ticks(&self) -> bool {
@@ -155,7 +171,45 @@ impl RadiosState {
 
     /// One reading: act only if what the rules want changed.
     pub fn tick(&mut self, root: &SysRoot, dir: &Path, on_ac: bool) {
+        self.tick_at(root, dir, on_ac, crate::core::unix_now());
+    }
+
+    /// Whether the unused-Bluetooth rule wants it off now.
+    fn bluetooth_unused(&mut self, root: &SysRoot, on_ac: bool, now: f64) -> bool {
+        if !self.policy.bluetooth_off_when_unused || on_ac {
+            self.bt_quiet_since = None;
+            self.bt_idle_off = false;
+            return false;
+        }
+        let bt: Vec<_> = radios::scan(root)
+            .into_iter()
+            .filter(|r| r.kind == "bluetooth")
+            .collect();
+        let on = bt.iter().any(|r| !r.soft_off && !r.hard_off);
+        if self.bt_idle_off {
+            if on {
+                // The person turned it back on: start counting again.
+                self.bt_idle_off = false;
+                self.bt_quiet_since = Some(now);
+            }
+            return self.bt_idle_off;
+        }
+        if !on || radios::bluetooth_connections(root) > 0 {
+            self.bt_quiet_since = None;
+            return false;
+        }
+        let since = *self.bt_quiet_since.get_or_insert(now);
+        if now - since >= BT_QUIET_S {
+            self.bt_idle_off = true;
+        }
+        self.bt_idle_off
+    }
+
+    pub fn tick_at(&mut self, root: &SysRoot, dir: &Path, on_ac: bool, now: f64) {
         let mut want: BTreeSet<String> = BTreeSet::new();
+        if self.bluetooth_unused(root, on_ac, now) {
+            want.insert("bluetooth".into());
+        }
         if !on_ac {
             want.extend(self.policy.off_on_battery.iter().cloned());
             if self.policy.keyboard_light_off_on_battery {
@@ -179,7 +233,16 @@ impl RadiosState {
         let newly: BTreeSet<String> = want.difference(&last).cloned().collect();
         let ended: BTreeSet<String> = last.difference(&want).cloned().collect();
         if !newly.is_empty() {
-            switch(root, dir, &newly, true, &reason(&newly, on_ac));
+            let why = if self.bt_idle_off
+                && newly.len() == 1
+                && newly.contains("bluetooth")
+                && !self.policy.off_on_battery.iter().any(|k| k == "bluetooth")
+            {
+                "on battery and nothing connected for 10 minutes".to_string()
+            } else {
+                reason(&newly, on_ac)
+            };
+            switch(root, dir, &newly, true, &why);
         }
         if !ended.is_empty() {
             switch(root, dir, &ended, false, "the rule no longer applies");
@@ -209,6 +272,7 @@ impl RadiosState {
             "keyboard_lights": radios::keyboard_lights(root).len(),
             "wired": radios::wired_up(root),
             "docked": radios::docked(root),
+            "bluetooth_connections": radios::bluetooth_connections(root),
         })
     }
 }
@@ -304,6 +368,7 @@ mod tests {
                 off_at_startup: vec![],
                 off_when_docked: vec![],
                 keyboard_light_off_on_battery: false,
+                bluetooth_off_when_unused: false,
             },
             &root,
             &state,
@@ -328,6 +393,38 @@ mod tests {
         // Plugged in again: Bluetooth back as it was before the rule.
         std::fs::write(dir.join("root/sys/class/rfkill/rfkill0/soft"), "1").unwrap();
         r.tick(&root, &state, true);
+        assert_eq!(soft(&dir, "rfkill0"), "0");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn bluetooth_off_after_ten_unused_minutes_on_battery() {
+        let (dir, root, state) = sandbox("btidle");
+        let mut r = RadiosState::load(&state);
+        r.set_policy(
+            RadioPolicy {
+                bluetooth_off_when_unused: true,
+                ..RadioPolicy::default()
+            },
+            &root,
+            &state,
+            true,
+        )
+        .unwrap();
+        let t0 = 1_000_000.0;
+        fixture::bt_connection(&dir.join("root"), true);
+        r.tick_at(&root, &state, false, t0);
+        r.tick_at(&root, &state, false, t0 + 900.0);
+        assert_eq!(soft(&dir, "rfkill0"), "0", "headphones connected");
+        fixture::bt_connection(&dir.join("root"), false);
+        r.tick_at(&root, &state, false, t0 + 1000.0);
+        r.tick_at(&root, &state, false, t0 + 1500.0);
+        assert_eq!(soft(&dir, "rfkill0"), "0", "not ten minutes yet");
+        r.tick_at(&root, &state, false, t0 + 1600.0);
+        assert_eq!(soft(&dir, "rfkill0"), "1", "off after ten unused minutes");
+        assert_eq!(soft(&dir, "rfkill1"), "0", "Wi-Fi untouched");
+        // Plugged in: back on.
+        r.tick_at(&root, &state, true, t0 + 1700.0);
         assert_eq!(soft(&dir, "rfkill0"), "0");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -406,6 +503,7 @@ mod tests {
                 off_at_startup: vec!["bluetooth".into()],
                 off_when_docked: vec![],
                 keyboard_light_off_on_battery: false,
+                bluetooth_off_when_unused: false,
             },
             &root,
             &state,

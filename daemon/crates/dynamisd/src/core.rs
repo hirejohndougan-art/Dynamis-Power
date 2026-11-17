@@ -116,6 +116,8 @@ pub struct Core {
     pub trouble: crate::trouble::Trouble,
     /// "Check deep idle": a one-minute measurement, and the last report.
     pub deepidle: crate::deepidle::DeepIdle,
+    /// Acting through the desktop (decision 0027).
+    pub desktop: crate::desktop::DesktopState,
     /// Temperature at light use, month by month ("runs hotter").
     pub heat: dynamis_core::heat::HeatHistory,
     heat_unsaved: usize,
@@ -216,6 +218,7 @@ impl Core {
             kernel: crate::kernelwatch::KernelWatch::start(&root_for_kernel),
             trouble: crate::trouble::Trouble::load(&state_dir_for_radios, unix_now() as u64),
             deepidle: crate::deepidle::DeepIdle::load(&state_dir_for_radios),
+            desktop: crate::desktop::DesktopState::load(&state_dir_for_radios, &root_for_kernel),
         };
         let on = core.relief.active(unix_now());
         core.learn.relief = on;
@@ -739,11 +742,40 @@ impl Core {
         self.auto.session_owner = Some(owner.to_string());
     }
 
+    /// What the desktop can do, from the session agent.
+    pub fn report_desktop(&mut self, owner: &str, found: crate::desktop::Found) {
+        if self
+            .auto
+            .session_owner
+            .as_deref()
+            .is_none_or(|o| o == owner)
+        {
+            self.desktop.found = Some(found);
+        }
+    }
+
+    pub fn set_desktop_policy(&mut self, p: crate::desktop::DesktopPolicy) -> Result<(), String> {
+        let dir = self.state_dir.clone();
+        self.desktop.set_policy(p, &dir)
+    }
+
+    /// What the desktop should do now (for the agent).
+    pub fn desktop_json(&self) -> serde_json::Value {
+        let ps = dynamis_core::sensors::power::read(&self.root);
+        let on_ac = ps.on_ac() || ps.batteries.is_empty();
+        let safe = open_engine(&self.root, &self.state_dir)
+            .ok()
+            .and_then(|e| e.safe_mode())
+            .is_some();
+        self.desktop.json(on_ac, self.active(), safe)
+    }
+
     /// The session agent left the bus: forget what it said.
     pub fn session_gone(&mut self, owner: &str) {
         if self.auto.session_owner.as_deref() == Some(owner) {
             self.auto.session = SessionReport::default();
             self.auto.session_owner = None;
+            self.desktop.found = None;
         }
     }
 

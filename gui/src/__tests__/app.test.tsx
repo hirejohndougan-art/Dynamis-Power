@@ -451,10 +451,23 @@ describe("the app with the stand-in backend", () => {
     await backend.setDevicePolicy({ usb: false, pci: false, never: [], deeper_link_sleep: false });
   });
 
+  it("acts through the desktop on battery, with a lower refresh rate offered on a fast screen", async () => {
+    window.location.hash = "#devices";
+    render(<App />);
+    const card = await screen.findByRole("region", { name: "Your desktop on battery" }, { timeout: 3000 });
+    expect(within(card).getByRole("switch", { name: "Pause file indexing on battery" }).getAttribute("aria-checked")).toBe("true");
+    const refresh = within(card).getByRole("switch", { name: "Run the screen at 60 Hz instead of 120 Hz on battery" });
+    await act(async () => fireEvent.click(refresh));
+    await waitFor(() => expect(within(card).getByRole("switch", { name: /60 Hz instead of 120 Hz/ }).getAttribute("aria-checked")).toBe("true"));
+    expect(within(card).getByText(/looks like an OLED/)).toBeTruthy();
+    await backend.setDesktopPolicy({ pause_indexing: true, lower_refresh: false, dark_style: false });
+  });
+
   it("switches radios off by rule", async () => {
     window.location.hash = "#devices";
     render(<App />);
     const card = await screen.findByRole("region", { name: "Radios" }, { timeout: 3000 });
+    expect(within(card).getByRole("switch", { name: /nothing has been connected for 10 minutes/ })).toBeTruthy();
     const sw = within(card).getByRole("switch", { name: "Turn Bluetooth off on battery" });
     await act(async () => fireEvent.click(sw));
     await waitFor(() => expect(within(card).getByRole("switch", { name: "Turn Bluetooth off on battery" }).getAttribute("aria-checked")).toBe("true"));

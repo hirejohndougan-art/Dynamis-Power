@@ -201,6 +201,11 @@ async fn start_sleep_test(conn: State<'_, Conn>, minutes: f64) -> Result<(), Str
 }
 
 #[tauri::command]
+async fn set_desktop_policy(conn: State<'_, Conn>, policy: Value) -> Result<(), String> {
+    client(&conn).await?.set_desktop_policy(&policy).await
+}
+
+#[tauri::command]
 async fn check_deep_idle(conn: State<'_, Conn>) -> Result<(), String> {
     client(&conn).await?.check_deep_idle().await
 }
@@ -476,6 +481,7 @@ fn main() {
             sleep_test,
             start_sleep_test,
             check_deep_idle,
+            set_desktop_policy,
             stop_sleep_test,
             predict,
             set_target,

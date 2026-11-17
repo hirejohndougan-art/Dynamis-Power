@@ -118,6 +118,8 @@ impl Core {
             "hotter": self.heat.hotter(),
             // Whether the kernel log can be read (needs root).
             "kernel_watch": self.kernel.watching(),
+            // Acting through the desktop (decision 0027).
+            "desktop": self.desktop.json(on_ac, self.active(), engine.as_ref().and_then(|e| e.safe_mode()).is_some()),
             // "Check deep idle": running, or the last report.
             "deep_idle": self.deepidle.json(crate::core::unix_now()),
             // "Something stopped working": waiting for the answer.
@@ -212,6 +214,7 @@ impl Core {
         self.kept.clear(&dir)?;
         self.devices.clear(&dir);
         self.radios.clear(&dir);
+        self.desktop.clear(&dir);
         self.brightness.clear(&dir);
         let root = self.root.clone();
         self.trouble.clear(&root, &dir);

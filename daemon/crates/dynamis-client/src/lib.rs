@@ -419,6 +419,15 @@ impl Client {
             .map_err(explain)
     }
 
+    /// The choices for acting through the desktop on battery.
+    pub async fn set_desktop_policy(&self, policy: &Value) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetDesktopPolicy", &(policy.to_string(),))
+            .await
+            .map_err(explain)
+    }
+
     /// The screen brightness chosen for each mode, and the level now.
     pub async fn brightness(&self) -> Result<Value> {
         self.json("Brightness", &()).await

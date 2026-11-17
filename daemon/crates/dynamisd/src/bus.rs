@@ -1160,6 +1160,47 @@ impl DynamisPower {
         self.0.lock().forget(&setting).map_err(fdo::Error::Failed)
     }
 
+    /// For the session agent: what the desktop should do now (pause
+    /// indexing, lower the refresh rate, dark style) and the person's
+    /// choices (JSON).
+    fn desktop(&self) -> String {
+        self.0.lock().desktop_json().to_string()
+    }
+
+    /// Called by the session agent: what this desktop can do (JSON: desktop,
+    /// indexer, refresh_hz, low_hz, can_style). Unknown keys are ignored.
+    async fn report_desktop(
+        &self,
+        found: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        let sender = self.0.check(conn, Some(&hdr), ACTION_REPORT).await?;
+        let f: crate::desktop::Found =
+            serde_json::from_str(&found).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        self.0.lock().report_desktop(&sender, f);
+        Ok(())
+    }
+
+    /// The person's choices for acting through the desktop (JSON:
+    /// pause_indexing, lower_refresh, dark_style).
+    async fn set_desktop_policy(
+        &self,
+        policy: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let p: crate::desktop::DesktopPolicy =
+            serde_json::from_str(&policy).map_err(|e| fdo::Error::InvalidArgs(e.to_string()))?;
+        self.0
+            .lock()
+            .set_desktop_policy(p)
+            .map_err(fdo::Error::Failed)?;
+        notify(conn, &self.0).await;
+        Ok(())
+    }
+
     /// Called by the session agent when something in the desktop session
     /// changes. Keys: media_playing, screen_inhibited, game_running,
     /// screen_locked, user_idle (booleans) and focused_pid (u32, the process

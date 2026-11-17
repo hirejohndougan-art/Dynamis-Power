@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Your desktop on battery** (Devices; decision 0027): the session helper pauses file indexing (KDE Baloo, GNOME LocalSearch/Tracker; on by default), runs a fast screen at 60 Hz (KDE `kscreen-doctor`, GNOME Mutter as temporary), and uses the dark style (OLED guessed from the screen's EDID), putting each back when plugged in and leaving any change you make yourself.
+- **Bluetooth off when unused**: on battery, Bluetooth is switched off after 10 minutes with nothing connected, and back on when plugged in.
+
 - **Wake-ups per app** on the Apps screen: how often each app's threads wake the processor (from each thread's `schedstat`), with a note for an app that wakes it 100 times a second or more.
 - **Check deep idle** (Learning): a quiet, read-only minute, then how much of the time the processor rested in its deepest state and which devices may be in the way (kept awake, links that never sleep, links able to sleep more deeply). `CheckDeepIdle` on D-Bus, `deep_idle` in `Status`.
 - **Deeper link sleep** (Devices, Experimental, off by default): PCIe L1.1/L1.2 for each capable device except graphics, on battery only, after an explicit yes. Put back by Restore, *Something stopped working* and the kernel watch.

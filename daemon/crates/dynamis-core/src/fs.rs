@@ -91,6 +91,11 @@ impl SysRoot {
         Ok(s.trim().to_string())
     }
 
+    /// Read a file's raw bytes (for binary files such as a screen's EDID).
+    pub fn read_bytes(&self, kernel_path: &str) -> ReadResult<Vec<u8>> {
+        Ok(fs::read(self.path(kernel_path))?)
+    }
+
     /// Read a file holding one unsigned integer.
     pub fn read_u64(&self, kernel_path: &str) -> ReadResult<u64> {
         let s = self.read_string(kernel_path)?;

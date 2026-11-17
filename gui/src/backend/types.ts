@@ -56,6 +56,8 @@ export interface Status {
   trouble?: Trouble | null;
   /** "Check deep idle": running, or the last report. */
   deep_idle?: DeepIdle;
+  /** Acting through the desktop on battery (decision 0027). */
+  desktop?: DesktopInfo;
   /** A rule offered from the modes picked by hand; nothing changes before a yes. */
   suggestion?: Suggestion | null;
   /** The laptop runs hotter at light use than it used to (dust, dried paste). */
@@ -174,6 +176,21 @@ export interface Conflict {
 export interface AppRule {
   app: string;
   profile: Profile;
+}
+
+export interface DesktopPolicy {
+  pause_indexing: boolean;
+  lower_refresh: boolean;
+  dark_style: boolean;
+}
+
+export interface DesktopInfo {
+  policy: DesktopPolicy;
+  want: DesktopPolicy;
+  /** What the session helper found; null when it is not running. */
+  found: { desktop?: string | null; indexer?: string | null; refresh_hz?: number | null; low_hz?: number | null; can_style?: boolean } | null;
+  /** The built-in screen looks like an OLED. */
+  oled: boolean;
 }
 
 export interface IdleBlocker {
@@ -347,6 +364,8 @@ export interface Backend {
   /** Radios and the rules that switch them off. */
   radios(): Promise<RadiosInfo>;
   setRadioPolicy(p: RadioPolicy): Promise<void>;
+  /** Acting through the desktop on battery (decision 0027). */
+  setDesktopPolicy(p: DesktopPolicy): Promise<void>;
   /** "It feels slow": undo what costs speed for the rest of the day. */
   feelsSlow(lasting: boolean): Promise<FeelsSlowResult>;
   endRelief(): Promise<void>;
@@ -445,7 +464,7 @@ export type Unclean = {
 };
 
 export type RadioKind = "bluetooth" | "wlan" | "wwan";
-export type RadioPolicy = { off_on_battery: RadioKind[]; wifi_off_when_wired: boolean; off_at_startup: RadioKind[]; off_when_docked?: RadioKind[]; keyboard_light_off_on_battery?: boolean };
+export type RadioPolicy = { off_on_battery: RadioKind[]; wifi_off_when_wired: boolean; off_at_startup: RadioKind[]; off_when_docked?: RadioKind[]; keyboard_light_off_on_battery?: boolean; bluetooth_off_when_unused?: boolean };
 export type RadiosInfo = {
   policy: RadioPolicy;
   radios: { id: string; kind: RadioKind; name: string; off: boolean; hard_off: boolean; managed: boolean }[];

@@ -199,10 +199,10 @@ Where the remaining watts are, and what TLP cannot do because it applies fixed s
 
 **B. Through the desktop** (the session agent, decision 0027)
 
-- [ ] **Pause file indexing on battery** (KDE Baloo, GNOME Tracker, through their own pause and resume calls), resumed when plugged in or when the agent stops.
-- [ ] **Lower screen refresh rate on battery**: fast screens (above 60 Hz) go to the slowest mode at the same size that is at least 60 Hz, and back when plugged in. KDE: `kscreen-doctor`; GNOME: Mutter's display configuration, applied as temporary.
-- [ ] **Dark style on battery for OLED screens** (found from the screen's EDID), opt-in, back when plugged in.
-- [ ] **Bluetooth off when nothing has been connected for 10 minutes on battery** (BlueZ), a radio rule, back on with one click.
+- [x] **Pause file indexing on battery** (KDE Baloo, GNOME Tracker, through their own pause and resume calls), resumed when plugged in or when the agent stops.
+- [x] **Lower screen refresh rate on battery**: fast screens (above 60 Hz) go to the slowest mode at the same size that is at least 60 Hz, and back when plugged in. KDE: `kscreen-doctor`; GNOME: Mutter's display configuration, applied as temporary.
+- [x] **Dark style on battery for OLED screens** (found from the screen's EDID), opt-in, back when plugged in.
+- [x] **Bluetooth off when nothing has been connected for 10 minutes on battery** (BlueZ), a radio rule, back on with one click.
 
 **C. Advice**
 
