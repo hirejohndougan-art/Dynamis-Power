@@ -5,6 +5,7 @@ import { useStatus } from "./hooks";
 import { t } from "./i18n";
 import { Home } from "./screens/Home";
 import { TABS, type Tab } from "./screens/advancedTabs";
+import { QuickPanel } from "./screens/QuickPanel";
 import { Welcome, welcomed } from "./screens/Welcome";
 
 // Only the Dashboard is read when the window opens; every other screen's
@@ -19,12 +20,12 @@ const Learning = lazy(() => import("./screens/Learning").then((m) => ({ default:
 const Modes = lazy(() => import("./screens/Modes").then((m) => ({ default: m.Modes })));
 
 
-type Screen = "home" | "modes" | "apps" | "battery" | "devices" | "learning" | "activity" | "advanced";
+type Screen = "home" | "modes" | "apps" | "battery" | "devices" | "learning" | "activity" | "advanced" | "quick";
 
 /** Screen in the URL hash, e.g. #activity or #advanced:learning. */
 function fromHash(): [Screen, string | undefined] {
   const [s, sub] = window.location.hash.replace("#", "").split(":");
-  return [(["home", "modes", "apps", "battery", "devices", "learning", "activity", "advanced"].includes(s) ? s : "home") as Screen, sub];
+  return [(["home", "modes", "apps", "battery", "devices", "learning", "activity", "advanced", "quick"].includes(s) ? s : "home") as Screen, sub];
 }
 
 export function App() {
@@ -60,6 +61,11 @@ export function App() {
     ["learning", "nav_learning"],
     ["activity", "nav_activity"],
   ];
+
+  // The quick panel (a left click on the panel icon): its own small window.
+  if (screen === "quick") {
+    return <QuickPanel status={status} refresh={refresh} />;
+  }
 
   if (showWelcome && status) {
     return <Welcome status={status} onDone={() => { setShowWelcome(false); refresh(); }} />;

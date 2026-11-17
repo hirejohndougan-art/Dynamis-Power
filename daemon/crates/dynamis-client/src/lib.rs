@@ -1,6 +1,7 @@
 //! A small client for the Dynamis Power service, used by the app's Tauri
-//! shell. Every call goes over D-Bus to `dynamisd`; nothing here touches the
-//! system directly, and nothing here needs root.
+//! shell. Every call goes over D-Bus to `dynamisd` (and, for the quick
+//! panel's brightness slider, to logind: see `backlight`); nothing here
+//! writes to the system directly, and nothing here needs root.
 //!
 //! Errors are plain sentences, ready to show to people.
 //!
@@ -9,6 +10,8 @@
 
 use serde_json::Value;
 use zbus::Connection;
+
+pub mod backlight;
 
 const NAME: &str = "net.dynamis.Power";
 const PATH: &str = "/net/dynamis/Power";

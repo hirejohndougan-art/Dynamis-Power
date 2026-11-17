@@ -114,9 +114,9 @@ Advanced always shows the technical details (setting IDs, raw kernel values, all
 
 **Built.** An icon next to the clock (StatusNotifierItem with a DBusMenu menu, drawn by the session agent `dynamis-agent`), shown from login on every desktop that supports panel icons (KDE Plasma, Xfce, Cinnamon, MATE, Budgie; GNOME with the AppIndicator extension, which Ubuntu ships on).
 
-- On a laptop the icon is a **battery filled to its charge**, the fill in the mode's colour (green Longer battery, canary yellow Balanced, orange Faster, grey when the service is not running or safe mode is on), red at 20% or less, with a bolt while charging. It follows the charge as UPower reports it, without polling. Panels that show text beside an icon (GNOME with the AppIndicator extension) also show the percentage. Without a battery, the app's logo coloured by mode. The tooltip says the mode, battery level and time left.
-- **Left click** opens the app.
-- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio; while *Make it last* is on, Balanced and Faster say "(stops Make it last)"); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *It feels slow*; *Something stopped working…* (undoes the last hour and opens the app to ask what stopped working; works in safe mode too); *Report a problem…* (opens the app with that dialog); *Open Dynamis Power*; *Hide this icon*.
+- On a laptop the icon is a **battery filled to its charge**, the fill in the mode's colour (green Longer battery, canary yellow Balanced, orange Faster, grey when the service is not running or safe mode is on), red at 20% or less, with the **percentage written across it** (dark on the fill, light with a dark rim on the empty part, so it reads on light and dark panels; from 20 pixels up) and a small bolt at the lower right while charging. It follows the charge as UPower reports it, without polling. Panels that show text beside an icon (GNOME with the AppIndicator extension) also show the percentage there. Without a battery, the app's logo coloured by mode. The tooltip says the mode, battery level and time left.
+- **Left click** opens the **quick panel**: a small frameless window near the icon (the app started with `--quick`, only that window) with the battery and time left, the three modes (a faster one asks before stopping *Make it last*), *Choose automatically*, a **screen brightness** slider (the person's own brightness, set through logind like the brightness keys; the desktop's slider follows), and a **gear** that opens the full app in the same process. Escape or a click elsewhere closes it. On Wayland the desktop places the window itself.
+- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio; while *Make it last* is on, Balanced and Faster say "(stops Make it last)"); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *It feels slow*; *Something stopped working…* (undoes the last hour and opens the app to ask what stopped working; works in safe mode too); *Report a problem…* (opens the app with that dialog); *Settings…* (opens the full app); *Hide this icon*.
 - Every change goes to the service exactly as the app sends it (polkit, safe mode and every rail apply). In safe mode the controls are greyed out.
 - *Hide this icon*, or the switch on Modes, turns it off; the choice is remembered per person.
 
@@ -124,7 +124,7 @@ Advanced always shows the technical details (setting IDs, raw kernel values, all
 
 - **Risky setting switch:** explains what can go wrong in one sentence and requires a deliberate confirmation.
 - **Rollback notice:** one notification, at most, saying what was undone and why.
-- **Restore original settings:** available from Home and Advanced, and always works, even in safe mode. The panel icon does not offer it, because it asks for confirmation; *Open Dynamis Power* is one click away.
+- **Restore original settings:** available from Home and Advanced, and always works, even in safe mode. The panel icon does not offer it, because it asks for confirmation; *Settings…* is one click away.
 - **First run:** a four-step welcome — what the app does, hardware check, conflicts found (with a fix button), and a baseline measurement. Nothing changes until the user clicks *Start*.
 
 ## Strings and translation

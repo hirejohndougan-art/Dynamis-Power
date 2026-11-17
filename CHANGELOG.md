@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Quick panel**: a left click on the panel icon opens a small panel with the battery, the modes, automatic choice, a screen brightness slider and a gear for the full app. The right-click menu's *Open Dynamis Power* is now *Settings…*.
+- **Battery percentage on the panel icon** itself, so it shows on KDE Plasma too (which does not show text beside icons).
+
+### Fixed
+
+- The panel icon's drawing failed for a battery below about 10% (a rounded corner wider than the fill).
+
 - **`dynamis bench`**: the head-to-head benchmark. `run --label stock|tlp|dynamis` measures idle, light use, video and a fixed heavy job on battery and saves the results; `compare` prints them side by side with each against the first. Changes no setting.
 
 - **The app opens faster on slow laptops**: the window shows the page colour and sidebar before any script is read (no blank white window), only the Dashboard's code is loaded at open (other screens load when first shown), and the installed app no longer carries the demo's stand-in backend. The script read at open is 228 KB instead of 329 KB.

@@ -45,3 +45,6 @@ body { background: var(--desk); }
 }
 .tray-battery { display: inline-flex; align-items: center; gap: 2px; }
 .tray-pct { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* The quick panel: a left click on the icon. */
+.tray-quick { position: absolute; right: 0; top: 38px; width: 340px; max-width: calc(100vw - 32px); border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); z-index: 40; }
+.tray-quick .quick { min-height: 0; }

@@ -232,3 +232,14 @@ fieldset.choice { border: 0; padding: 0; margin-inline: 0; min-width: 0; }
 .chart-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--accent-strong); }
 .chart-key-2 { border-top: 2px dashed var(--meter-low); margin-left: 10px; }
 .plain-list { list-style: none; margin: 0; padding: 0; }
+
+/* The quick panel (panel icon, left click): a small window of its own. */
+.quick { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; min-height: 100vh; box-sizing: border-box; background: var(--surface); }
+.quick-battery { margin: 0; font-size: 22px; font-weight: 700; }
+.quick-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.quick-modes .segment { min-height: 44px; padding: 6px; font-size: 13px; text-align: center; }
+.quick-slider { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.quick-slider input { width: 100%; accent-color: var(--accent-strong); height: 28px; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; }
+.icon-btn:hover { background: var(--surface-2); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }

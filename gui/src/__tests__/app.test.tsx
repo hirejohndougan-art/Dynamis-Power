@@ -532,6 +532,22 @@ describe("the app with the stand-in backend", () => {
     render(<App />);
     expect(await screen.findByRole("dialog", { name: "Report a problem", hidden: true }, { timeout: 4000 })).toBeTruthy();
   });
+  it("opens the quick panel: modes, automatic choice, brightness and a gear", async () => {
+    window.location.hash = "#quick";
+    render(<App />);
+    const panel = await screen.findByRole("dialog", { name: "Quick settings" });
+    await waitFor(() => expect(within(panel).getByRole("slider", { name: "Screen brightness" })).toBeTruthy());
+    const slider = within(panel).getByRole("slider", { name: "Screen brightness" }) as HTMLInputElement;
+    await act(async () => fireEvent.change(slider, { target: { value: "35" } }));
+    await waitFor(async () => expect(await backend.screenBrightness()).toBe(35), { timeout: 2000 });
+    await act(async () => fireEvent.click(within(panel).getByRole("radio", { name: "Longer battery" })));
+    await waitFor(() => expect(within(panel).getByRole("radio", { name: "Longer battery" }).getAttribute("aria-checked")).toBe("true"));
+    expect(within(panel).getByRole("switch", { name: "Choose automatically" })).toBeTruthy();
+    await act(async () => fireEvent.click(within(panel).getByRole("button", { name: "Settings" })));
+    await waitFor(() => expect(window.location.hash).toBe("#home"));
+    await backend.setProfile("balanced");
+  });
+
   it("shows advice on Home and hides it when dismissed", async () => {
     window.location.hash = "#home";
     render(<App />);

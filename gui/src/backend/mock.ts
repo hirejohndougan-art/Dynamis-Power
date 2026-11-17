@@ -256,6 +256,7 @@ export function mockBackend(): Backend {
     found: { desktop: "kde", indexer: "baloo", refresh_hz: 120, low_hz: 60, can_style: true },
     oled: true,
   };
+  let screenPct = 60;
   let tips: Tip[] = [{ id: "video_decode", pct: 42 }];
   let deepIdle: DeepIdle = { running: false, seconds_left: null, at: null, report: null };
   const KINDS: TroubleKind[] = ["wifi", "bluetooth", "sound", "input", "screen", "storage", "sleep", "freeze", "other"];
@@ -531,6 +532,17 @@ export function mockBackend(): Backend {
       }
     },
     sleepTest: async () => delay({ ...sleep, active: values["system.mem_sleep"] }),
+    openFull: async () => {
+      window.location.hash = "home";
+      window.dispatchEvent(new Event("dynamis:open-full"));
+    },
+    closeQuick: async () => {
+      window.dispatchEvent(new Event("dynamis:close-quick"));
+    },
+    screenBrightness: async () => delay(screenPct),
+    setScreenBrightness: async (pct) => {
+      screenPct = Math.max(5, Math.min(100, Math.round(pct)));
+    },
     dismissTip: async (id) => {
       refuse();
       tips = tips.filter((x) => x.id !== id);

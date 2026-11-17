@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { App } from "../App";
+import { QuickPanel } from "../screens/QuickPanel";
 import { backend, type Profile, type Status } from "../backend";
 import { demoControls } from "../backend/mock";
 import { profileName } from "../i18n";
@@ -33,9 +34,12 @@ function TrayBattery(props: { mode: string; pct: number; charging: boolean }) {
         <rect x="2.6" y="8.1" width="23.3" height="15.8" rx="2.6" fill="none" stroke="#f5f5f5" strokeWidth="2.2" />
         <rect x="27" y="12" width="3.5" height="8" rx="1" fill="#f5f5f5" />
         {props.pct > 0 && <rect x="4.9" y="10.4" width={Math.max(1, w)} height="11.2" rx="1" fill={fill} />}
-        {props.charging && <path d="M16.5 9.5 10.5 17h4l-1.5 5.5 6.5-8h-4z" fill="#1a1a1a" stroke="#f5f5f5" strokeWidth="0.9" />}
+        {/* The percentage across the battery, as the real icon draws it. */}
+        <text x="14.25" y="19.6" textAnchor="middle" fontSize={props.pct >= 100 ? 9 : 10.5} fontWeight="700" fontFamily="Inter, system-ui, sans-serif" fill="#1a1a1a" stroke="#f5f5f5" strokeWidth="0.6" paintOrder="stroke">
+          {props.pct}
+        </text>
+        {props.charging && <path d="M27.5 19.5 23.5 25h3l-1 3.5 4.5-5.5h-3z" fill="#1a1a1a" stroke="#f5f5f5" strokeWidth="0.8" />}
       </svg>
-      <span className="tray-pct">{props.pct}%</span>
     </span>
   );
 }
@@ -148,7 +152,7 @@ function TrayMenu(props: { status: Status; onOpen: () => void; onClose: () => vo
       <div className="tray-sep" role="separator" />
       <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpen(); }}>
         <span className="tray-mark" aria-hidden="true" />
-        Open Dynamis Power
+        Settings…
       </button>
       <button type="button" role="menuitem" onClick={() => act(() => backend.setTray(false))}>
         <span className="tray-mark" aria-hidden="true" />
@@ -171,6 +175,27 @@ export function Demo() {
   const [status, setStatus] = useState<Status | null>(null);
   const [trayShown, setTrayShown] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const quickRef = useRef<HTMLDivElement>(null);
+  // The quick panel's gear opens the app; Escape or a click elsewhere closes it.
+  useEffect(() => {
+    const full = () => {
+      setQuickOpen(false);
+      setAppOpen(true);
+    };
+    const close = () => setQuickOpen(false);
+    const outside = (e: MouseEvent) => {
+      if (quickRef.current && !quickRef.current.contains(e.target as Node) && !iconRef.current?.contains(e.target as Node)) setQuickOpen(false);
+    };
+    window.addEventListener("dynamis:open-full", full);
+    window.addEventListener("dynamis:close-quick", close);
+    document.addEventListener("mousedown", outside);
+    return () => {
+      window.removeEventListener("dynamis:open-full", full);
+      window.removeEventListener("dynamis:close-quick", close);
+      document.removeEventListener("mousedown", outside);
+    };
+  }, []);
   const [appOpen, setAppOpen] = useState(true);
   const [run, setRun] = useState(0);
   const iconRef = useRef<HTMLButtonElement>(null);
@@ -259,16 +284,27 @@ export function Demo() {
                 ref={iconRef}
                 type="button"
                 className="tray-icon"
-                aria-label={`Dynamis Power: ${status ? summary(status) : "starting"}. Right-click or press the menu key for options.`}
+                aria-label={`Dynamis Power: ${status ? summary(status) : "starting"}. Click for quick settings; right-click or press the menu key for options.`}
                 title={status ? `Dynamis Power\n${summary(status)}` : "Dynamis Power"}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen(!menuOpen)}
+                aria-haspopup="dialog"
+                aria-expanded={quickOpen || menuOpen}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setQuickOpen(!quickOpen);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+                    e.preventDefault();
+                    setQuickOpen(false);
+                    setMenuOpen(true);
+                  }
+                }}
                 // Right button: open on press, as panels do, so a page or
                 // browser menu cannot get in first.
                 onPointerDown={(e) => {
                   if (e.button === 2) {
                     e.preventDefault();
+                    setQuickOpen(false);
                     setMenuOpen(true);
                   } else if (e.pointerType === "touch") {
                     // Press and hold on a touch screen.
@@ -289,6 +325,11 @@ export function Demo() {
                   <TrayLogo mode={mode} />
                 )}
               </button>
+              {quickOpen && (
+                <div className="tray-quick" ref={quickRef}>
+                  <QuickPanel status={status} refresh={read} />
+                </div>
+              )}
               {menuOpen && status && (
                 <TrayMenu
                   status={status}
@@ -321,7 +362,7 @@ export function Demo() {
       ) : (
         <div className="desktop-empty">
           <p>The app is closed and costs nothing. The service keeps working, and the panel icon stays.</p>
-          <p className="muted">Click the icon in the panel to change the mode, or choose <em>Open Dynamis Power</em> from its menu.</p>
+          <p className="muted">Click the icon in the panel for quick settings, or right-click it and choose <em>Settings…</em> to open the app.</p>
         </div>
       )}
     </div>

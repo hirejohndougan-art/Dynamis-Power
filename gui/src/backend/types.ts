@@ -373,6 +373,13 @@ export interface Backend {
   setRadioPolicy(p: RadioPolicy): Promise<void>;
   /** Acting through the desktop on battery (decision 0027). */
   setDesktopPolicy(p: DesktopPolicy): Promise<void>;
+  /** The quick panel's gear: open the full app (and close the panel). */
+  openFull(): Promise<void>;
+  closeQuick(): Promise<void>;
+  /** The screen brightness now, in percent (null without a backlight). */
+  screenBrightness(): Promise<number | null>;
+  /** Set the screen brightness (the person's own, through logind). */
+  setScreenBrightness(pct: number): Promise<void>;
   /** Hide a piece of advice for 30 days. */
   dismissTip(id: Tip["id"]): Promise<void>;
   /** "It feels slow": undo what costs speed for the rest of the day. */

@@ -264,6 +264,108 @@ fn launch_view() -> Option<String> {
         .then(|| "activity:report".to_string())
 }
 
+// --- The quick panel -------------------------------------------------------
+//
+// A left click on the panel icon runs `dynamis-power --quick X Y`: a small
+// window without a frame near the icon, with the modes, automatic choice
+// and the screen brightness. The gear opens the full app in the same
+// process (no second start-up); clicking elsewhere or Escape closes it.
+
+const QUICK: &str = "quick";
+const QUICK_W: f64 = 340.0;
+const QUICK_H: f64 = 430.0;
+
+/// `--quick` and the click's screen position, if given.
+fn quick_args() -> Option<Option<(i32, i32)>> {
+    let args: Vec<String> = std::env::args().collect();
+    let i = args.iter().position(|a| a == "--quick")?;
+    let n = |k: usize| args.get(i + k).and_then(|v| v.parse::<i32>().ok());
+    Some(n(1).zip(n(2)))
+}
+
+fn open_quick(app: &tauri::AppHandle, at: Option<(i32, i32)>) -> tauri::Result<()> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder, WindowEvent};
+    let w = WebviewWindowBuilder::new(app, QUICK, WebviewUrl::App("index.html#quick".into()))
+        .title("Dynamis Power")
+        .inner_size(QUICK_W, QUICK_H)
+        .resizable(false)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focused(true)
+        .build()?;
+    // Near the click, kept on the screen: above it for a panel at the
+    // bottom, below it for one at the top. (Wayland desktops place windows
+    // themselves and may ignore this.)
+    if let (Some((x, y)), Ok(Some(m))) = (at, w.current_monitor()) {
+        let scale = m.scale_factor();
+        let (mw, mh) = (m.size().width as f64, m.size().height as f64);
+        let (mx, my) = (m.position().x as f64, m.position().y as f64);
+        let (ww, wh) = (QUICK_W * scale, QUICK_H * scale);
+        let px = (x as f64 - ww / 2.0).clamp(mx + 8.0, mx + mw - ww - 8.0);
+        let below = (y as f64) < my + mh / 2.0;
+        let py = if below { y as f64 + 16.0 } else { y as f64 - wh - 16.0 };
+        let py = py.clamp(my + 8.0, my + mh - wh - 8.0);
+        let _ = w.set_position(tauri::PhysicalPosition::new(px, py));
+    }
+    // Clicking elsewhere closes it, like the desktop's own panel popups.
+    let handle = w.clone();
+    w.on_window_event(move |e| {
+        if let WindowEvent::Focused(false) = e {
+            let _ = handle.close();
+        }
+    });
+    Ok(())
+}
+
+/// The full app's window: shown if already open, created otherwise.
+fn open_main(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("main") {
+        w.show()?;
+        return w.set_focus();
+    }
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "main")
+        .cloned()
+        .ok_or_else(|| tauri::Error::WindowNotFound)?;
+    tauri::WebviewWindowBuilder::from_config(app, &config)?.build()?;
+    Ok(())
+}
+
+/// The gear in the quick panel: the full app, then the panel closes.
+#[tauri::command]
+fn open_full(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    open_main(&app).map_err(|e| e.to_string())?;
+    if let Some(q) = app.get_webview_window(QUICK) {
+        let _ = q.close();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn close_quick(app: tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(q) = app.get_webview_window(QUICK) {
+        let _ = q.close();
+    }
+}
+
+#[tauri::command]
+fn screen_brightness() -> Option<u32> {
+    dynamis_client::backlight::percent()
+}
+
+#[tauri::command]
+async fn set_screen_brightness(pct: u32) -> Result<(), String> {
+    dynamis_client::backlight::set_percent(pct).await
+}
+
 #[tauri::command]
 async fn set_learn_heavy(conn: State<'_, Conn>, on: bool) -> Result<(), String> {
     client(&conn).await?.set_learn_during_heavy_work(on).await
@@ -437,6 +539,12 @@ fn main() {
         .manage(Conn::default())
         .setup(|app| {
             forward_changes(app.handle().clone());
+            // The main window is not created from the configuration on its
+            // own ("create": false), so `--quick` can open only the panel.
+            match quick_args() {
+                Some(at) => open_quick(app.handle(), at)?,
+                None => open_main(app.handle())?,
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -488,6 +596,10 @@ fn main() {
             check_deep_idle,
             set_desktop_policy,
             dismiss_tip,
+            open_full,
+            close_quick,
+            screen_brightness,
+            set_screen_brightness,
             stop_sleep_test,
             predict,
             set_target,

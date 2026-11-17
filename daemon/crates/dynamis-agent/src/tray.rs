@@ -630,15 +630,61 @@ pub fn battery_pixmaps(mode: &str, pct: u8, charging: bool) -> Pixmaps {
         .collect()
 }
 
+/// Digits 0–9 in a 3×5 grid, one row per entry, bit 2 = left column.
+const DIGITS: [[u8; 5]; 10] = [
+    [7, 5, 5, 5, 7],
+    [2, 6, 2, 2, 7],
+    [7, 1, 7, 4, 7],
+    [7, 1, 7, 1, 7],
+    [5, 5, 7, 1, 1],
+    [7, 4, 7, 1, 7],
+    [7, 4, 7, 5, 7],
+    [7, 1, 1, 1, 1],
+    [7, 5, 7, 5, 7],
+    [7, 5, 7, 1, 7],
+];
+
+/// Whether (x, y), in 32-unit icon space, is inside the percentage written
+/// across the battery's middle.
+fn in_digits(text: &[u8], x: f64, y: f64) -> bool {
+    let len = text.len() as f64;
+    let cell = if text.len() >= 3 { 1.7 } else { 1.9 };
+    let (cw, gap) = (3.0 * cell, 0.55 * cell);
+    let total = len * cw + (len - 1.0) * gap;
+    let (x0, y0) = (14.25 - total / 2.0, 16.0 - 2.5 * cell);
+    if x < x0 || y < y0 || y >= y0 + 5.0 * cell {
+        return false;
+    }
+    let i = ((x - x0) / (cw + gap)) as usize;
+    let Some(d) = text.get(i).map(|c| (c - b'0') as usize) else {
+        return false;
+    };
+    let in_x = x - x0 - i as f64 * (cw + gap);
+    if in_x >= cw {
+        return false; // in the gap
+    }
+    let (col, row) = ((in_x / cell) as u32, ((y - y0) / cell) as usize);
+    DIGITS[d][row] & (4 >> col) != 0
+}
+
 /// A battery drawn in 32×32 units with 4×4 supersampling: a light outline
 /// with a dark edge on both sides (so it shows on light and dark panels),
-/// the fill from the left to the charge, and a bolt while charging.
+/// the fill from the left to the charge, and the percentage written across
+/// it (dark with a light rim, readable on any fill) from 20 pixels up;
+/// while charging, a bolt (small, at the lower right, when the percentage
+/// is shown; large in the middle on the smallest icon).
 fn draw_battery(n: usize, pct: u8, charging: bool, fill: (f64, f64, f64)) -> Vec<u8> {
+    let digits = n >= 20;
+    let text = pct.to_string();
+    let text = text.as_bytes();
     // Inside a rounded rectangle.
     let rr = |x: f64, y: f64, x0: f64, y0: f64, x1: f64, y1: f64, r: f64| {
         if x < x0 || x > x1 || y < y0 || y > y1 {
             return false;
         }
+        // A rectangle narrower than its corners (a nearly empty battery's
+        // fill) gets smaller corners, so the clamp below stays valid.
+        let r = r.min((x1 - x0) / 2.0).min((y1 - y0) / 2.0);
         let cx = x.clamp(x0 + r, x1 - r);
         let cy = y.clamp(y0 + r, y1 - r);
         (x - cx).powi(2) + (y - cy).powi(2) <= r * r
@@ -690,12 +736,19 @@ fn draw_battery(n: usize, pct: u8, charging: bool, fill: (f64, f64, f64)) -> Vec
         (19.5, 14.5),
         (15.5, 14.5),
     ];
+    // The bolt's centre: the middle, or the lower right beside the digits.
+    let (ox, oy, bs) = if digits {
+        (26.0, 24.5, 0.62)
+    } else {
+        (15.0, 16.0, 1.0)
+    };
     let in_poly = |x: f64, y: f64, scale: f64| {
         let (cx, cy) = (15.0, 16.0);
+        let scale = scale * bs;
         let mut c = false;
         let mut j = bolt.len() - 1;
         for i in 0..bolt.len() {
-            let p = |k: usize| (cx + (bolt[k].0 - cx) * scale, cy + (bolt[k].1 - cy) * scale);
+            let p = |k: usize| (ox + (bolt[k].0 - cx) * scale, oy + (bolt[k].1 - cy) * scale);
             let ((xi, yi), (xj, yj)) = (p(i), p(j));
             if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
                 c = !c;
@@ -719,7 +772,7 @@ fn draw_battery(n: usize, pct: u8, charging: bool, fill: (f64, f64, f64)) -> Vec
                 b = c.2 * alpha + b * (1.0 - alpha);
                 a = alpha + a * (1.0 - alpha);
             };
-            let mut cov = [0u32; 6];
+            let mut cov = [0u32; 8];
             for sy in 0..ss {
                 for sx in 0..ss {
                     let x = (px as f64 + (sx as f64 + 0.5) / ss as f64) * 32.0 / n as f64;
@@ -736,6 +789,30 @@ fn draw_battery(n: usize, pct: u8, charging: bool, fill: (f64, f64, f64)) -> Vec
                     if in_fill(x, y) {
                         cov[2] += 1;
                     }
+                    if digits {
+                        // Dark digits on the fill; light digits with a thin
+                        // dark rim on the empty part, which shows the panel
+                        // behind it (light or dark).
+                        const RIM: [(f64, f64); 8] = [
+                            (0.8, 0.0),
+                            (-0.8, 0.0),
+                            (0.0, 0.8),
+                            (0.0, -0.8),
+                            (0.6, 0.6),
+                            (-0.6, 0.6),
+                            (0.6, -0.6),
+                            (-0.6, -0.6),
+                        ];
+                        let filled = in_fill(x, y);
+                        if in_digits(text, x, y) {
+                            cov[if filled { 6 } else { 7 }] += 1;
+                        } else if !filled
+                            && inner(x, y, 0.0)
+                            && RIM.iter().any(|(dx, dy)| in_digits(text, x + dx, y + dy))
+                        {
+                            cov[5] += 1;
+                        }
+                    }
                     if charging && in_poly(x, y, 1.35) {
                         cov[3] += 1;
                     }
@@ -748,6 +825,9 @@ fn draw_battery(n: usize, pct: u8, charging: bool, fill: (f64, f64, f64)) -> Vec
             over(dark, 0.55 * cov[0] as f64 / t);
             over(light, cov[1] as f64 / t);
             over(fill, cov[2] as f64 / t);
+            over(dark, 0.95 * cov[5] as f64 / t);
+            over((0.1, 0.1, 0.1), cov[6] as f64 / t);
+            over(light, cov[7] as f64 / t);
             over(light, cov[3] as f64 / t);
             over((0.1, 0.1, 0.1), cov[4] as f64 / t);
             // Back to straight (not premultiplied) ARGB bytes.
@@ -903,8 +983,13 @@ impl Item {
     }
 
     /// Left click: open the app.
-    fn activate(&self, _x: i32, _y: i32) {
-        open_app();
+    /// A left click opens the quick panel (modes, automatic choice, screen
+    /// brightness, and a gear for the full app) near the icon. The click's
+    /// screen position is passed on; panels on Wayland may place it
+    /// themselves.
+    fn activate(&self, x: i32, y: i32) {
+        let (xs, ys) = (x.to_string(), y.to_string());
+        open_app_with(&["--quick", &xs, &ys]);
     }
     fn secondary_activate(&self, _x: i32, _y: i32) {}
     /// The panel shows the menu itself (from `Menu`).
@@ -1207,11 +1292,17 @@ mod tests {
         assert_eq!(*w, 32);
         let at = |x: usize, y: usize| data[(y * 32 + x) * 4..(y * 32 + x) * 4 + 4].to_vec();
         // Filled near the left, empty near the right at 79%: compare the
-        // middle row at 15% and 95% across the inside.
-        let left = at(7, 16);
-        let right = at(21, 16);
+        // middle row either side of the digits.
+        let left = at(5, 16);
+        let right = at(23, 16);
         assert!(left[0] > 200, "filled: {left:?}");
         assert!(right[0] < 60, "empty: {right:?}");
+        // "79" written across the middle: the 7's top bar is dark.
+        let top = at(10, 12);
+        assert!(top[0] > 200 && top[1] < 60, "digit: {top:?}");
+        // The smallest icon has no room for digits.
+        let small = &p[0];
+        assert_eq!(small.0, 16);
         // Corner transparent; outline light.
         assert_eq!(at(0, 0)[0], 0);
         assert!(at(14, 8)[1] > 200, "outline {:?}", at(14, 8));
@@ -1219,10 +1310,13 @@ mod tests {
         let low = battery_pixmaps("balanced", 15, false);
         let px = &low[3].2[(16 * 32 + 6) * 4..(16 * 32 + 6) * 4 + 4];
         assert!(px[1] > 200 && px[2] < 100, "red: {px:?}");
-        // Charging: a dark bolt in the middle.
+        // Charging: a small dark bolt at the lower right beside the digits,
+        // and a large one in the middle of the 16-pixel icon.
         let ch = battery_pixmaps("balanced", 50, true);
-        let mid = &ch[3].2[(16 * 32 + 15) * 4..(16 * 32 + 15) * 4 + 4];
-        assert!(mid[1] < 80, "bolt: {mid:?}");
+        let corner = &ch[3].2[(25 * 32 + 26) * 4..(25 * 32 + 26) * 4 + 4];
+        assert!(corner[0] > 200 && corner[1] < 80, "bolt: {corner:?}");
+        let mid16 = &ch[0].2[(8 * 16 + 7) * 4..(8 * 16 + 7) * 4 + 4];
+        assert!(mid16[1] < 80, "bolt on the small icon: {mid16:?}");
         // No battery: the logo.
         st["power"]["has_battery"] = false.into();
         assert_eq!(icon_for(Some(&st)), pixmaps("balanced"));
@@ -1244,6 +1338,8 @@ mod tests {
             ("faster-100", "performance", 100, false),
             ("low-12", "balanced", 12, false),
             ("charging-50", "balanced", 50, true),
+            ("charging-100", "balanced", 100, true),
+            ("saver-8", "power-saver", 8, false),
         ] {
             for (n, _, data) in battery_pixmaps(mode, pct, ch) {
                 std::fs::write(format!("{dir}/{name}-{n}.argb"), data).unwrap();
