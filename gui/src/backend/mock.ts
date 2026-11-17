@@ -251,8 +251,8 @@ export function mockBackend(): Backend {
   // "Something stopped working".
   let trouble: Trouble | null = null;
   let desktop: DesktopInfo = {
-    policy: { pause_indexing: true, lower_refresh: false, dark_style: false },
-    want: { pause_indexing: true, lower_refresh: false, dark_style: false },
+    policy: { pause_indexing: true, lower_refresh: false, dark_style: false, screen_off_battery_s: null, screen_off_ac_s: null, animated_dim: true },
+    want: { pause_indexing: true, lower_refresh: false, dark_style: false, screen_off_battery_s: null, screen_off_ac_s: null, animated_dim: true },
     found: { desktop: "kde", indexer: "baloo", refresh_hz: 120, low_hz: 60, can_style: true },
     oled: true,
   };

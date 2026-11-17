@@ -34,7 +34,22 @@ pub struct DesktopPolicy {
     /// The dark style on battery (saves power on OLED screens only).
     #[serde(default)]
     pub dark_style: bool,
+    /// Seconds of no use before the screen turns off, on battery and
+    /// plugged in (decision 0029). `None` leaves the desktop's own time.
+    #[serde(default)]
+    pub screen_off_battery_s: Option<u32>,
+    #[serde(default)]
+    pub screen_off_ac_s: Option<u32>,
+    /// Animated dim: the screen fades to 10% over the last 15 seconds
+    /// before it turns off, and brightens quickly from 10% when used again.
+    /// On by default; the desktop's own dimming is switched off meanwhile.
+    #[serde(default = "yes")]
+    pub animated_dim: bool,
 }
+
+/// The screen-off times offered, in seconds (30 s to 1 hour).
+pub const SCREEN_OFF_MIN_S: u32 = 30;
+pub const SCREEN_OFF_MAX_S: u32 = 3600;
 
 impl Default for DesktopPolicy {
     fn default() -> Self {
@@ -42,6 +57,9 @@ impl Default for DesktopPolicy {
             pause_indexing: true,
             lower_refresh: false,
             dark_style: false,
+            screen_off_battery_s: None,
+            screen_off_ac_s: None,
+            animated_dim: true,
         }
     }
 }
@@ -96,6 +114,16 @@ impl DesktopState {
     }
 
     pub fn set_policy(&mut self, p: DesktopPolicy, dir: &Path) -> Result<(), String> {
+        for s in [p.screen_off_battery_s, p.screen_off_ac_s]
+            .into_iter()
+            .flatten()
+        {
+            if !(SCREEN_OFF_MIN_S..=SCREEN_OFF_MAX_S).contains(&s) {
+                return Err(format!(
+                    "the screen-off time must be between {SCREEN_OFF_MIN_S} seconds and an hour"
+                ));
+            }
+        }
         write_atomic(
             &dir.join(FILE),
             &serde_json::to_string_pretty(&Saved {
@@ -109,10 +137,12 @@ impl DesktopState {
     }
 
     /// Restore: the person's choices go back to the defaults; the agent
-    /// puts the desktop back when it next looks.
+    /// puts the desktop back when it next looks. Restore puts everything
+    /// back as it was before Dynamis Power, so animated dim is off too.
     pub fn clear(&mut self, dir: &Path) {
         self.policy = DesktopPolicy {
             pause_indexing: false,
+            animated_dim: false,
             ..DesktopPolicy::default()
         };
         let _ = self.set_policy(self.policy.clone(), dir);
@@ -126,6 +156,12 @@ impl DesktopState {
             "pause_indexing": battery && self.policy.pause_indexing,
             "lower_refresh": battery && self.policy.lower_refresh && profile != Profile::Performance,
             "dark_style": battery && self.policy.dark_style,
+            // The person's own screen settings apply in safe mode too: they
+            // are the desktop's, not tuning.
+            "screen_off_battery_s": self.policy.screen_off_battery_s,
+            "screen_off_ac_s": self.policy.screen_off_ac_s,
+            "animated_dim": self.policy.animated_dim,
+            "on_ac": on_ac,
         })
     }
 
@@ -181,6 +217,20 @@ mod tests {
             d.want(false, Profile::Performance, false)["lower_refresh"],
             false
         );
+        assert_eq!(
+            d.want(true, Profile::Balanced, false)["animated_dim"],
+            true,
+            "on by default"
+        );
+        assert!(d
+            .set_policy(
+                DesktopPolicy {
+                    screen_off_battery_s: Some(5),
+                    ..DesktopPolicy::default()
+                },
+                &dir,
+            )
+            .is_err());
         let again = DesktopState::load(&dir, &root);
         assert!(again.policy.lower_refresh, "saved");
         let _ = std::fs::remove_dir_all(&dir);

@@ -260,11 +260,13 @@ function DesktopCard(props: { status: Status; run: (a: () => Promise<string | vo
   const f = d.found;
   const locked = !!props.status.safe_mode;
   const set = (change: Partial<DesktopPolicy>) => props.run(() => backend.setDesktopPolicy({ ...d.policy, ...change }));
-  const fast = f?.refresh_hz != null && f.low_hz != null && f.refresh_hz > f.low_hz + 1;
   return (
     <section className="card" aria-labelledby="desk-heading">
       <h2 id="desk-heading">{t("desk_heading")}</h2>
       <p className="muted">{t("desk_intro")}</p>
+      <p className="muted small">
+        {t("desk_screen_moved")} <a className="btn-link" href="#screen">{t("nav_screen")}</a>
+      </p>
       {!f ? (
         <p className="notice notice-info">{t("desk_no_helper")}</p>
       ) : f.desktop === "other" ? (
@@ -275,23 +277,6 @@ function DesktopCard(props: { status: Status; run: (a: () => Promise<string | vo
           <>
             <Switch checked={d.policy.pause_indexing} disabled={locked} label={t("desk_indexing")} onChange={(v) => set({ pause_indexing: v })} />
             <p className="muted small">{t("desk_indexing_desc")}</p>
-          </>
-        )}
-        {fast && (
-          <>
-            <Switch
-              checked={d.policy.lower_refresh}
-              disabled={locked}
-              label={t("desk_refresh", { from: Math.round(f!.refresh_hz!), to: Math.round(f!.low_hz!) })}
-              onChange={(v) => set({ lower_refresh: v })}
-            />
-            <p className="muted small">{t("desk_refresh_desc")}</p>
-          </>
-        )}
-        {f?.can_style && (
-          <>
-            <Switch checked={d.policy.dark_style} disabled={locked} label={t("desk_dark")} onChange={(v) => set({ dark_style: v })} />
-            <p className="muted small">{t(d.oled ? "desk_dark_oled" : "desk_dark_desc")}</p>
           </>
         )}
       </div>

@@ -38,6 +38,7 @@
 
 mod brightness;
 mod desktop;
+mod screen;
 mod strings;
 mod tray;
 
@@ -579,7 +580,7 @@ async fn screen_locked(c: &Connection) -> bool {
     false
 }
 
-async fn screen_inhibited(c: &Connection) -> bool {
+pub(crate) async fn screen_inhibited(c: &Connection) -> bool {
     // KDE: 4 = "change screen settings" (dimming, screen off).
     if let Some(v) = call_bool(
         c,

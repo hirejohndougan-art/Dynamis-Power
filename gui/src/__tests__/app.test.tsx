@@ -334,7 +334,7 @@ describe("the app with the stand-in backend", () => {
     expect(rows.find((r) => r.id === "vm.swappiness")?.blocked).toBeNull();
   });
   it("sets the screen brightness chosen for each mode", async () => {
-    window.location.hash = "#modes";
+    window.location.hash = "#screen";
     render(<App />);
     const set = await screen.findAllByRole("switch", { name: "Set the screen brightness for this mode" });
     expect(set).toHaveLength(3);
@@ -451,16 +451,33 @@ describe("the app with the stand-in backend", () => {
     await backend.setDevicePolicy({ usb: false, pci: false, never: [], deeper_link_sleep: false });
   });
 
-  it("acts through the desktop on battery, with a lower refresh rate offered on a fast screen", async () => {
+  it("pauses file indexing on battery from Devices", async () => {
     window.location.hash = "#devices";
     render(<App />);
     const card = await screen.findByRole("region", { name: "Your desktop on battery" }, { timeout: 3000 });
     expect(within(card).getByRole("switch", { name: "Pause file indexing on battery" }).getAttribute("aria-checked")).toBe("true");
-    const refresh = within(card).getByRole("switch", { name: "Run the screen at 60 Hz instead of 120 Hz on battery" });
+    expect(within(card).queryByRole("switch", { name: /Hz/ })).toBeNull();
+  });
+
+  it("has a Screen page: brightness, screen-off times, animated dim, refresh rate", async () => {
+    window.location.hash = "#screen";
+    render(<App />);
+    expect(await screen.findByRole("link", { name: "Screen" })).toBeTruthy();
+    const off = await screen.findByRole("region", { name: "Turning the screen off" }, { timeout: 3000 });
+    const dim = within(off).getByRole("switch", { name: "Animated dim" });
+    expect(dim.getAttribute("aria-checked")).toBe("true");
+    const battery = within(off).getByRole("combobox", { name: "On battery" });
+    await act(async () => fireEvent.change(battery, { target: { value: "120" } }));
+    await waitFor(async () => expect((await backend.status()).desktop?.policy.screen_off_battery_s).toBe(120));
+    await act(async () => fireEvent.click(within(off).getByRole("switch", { name: "Animated dim" })));
+    await waitFor(async () => expect((await backend.status()).desktop?.policy.animated_dim).toBe(false));
+    const bat = screen.getByRole("region", { name: "On battery" });
+    const refresh = within(bat).getByRole("switch", { name: "Run the screen at 60 Hz instead of 120 Hz on battery" });
     await act(async () => fireEvent.click(refresh));
-    await waitFor(() => expect(within(card).getByRole("switch", { name: /60 Hz instead of 120 Hz/ }).getAttribute("aria-checked")).toBe("true"));
-    expect(within(card).getByText(/looks like an OLED/)).toBeTruthy();
-    await backend.setDesktopPolicy({ pause_indexing: true, lower_refresh: false, dark_style: false });
+    await waitFor(() => expect(within(bat).getByRole("switch", { name: /60 Hz instead of 120 Hz/ }).getAttribute("aria-checked")).toBe("true"));
+    expect(within(bat).getByText(/looks like an OLED/)).toBeTruthy();
+    expect(screen.getByRole("slider", { name: "Screen brightness" })).toBeTruthy();
+    await backend.setDesktopPolicy({ pause_indexing: true, lower_refresh: false, dark_style: false, screen_off_battery_s: null, screen_off_ac_s: null, animated_dim: true });
   });
 
   it("switches radios off by rule", async () => {

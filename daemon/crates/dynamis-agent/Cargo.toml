@@ -11,5 +11,6 @@ clap.workspace = true
 futures-lite = "2.6.1"
 serde.workspace = true
 serde_json.workspace = true
+dynamis-client = { path = "../dynamis-client" }
 signal-hook = "0.3"
 zbus = "6"

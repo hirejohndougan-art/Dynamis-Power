@@ -18,14 +18,15 @@ const Battery = lazy(() => import("./screens/Battery").then((m) => ({ default: m
 const Devices = lazy(() => import("./screens/Devices").then((m) => ({ default: m.Devices })));
 const Learning = lazy(() => import("./screens/Learning").then((m) => ({ default: m.Learning })));
 const Modes = lazy(() => import("./screens/Modes").then((m) => ({ default: m.Modes })));
+const Screen = lazy(() => import("./screens/Screen").then((m) => ({ default: m.Screen })));
 
 
-type Screen = "home" | "modes" | "apps" | "battery" | "devices" | "learning" | "activity" | "advanced" | "quick";
+type Page = "home" | "modes" | "apps" | "battery" | "screen" | "devices" | "learning" | "activity" | "advanced" | "quick";
 
 /** Screen in the URL hash, e.g. #activity or #advanced:learning. */
-function fromHash(): [Screen, string | undefined] {
+function fromHash(): [Page, string | undefined] {
   const [s, sub] = window.location.hash.replace("#", "").split(":");
-  return [(["home", "modes", "apps", "battery", "devices", "learning", "activity", "advanced", "quick"].includes(s) ? s : "home") as Screen, sub];
+  return [(["home", "modes", "apps", "battery", "screen", "devices", "learning", "activity", "advanced", "quick"].includes(s) ? s : "home") as Page, sub];
 }
 
 export function App() {
@@ -52,11 +53,12 @@ export function App() {
   const go = (to: string) => {
     window.location.hash = to;
   };
-  const nav: [Screen, Parameters<typeof t>[0]][] = [
+  const nav: [Page, Parameters<typeof t>[0]][] = [
     ["home", "nav_home"],
     ["modes", "nav_modes"],
     ["apps", "nav_apps"],
     ["battery", "nav_battery"],
+    ["screen", "nav_screen"],
     ["devices", "nav_devices"],
     ["learning", "nav_learning"],
     ["activity", "nav_activity"],
@@ -109,6 +111,8 @@ export function App() {
           <Apps status={status} refresh={refresh} />
         ) : screen === "battery" && status.power.has_battery ? (
           <Battery status={status} refresh={refresh} go={go} />
+        ) : screen === "screen" ? (
+          <Screen status={status} refresh={refresh} />
         ) : screen === "devices" ? (
           <Devices status={status} refresh={refresh} />
         ) : screen === "learning" ? (

@@ -46,6 +46,26 @@ fn device(dir: &Path) -> Option<(String, u64, u64)> {
         .map(|(_, n, now, max)| (n, now, max))
 }
 
+/// The backlight's name, raw brightness now and its maximum.
+pub fn raw() -> Option<(String, u64, u64)> {
+    device(Path::new(DIR))
+}
+
+/// Set a raw brightness through logind (for the session agent's animated
+/// dim, which needs finer steps than percent).
+pub async fn set_raw(conn: &Connection, name: &str, value: u32) -> Result<(), String> {
+    conn.call_method(
+        Some("org.freedesktop.login1"),
+        "/org/freedesktop/login1/session/auto",
+        Some("org.freedesktop.login1.Session"),
+        "SetBrightness",
+        &("backlight", name, value),
+    )
+    .await
+    .map(|_| ())
+    .map_err(|e| format!("The brightness could not be set: {e}"))
+}
+
 /// The screen brightness now, in percent (None without a backlight).
 pub fn percent() -> Option<u32> {
     percent_in(Path::new(DIR))
@@ -70,16 +90,7 @@ pub async fn set_percent(pct: u32) -> Result<(), String> {
 async fn set_percent_in(dir: &Path, pct: u32) -> Result<(), String> {
     let (name, _, max) = device(dir).ok_or("This screen's brightness cannot be set here.")?;
     let conn = Connection::system().await.map_err(|e| e.to_string())?;
-    conn.call_method(
-        Some("org.freedesktop.login1"),
-        "/org/freedesktop/login1/session/auto",
-        Some("org.freedesktop.login1.Session"),
-        "SetBrightness",
-        &("backlight", name.as_str(), raw_for(pct, max)),
-    )
-    .await
-    .map(|_| ())
-    .map_err(|e| format!("The brightness could not be set: {e}"))
+    set_raw(&conn, &name, raw_for(pct, max)).await
 }
 
 #[cfg(test)]

@@ -6,12 +6,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Screen page** in the main menu: brightness now, brightness for each mode (moved from Modes), the screen-off time on battery and plugged in, *Animated dim* (fades to 10% over the last 15 seconds before the screen turns off, brightens quickly on return; on by default, decision 0029), and the refresh rate and dark style on battery (moved from Devices).
+
 - **Quick panel**: a left click on the panel icon opens a small panel with the battery, the modes, automatic choice, a screen brightness slider and a gear for the full app. The right-click menu's *Open Dynamis Power* is now *Settings…*.
 - **Battery percentage on the panel icon** itself, so it shows on KDE Plasma too (which does not show text beside icons).
-
-### Fixed
-
-- The panel icon's drawing failed for a battery below about 10% (a rounded corner wider than the fill).
 
 - **`dynamis bench`**: the head-to-head benchmark. `run --label stock|tlp|dynamis` measures idle, light use, video and a fixed heavy job on battery and saves the results; `compare` prints them side by side with each against the first. Changes no setting.
 
@@ -177,6 +175,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- The panel icon's drawing failed for a battery below about 10% (a rounded corner wider than the fill).
 - The service unit no longer sets `ProtectKernelLogs=yes`, which stopped the trial health monitor from reading the kernel log on installed systems.
 - Crash recovery no longer undoes a change whose owner process is still running (needed for tests that span many steps, and for running `dynamis` commands meanwhile).
 - The lag reading cannot be inflated by a pressure counter missing from one reading.

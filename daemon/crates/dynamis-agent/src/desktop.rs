@@ -78,6 +78,15 @@ struct Want {
     lower_refresh: bool,
     #[serde(default)]
     dark_style: bool,
+    // The screen page (decision 0029).
+    #[serde(default)]
+    screen_off_battery_s: Option<u32>,
+    #[serde(default)]
+    screen_off_ac_s: Option<u32>,
+    #[serde(default)]
+    animated_dim: bool,
+    #[serde(default)]
+    on_ac: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,6 +107,10 @@ struct Applied {
     refresh: Option<Changed>,
     #[serde(default)]
     style: Option<Changed>,
+    /// The desktop's screen settings before the person's own times and
+    /// animated dim were written.
+    #[serde(default)]
+    screen: Vec<crate::screen::Was>,
 }
 
 pub struct Desktop {
@@ -108,6 +121,10 @@ pub struct Desktop {
     /// resumes by itself when the agent leaves the bus.
     paused: Option<(String, i32)>,
     verbose: bool,
+    /// Animated dim's settings, shared with its thread.
+    dim: crate::screen::DimShared,
+    /// The fade thread is started the first time animated dim is wanted.
+    dim_started: bool,
 }
 
 fn state_file() -> Option<PathBuf> {
@@ -130,6 +147,11 @@ impl Desktop {
             last: None,
             paused: None,
             verbose,
+            dim: std::sync::Arc::new((
+                std::sync::Mutex::new(crate::screen::DimConfig::default()),
+                std::sync::Condvar::new(),
+            )),
+            dim_started: false,
         }
     }
 
@@ -137,8 +159,10 @@ impl Desktop {
         let Some(p) = state_file() else {
             return;
         };
-        let empty =
-            !self.applied.baloo && self.applied.refresh.is_none() && self.applied.style.is_none();
+        let empty = !self.applied.baloo
+            && self.applied.refresh.is_none()
+            && self.applied.style.is_none()
+            && self.applied.screen.is_empty();
         if empty {
             let _ = std::fs::remove_file(p);
             return;
@@ -151,6 +175,7 @@ impl Desktop {
             baloo: self.applied.baloo,
             refresh: self.applied.refresh.clone(),
             style: self.applied.style.clone(),
+            screen: self.applied.screen.clone(),
         };
         if let Ok(t) = serde_json::to_string_pretty(&a) {
             let _ = std::fs::write(p, t);
@@ -176,6 +201,58 @@ impl Desktop {
         self.put_back_indexing(session).await;
         self.put_back_refresh(session).await;
         self.put_back_style();
+        crate::screen::set_config(&self.dim, crate::screen::DimConfig::default());
+        let desk = self.desk();
+        crate::screen::put_back(session, desk, &mut self.applied.screen).await;
+        self.save();
+    }
+
+    fn desk(&self) -> crate::screen::Desk {
+        match self.kind {
+            Kind::Kde => crate::screen::Desk::Kde,
+            Kind::Gnome => crate::screen::Desk::Gnome,
+            Kind::Other => crate::screen::Desk::Other,
+        }
+    }
+
+    /// The person's screen-off times and animated dim: written to the
+    /// desktop (what was there put back first), then the fade thread told
+    /// the screen-off time now in force.
+    async fn screen(&mut self, session: &Connection, want: &Want) {
+        let desk = self.desk();
+        crate::screen::put_back(session, desk, &mut self.applied.screen).await;
+        if want.screen_off_battery_s.is_some()
+            || want.screen_off_ac_s.is_some()
+            || want.animated_dim
+        {
+            crate::screen::apply(
+                session,
+                desk,
+                want.screen_off_battery_s,
+                want.screen_off_ac_s,
+                want.animated_dim,
+                want.on_ac,
+                &mut self.applied.screen,
+            )
+            .await;
+        }
+        self.save();
+        let timeout = crate::screen::desktop_timeout(desk, want.on_ac);
+        if want.animated_dim && !self.dim_started {
+            crate::screen::start(desk, self.dim.clone(), self.verbose);
+            self.dim_started = true;
+        }
+        self.say(&format!(
+            "screen off after {timeout:?} s, animated dim {}",
+            want.animated_dim
+        ));
+        crate::screen::set_config(
+            &self.dim,
+            crate::screen::DimConfig {
+                enabled: want.animated_dim,
+                timeout_s: timeout,
+            },
+        );
     }
 
     /// Look at what the service wants; act on what changed.
@@ -209,6 +286,17 @@ impl Desktop {
             } else {
                 self.put_back_style();
             }
+        }
+        let screen_key = |w: &Want| {
+            (
+                w.screen_off_battery_s,
+                w.screen_off_ac_s,
+                w.animated_dim,
+                w.on_ac,
+            )
+        };
+        if screen_key(&want) != screen_key(&last) {
+            self.screen(session, &want).await;
         }
     }
 

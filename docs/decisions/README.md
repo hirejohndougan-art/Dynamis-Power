@@ -32,6 +32,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0026](0026-learning-per-activity.md) | Learning per activity |
 | [0027](0027-acting-through-the-desktop.md) | Acting through the desktop |
 | [0028](0028-sharing-through-github.md) | Sharing results through a public GitHub repository (supersedes 0005) |
+| [0029](0029-screen-page-timeout-and-animated-dim.md) | The Screen page: screen-off time and animated dim (changes 0027 point 4) |
 
 ## Adding a record
 

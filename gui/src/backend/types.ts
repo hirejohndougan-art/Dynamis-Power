@@ -189,11 +189,16 @@ export interface DesktopPolicy {
   pause_indexing: boolean;
   lower_refresh: boolean;
   dark_style: boolean;
+  /** Seconds before the screen turns off (null: the desktop's own). */
+  screen_off_battery_s: number | null;
+  screen_off_ac_s: number | null;
+  /** Fade to 10% over the last 15 seconds; brighten quickly on return. */
+  animated_dim: boolean;
 }
 
 export interface DesktopInfo {
   policy: DesktopPolicy;
-  want: DesktopPolicy;
+  want: Partial<DesktopPolicy> & { on_ac?: boolean };
   /** What the session helper found; null when it is not running. */
   found: { desktop?: string | null; indexer?: string | null; refresh_hz?: number | null; low_hz?: number | null; can_style?: boolean } | null;
   /** The built-in screen looks like an OLED. */

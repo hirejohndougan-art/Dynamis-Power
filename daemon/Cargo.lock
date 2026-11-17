@@ -262,6 +262,7 @@ name = "dynamis-agent"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "dynamis-client",
  "futures-lite",
  "serde",
  "serde_json",

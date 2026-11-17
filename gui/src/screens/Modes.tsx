@@ -1,105 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { backend, type AutoPrefs, type BrightnessPrefs, type Profile, type Status, type TimeRule } from "../backend";
+import { useEffect, useState } from "react";
+import { backend, type AutoPrefs, type Profile, type Status, type TimeRule } from "../backend";
 import { Choice, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { hourName, profileName, t } from "../i18n";
-import { brightnessMinutes } from "../power";
-
-type Levels = BrightnessPrefs["levels"];
-
-/** The brightness chosen for each mode, saved shortly after the last move. */
-function useBrightness(onSaved: () => void) {
-  const info = useLoad(() => backend.brightness(), []);
-  const [levels, setLevels] = useState<Levels | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const dirty = useRef(false);
-  useEffect(() => {
-    if (info.data && !dirty.current) setLevels(info.data.levels);
-  }, [info.data]);
-  useEffect(() => {
-    if (!levels || !dirty.current) return;
-    const id = window.setTimeout(() => {
-      dirty.current = false;
-      backend.setBrightnessPrefs({ levels }).then(
-        () => {
-          setError(null);
-          info.reload();
-          onSaved();
-        },
-        (e) => setError(String(e?.message ?? e)),
-      );
-    }, 500);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [levels]);
-  const change = (next: Levels) => {
-    dirty.current = true;
-    setLevels(next);
-  };
-  const set = (p: Profile, v: number | null) => {
-    if (!levels) return;
-    const next = { ...levels };
-    if (v == null) delete next[p];
-    else next[p] = v;
-    change(next);
-  };
-  return { info: info.data, levels, set, change, error };
-}
-
-/** Where a mode's slider starts: the brightness now, but no brighter than
- * 40% for Longer battery. */
-function startLevel(p: Profile, nowPct: number | null, min: number) {
-  const now = Math.round((nowPct ?? 60) / 5) * 5;
-  return Math.max(min, p === "power-saver" ? Math.min(now, 40) : now);
-}
-
-function ModeBrightness(props: { profile: Profile; status: Status; bright: ReturnType<typeof useBrightness> }) {
-  const { info, levels, set } = props.bright;
-  if (!info?.supported || !levels) return null;
-  const p = props.profile;
-  const level = levels[p];
-  const d = props.status.display;
-  const id = `bright-${p}`;
-  let estimate: string;
-  if (level == null) estimate = t("bright_left_alone");
-  else if (!d) estimate = t("bright_learning");
-  else {
-    const mins = brightnessMinutes(level, info.now_pct, d, props.status.power);
-    const cost = t("bright_cost", { w: (d.w_per_pct * level).toFixed(1) });
-    const diff =
-      mins == null ? "" : Math.abs(mins) < 3 ? t("bright_same") : mins > 0 ? t("bright_more", { min: Math.round(mins) }) : t("bright_less", { min: Math.round(-mins) });
-    estimate = diff ? `${cost} ${diff}` : cost;
-  }
-  return (
-    <div className="stack mode-bright" style={{ gap: 6 }}>
-      <Switch
-        checked={level != null}
-        disabled={!!props.status.safe_mode}
-        label={t("bright_set")}
-        onChange={(on) => set(p, on ? startLevel(p, info.now_pct, info.min_pct) : null)}
-      />
-      {level != null && (
-        <label className="field" htmlFor={id}>
-          <span className="field-label">
-            {t("bright_label")}: {level}%
-          </span>
-          <input
-            id={id}
-            type="range"
-            min={info.min_pct}
-            max={100}
-            step={5}
-            value={level}
-            disabled={!!props.status.safe_mode}
-            onChange={(e) => set(p, Number(e.target.value))}
-            aria-label={`${t("bright_label")}, ${profileName(p)}`}
-          />
-        </label>
-      )}
-      <p className="muted small" aria-live="polite">{estimate}</p>
-    </div>
-  );
-}
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
@@ -166,7 +69,6 @@ export function Modes(props: { status: Status; refresh: () => void }) {
   const [prefs, setPrefs] = useState<AutoPrefs | null>(null);
   const tray = useLoad(() => backend.trayShown(), []);
   const host = useLoad(() => backend.trayHost(), []);
-  const bright = useBrightness(props.refresh);
   const { run, toast } = useAction(() => {
     props.refresh();
     tray.reload();
@@ -201,7 +103,6 @@ export function Modes(props: { status: Status; refresh: () => void }) {
               {s.profile === p && <span className="badge badge-safe">{t("modes_current")}</span>}
             </div>
             <p className="muted">{t(`profile_${p.replace("-", "_")}_desc` as "profile_balanced_desc")}</p>
-            <ModeBrightness profile={p} status={s} bright={bright} />
             {s.profile !== p && (
               <div>
                 <button type="button" className="btn btn-small" disabled={!!s.safe_mode} onClick={() => run(() => backend.setProfile(p))}>
@@ -213,28 +114,9 @@ export function Modes(props: { status: Status; refresh: () => void }) {
         ))}
       </div>
 
-      {bright.info?.supported && bright.levels && (
-        <div className="stack" style={{ gap: 8 }}>
-          <p className="muted small">{t("bright_how")}</p>
-          {Object.keys(bright.levels).length === 0 && (
-            <div className="row">
-              <button
-                type="button"
-                className="btn btn-small"
-                disabled={!!s.safe_mode}
-                onClick={() => {
-                  const i = bright.info;
-                  if (i) bright.change({ "power-saver": startLevel("power-saver", i.now_pct, i.min_pct), balanced: startLevel("balanced", i.now_pct, i.min_pct) });
-                }}
-              >
-                {t("bright_suggest")}
-              </button>
-              <span className="muted small">{t("bright_suggest_desc")}</span>
-            </div>
-          )}
-          {bright.error && <p className="notice" role="alert">{bright.error}</p>}
-        </div>
-      )}
+      <p className="muted small">
+        {t("modes_bright_moved")} <a className="btn-link" href="#screen">{t("nav_screen")}</a>
+      </p>
 
       {(s.missing_modes ?? []).length > 0 && (
         <div className="stack">
