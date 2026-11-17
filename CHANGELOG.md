@@ -175,6 +175,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- *Check deep idle* said "rested deeply" when the processor was only allowed its lightest rest state (C1); it now says so plainly and names the cause when it can (for example `intel_idle.max_cstate=1` at start-up). Found on the VivoBook.
+- *Check deep idle* no longer lists the graphics chip as "kept awake": it manages its own sleep and is awake while the screen is on.
+- *Learn now* results show each setting once, with its latest result and how many tests it took, instead of a row per attempt; labels drop the unit note the value already shows.
 - The Dashboard chart's key no longer covers the time labels: it sits above the chart and names both lines (power in watts, scale on the left; temperature in °C, scale on the right), and the temperature scale has its own column with three marks.
 - The panel icon's drawing failed for a battery below about 10% (a rounded corner wider than the fill).
 - The service unit no longer sets `ProtectKernelLogs=yes`, which stopped the trial health monitor from reading the kernel log on installed systems.

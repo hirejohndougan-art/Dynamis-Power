@@ -8,6 +8,28 @@ import { duration, formatTime, t, tn, valueName } from "../i18n";
 
 /** Learning, in plain language: how far it has got, what it kept, and the
  * tests so far. The technical table stays in Advanced → Learning. */
+/** A setting tried several times (an unclear result is tried again) shows
+ * once, with its latest result and how many tests it took. */
+function grouped<T extends { setting: string; value: string; under_load?: boolean }>(results: T[]): { r: T; tries: number }[] {
+  const out: { r: T; tries: number }[] = [];
+  for (const r of results) {
+    const same = out.find((o) => o.r.setting === r.setting && o.r.value === r.value && !!o.r.under_load === !!r.under_load);
+    if (same) {
+      same.r = r;
+      same.tries += 1;
+    } else {
+      out.push({ r, tries: 1 });
+    }
+  }
+  return out;
+}
+
+/** "Sound chip sleep (seconds idle, 0 = never)" → "Sound chip sleep": the
+ * value beside it already says the unit. */
+function shortLabel(label: string): string {
+  return label.replace(/\s*\([^)]*\)\s*$/, "");
+}
+
 export function Learning(props: { status: Status; refresh: () => void }) {
   const s = props.status.learning;
   const learned = useLoad(() => backend.learned(), [s.tests]);
@@ -219,14 +241,17 @@ function LearnNow(props: { status: Status; run: (a: () => Promise<string | void>
 
       {d.results.length > 0 && (
         <ul className="entries" aria-label={t("lnow_results")}>
-          {d.results.map((r, i) => (
-            <li key={`${i}-${r.setting}-${r.value}`} className="entry">
+          {grouped(d.results).map(({ r, tries }) => (
+            <li key={`${r.setting}-${r.value}-${r.under_load}`} className="entry">
               <div className="stack" style={{ gap: 2 }}>
                 <span>
-                  {r.label}: {valueName(r.setting, r.value)}
+                  {shortLabel(r.label)}: {valueName(r.setting, r.value)}
                   {r.under_load && <span className="muted small"> · {t("lnow_with_workload")}</span>}
                 </span>
-                <span className="muted small">{r.reason}</span>
+                <span className="muted small">
+                  {r.reason}
+                  {tries > 1 && ` · ${t("lnow_tries", { n: tries })}`}
+                </span>
               </div>
               <span className={`badge ${VERDICT_BADGE[r.verdict]}`}>{t(`lnow_verdict_${r.verdict}` as "lnow_verdict_keep")}</span>
             </li>

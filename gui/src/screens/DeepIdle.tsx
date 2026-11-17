@@ -50,6 +50,13 @@ export function DeepIdleCheck(props: { status: Status; refresh: () => void; run:
         <div className="stack" style={{ gap: 8 }} aria-label={t("idle_result")}>
           {r.core_deepest_pct == null ? (
             <p>{t("idle_unknown")}</p>
+          ) : r.shallow ? (
+            <div className="notice" role="note" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+              <strong>{t("idle_shallow_title")}</strong>
+              <span>{t("idle_shallow", { name: r.deepest ?? "C1" })}</span>
+              {r.limited_by && r.limited_by !== "disabled" && <span>{t("idle_shallow_boot", { param: r.limited_by })}</span>}
+              {r.limited_by === "disabled" && <span>{t("idle_shallow_disabled")}</span>}
+            </div>
           ) : (
             <p role="note">
               {t(r.core_deepest_pct >= 80 ? "idle_good" : "idle_low", { pct: Math.round(r.core_deepest_pct) })}

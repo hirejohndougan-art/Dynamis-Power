@@ -123,6 +123,43 @@ pub struct Report {
     /// The laptop was used during the check, so the numbers are lower than
     /// at rest.
     pub touched: bool,
+    /// The deepest state allowed is only a light one (C1, C1E or polling),
+    /// so "rested deeply" would be misleading.
+    #[serde(default)]
+    pub shallow: bool,
+    /// Why deeper states are not allowed, when it can be seen: the kernel
+    /// command line setting that caps them (`intel_idle.max_cstate=1`), or
+    /// `disabled` when deeper states exist but are switched off.
+    #[serde(default)]
+    pub limited_by: Option<String>,
+}
+
+/// Light idle states: a core in one of these is barely resting.
+fn is_light(name: &str) -> bool {
+    let n = name.trim().to_ascii_uppercase();
+    n == "POLL" || n == "C1" || n == "C1E" || n.starts_with("C1-") || n.starts_with("C1E-")
+}
+
+/// What keeps deeper idle states away: a cap on the kernel command line, or
+/// deeper states present but disabled.
+fn limit(root: &SysRoot) -> Option<String> {
+    if let Ok(cmd) = root.read_string("/proc/cmdline") {
+        if let Some(p) = cmd.split_whitespace().find(|p| {
+            p.starts_with("intel_idle.max_cstate=")
+                || p.starts_with("processor.max_cstate=")
+                || p.starts_with("idle=")
+        }) {
+            return Some(p.to_string());
+        }
+    }
+    let dir = format!("{CPU_DIR}/cpu0/cpuidle");
+    let disabled = root.list_dir(&dir).into_iter().any(|s| {
+        s.starts_with("state")
+            && root
+                .read_string(&format!("{dir}/{s}/disable"))
+                .is_ok_and(|d| d.trim() != "0")
+    });
+    disabled.then(|| "disabled".to_string())
 }
 
 fn pct(delta: u64, seconds: f64) -> f64 {
@@ -144,6 +181,7 @@ pub fn report(root: &SysRoot, a: &Snapshot, b: &Snapshot, touched: bool) -> Repo
         }
     }
     let delta = |x: Option<u64>, y: Option<u64>| Some(pct(y?.checked_sub(x?)?, seconds));
+    let shallow = !names.is_empty() && names.iter().all(|n| is_light(n));
 
     let mut list = devices::scan(root);
     list.retain(|d| d.kind == Kind::Pci);
@@ -162,7 +200,12 @@ pub fn report(root: &SysRoot, a: &Snapshot, b: &Snapshot, touched: bool) -> Repo
     let mut no_link_sleep = Vec::new();
     let mut no_deeper_link_sleep = Vec::new();
     for d in &list {
-        if d.control == "on" && read(d, "power/runtime_status").as_deref() == Some("active") {
+        // Graphics manages its own sleep and is awake whenever the screen
+        // is on: listing it would only mislead.
+        if d.what != "graphics"
+            && d.control == "on"
+            && read(d, "power/runtime_status").as_deref() == Some("active")
+        {
             held_awake.push(blocker(d));
         }
         if read(d, "link/l1_aspm").as_deref() == Some("0") {
@@ -186,6 +229,8 @@ pub fn report(root: &SysRoot, a: &Snapshot, b: &Snapshot, touched: bool) -> Repo
         no_link_sleep,
         no_deeper_link_sleep,
         touched,
+        shallow,
+        limited_by: if shallow { limit(root) } else { None },
     }
 }
 
@@ -260,6 +305,33 @@ mod tests {
         assert_eq!(r.held_awake[0].id, "pci:0000:00:14.0");
         assert_eq!(r.no_link_sleep[0].id, "pci:0000:02:00.0");
         assert_eq!(r.no_deeper_link_sleep[0].id, "pci:0000:01:00.0");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_light_rest_allowed_and_why() {
+        let dir = std::env::temp_dir().join(format!("dynamis-deepidle3-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        fixture::core(&dir, 0, &["POLL", "C1"], 1_000);
+        std::fs::create_dir_all(dir.join("proc")).unwrap();
+        std::fs::write(
+            dir.join("proc/cmdline"),
+            "quiet splash intel_idle.max_cstate=1\n",
+        )
+        .unwrap();
+        crate::devices::fixture::pci(&dir, "0000:00:02.0", "0x030000", "on", "i915");
+        std::fs::write(
+            dir.join("sys/bus/pci/devices/0000:00:02.0/power/runtime_status"),
+            "active\n",
+        )
+        .unwrap();
+        let root = SysRoot::at(&dir);
+        let a = snapshot(&root, 0.0);
+        fixture::core(&dir, 0, &["POLL", "C1"], 47_000_000);
+        let r = report(&root, &a, &snapshot(&root, 60.0), false);
+        assert!(r.shallow);
+        assert_eq!(r.limited_by.as_deref(), Some("intel_idle.max_cstate=1"));
+        assert!(r.held_awake.is_empty(), "graphics is not listed");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

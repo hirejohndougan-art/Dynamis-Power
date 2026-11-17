@@ -222,6 +222,11 @@ export interface DeepIdleReport {
   no_link_sleep: IdleBlocker[];
   no_deeper_link_sleep: IdleBlocker[];
   touched: boolean;
+  /** Only a light rest state is allowed (C1 or lighter). */
+  shallow?: boolean;
+  /** What caps it: a start-up setting such as "intel_idle.max_cstate=1",
+   * or "disabled". */
+  limited_by?: string | null;
 }
 
 export interface DeepIdle {
