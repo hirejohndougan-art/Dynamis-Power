@@ -2511,3 +2511,25 @@ fn after_a_kernel_update_learned_settings_are_rechecked() {
         assert_eq!(saved["kernel"], "6.14.0-synthetic");
     });
 }
+
+#[test]
+fn learning_during_heavy_work_is_off_until_chosen() {
+    let Some(env) = Env::new("heavy") else {
+        return;
+    };
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let s = c.status().await.unwrap();
+        assert_eq!(s["learning"]["heavy"], false, "{s}");
+        assert_eq!(s["learning"]["activity"], "everyday");
+        c.set_learn_during_heavy_work(true).await.unwrap();
+        assert_eq!(c.status().await.unwrap()["learning"]["heavy"], true);
+        let saved = fs::read_to_string(env.dir.join("state/learning.json")).unwrap();
+        assert!(saved.contains("\"heavy\":true"), "{saved}");
+    });
+}

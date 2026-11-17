@@ -29,6 +29,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0023](0023-desktops-two-gpus-image-based-flatpak.md) | Desktops, two graphics chips, image-based systems and Flatpak |
 | [0024](0024-gnome-extension-in-the-package.md) | The GNOME extension ships in the package |
 | [0025](0025-hibernate-on-low-battery-is-advice.md) | Sleep that turns into hibernation is advice only |
+| [0026](0026-learning-per-activity.md) | Learning per activity |
 
 ## Adding a record
 

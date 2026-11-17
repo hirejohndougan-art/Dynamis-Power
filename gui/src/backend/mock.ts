@@ -235,6 +235,7 @@ export function mockBackend(): Backend {
     }, SLEEP_MS);
   };
   let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [], off_when_docked: [] };
+  let learnHeavy = false;
   // "Something stopped working".
   let trouble: Trouble | null = null;
   const KINDS: TroubleKind[] = ["wifi", "bluetooth", "sound", "input", "screen", "storage", "sleep", "freeze", "other"];
@@ -358,6 +359,9 @@ export function mockBackend(): Backend {
         status: learning ? "Waiting: power use is changing" : "Learning is off",
         tests: records.length,
         tested_settings: new Set(records.filter((r) => r.verdict !== "inconclusive").map((r) => r.setting)).size,
+        heavy: learnHeavy,
+        activity: "everyday",
+        activity_tests: { video: 4, heavy: learnHeavy ? 2 : 0 },
         rechecks: { count: 1, why: "after a system update (kernel 6.8.0-45-generic → 6.11.0-21-generic)" },
         kept: kept().map((r) => ({ setting: r.setting, label: label(r.setting), value: r.value, baseline: r.baseline, saves_w: -r.effect.mean, reason: r.reason })),
         saves_w: kept().reduce((a, r) => a - r.effect.mean, 0),
@@ -581,6 +585,7 @@ export function mockBackend(): Backend {
       suggestion = null;
     },
     sleeps: async () => delay({ sleeps: sleepLog }),
+    setLearnHeavy: async (on) => { refuse(); learnHeavy = on; },
     somethingBroke: async () => {
       const at = now();
       const recent = journal.filter((j) => j.time >= at - 3600 && j.event === "done" && j.id in original);

@@ -75,6 +75,13 @@ impl Core {
                 "power_update_s": self.learn.power_update_s(),
                 // Learned settings to measure again (after an update, or
                 // a few months on), and why.
+                // Learning per activity (decision 0026).
+                "heavy": self.learn.heavy,
+                "activity": self.learn.activity.map(|a| a.as_str()),
+                "activity_tests": {
+                    "video": self.learn.records.iter().filter(|r| dynamis_core::activity::Activity::of_record(r) == dynamis_core::activity::Activity::Video).count(),
+                    "heavy": self.learn.records.iter().filter(|r| dynamis_core::activity::Activity::of_record(r) == dynamis_core::activity::Activity::Heavy).count(),
+                },
                 "rechecks": {"count": rechecks.len(), "why": rechecks.first().map(|(_, w)| w.clone())},
             },
             "power": {

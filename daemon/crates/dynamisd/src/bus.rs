@@ -835,6 +835,24 @@ impl DynamisPower {
         r
     }
 
+    /// Also learn speed settings during heavy work (decision 0026). Off by
+    /// default: heavy work then uses the power mode's own speed values.
+    async fn set_learn_during_heavy_work(
+        &self,
+        on: bool,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .set_learn_heavy(on)
+            .map_err(fdo::Error::Failed)?;
+        self.0.ticker.poke();
+        notify_auto(conn, &self.0).await;
+        Ok(())
+    }
+
     /// Yes or no to the suggestion in `Status` (`suggestion.id`). Yes adds
     /// the rule and switches automatic choice on.
     async fn answer_suggestion(

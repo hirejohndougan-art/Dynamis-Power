@@ -181,7 +181,7 @@ describe("the app with the stand-in backend", () => {
     expect(screen.getByText("What it kept")).toBeTruthy();
     // Why it waits, with advice, and the battery's update rate. (An
     // earlier test restored everything, which switches learning off.)
-    const sw = screen.getByRole("switch", { name: /learn/i });
+    const sw = screen.getByRole("switch", { name: "Learn" });
     if (sw.getAttribute("aria-checked") !== "true") await act(async () => fireEvent.click(sw));
     await waitFor(() => expect(screen.getAllByRole("note").some((n) => /62%.*steady use/.test(n.textContent ?? ""))).toBe(true));
     expect(screen.getAllByRole("note").some((n) => /Re-checking 1 learned setting after a system update/.test(n.textContent ?? ""))).toBe(true);
@@ -500,5 +500,14 @@ describe("the app with the stand-in backend", () => {
     window.location.hash = "#activity:report";
     render(<App />);
     expect(await screen.findByRole("dialog", { name: "Report a problem", hidden: true }, { timeout: 4000 })).toBeTruthy();
+  });
+  it("lets learning during heavy work be switched on", async () => {
+    window.location.hash = "#learning";
+    render(<App />);
+    const sw = await screen.findByRole("switch", { name: "Also learn during heavy work" }, { timeout: 4000 });
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    await act(async () => fireEvent.click(sw));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Also learn during heavy work" }).getAttribute("aria-checked")).toBe("true"));
+    await backend.setLearnHeavy(false);
   });
 });

@@ -250,6 +250,11 @@ fn launch_view() -> Option<String> {
 }
 
 #[tauri::command]
+async fn set_learn_heavy(conn: State<'_, Conn>, on: bool) -> Result<(), String> {
+    client(&conn).await?.set_learn_during_heavy_work(on).await
+}
+
+#[tauri::command]
 async fn something_broke(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.something_broke().await
 }
@@ -452,6 +457,7 @@ fn main() {
             end_relief,
             answer_suggestion,
             something_broke,
+            set_learn_heavy,
             launch_view,
             what_broke,
             sleeps,

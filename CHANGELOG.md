@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Learning per activity** ([decision 0026](docs/decisions/0026-learning-per-activity.md)): turbo, the speed limit and graphics speed are learned separately for everyday use and for video, and follow what the laptop is doing once it has lasted a minute. Calls, games and heavy work keep the power mode's own speed, unless *Also learn during heavy work* is switched on (Learning screen, `SetLearnDuringHeavyWork`). Graphics speed (Intel top speed, AMD low level) is now tested for everyday use.
+
 - **Re-checking learned results** (everyday problem §6): each result records the kernel and firmware it was measured on. After an update, or 120 days on, learned settings are measured again before new tests; they stay applied meanwhile and go back only if they no longer help. Activity notes system updates and settings the laptop no longer offers (then no longer applied). Learning says what it is re-checking and why. Quirks can be limited by `kernel_min`, `kernel_below` and `firmware_before`.
 
 - **Fedora and Arch packages**: `daemon/packaging/build-rpm.sh` (service `.rpm`, same install and removal steps as the `.deb`), the app as `.rpm` from Tauri, and `daemon/packaging/arch/PKGBUILD` building both for Arch (conflicts with and provides power-profiles-daemon; prints how to start the service). CI builds, installs and removes each in a Fedora and an Arch container. `stage.sh` now lays out the service's files for all three.

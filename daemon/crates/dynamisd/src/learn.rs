@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+use dynamis_core::activity::{self, Activity};
 use dynamis_core::auto::{Context, Workload};
 use dynamis_core::calibrate::{
     self, Action, Experiment, Limits, Plan, PowerSource, Record, RecordContext, Sample, Verdict,
@@ -41,6 +42,8 @@ use crate::core::{open_engine, write_atomic, Core};
 const FORMAT_VERSION: u32 = 2;
 /// Inconclusive results are retried up to this many times in all.
 const MAX_TRIES: usize = 3;
+/// An activity must last this long before learned speed settings follow it.
+const ACTIVITY_SETTLE_S: f64 = 60.0;
 pub(crate) const MIN_BATTERY_PCT: f64 = 40.0;
 pub(crate) const MAX_TEMP_C: f64 = 80.0;
 
@@ -121,10 +124,22 @@ struct SavedSwitch {
     /// measurable lag at all.
     #[serde(default)]
     strict: bool,
+    /// Also learn speed settings during heavy work (decision 0026).
+    #[serde(default)]
+    heavy: bool,
 }
 
 pub struct Learning {
     pub enabled: bool,
+    /// Also learn speed settings during heavy work (off unless chosen).
+    pub heavy: bool,
+    /// The activity seen at the last readings, and since when.
+    activity_seen: Option<(Option<Activity>, f64)>,
+    /// The activity that has lasted a minute: learned speed settings
+    /// follow it. `None` is a call or a game.
+    pub(crate) activity: Option<Activity>,
+    /// `activity` when learned settings were last applied.
+    overlay_activity: Option<Option<Activity>>,
     /// Keep only changes with no measurable lag (see `SavedSwitch`).
     pub strict: bool,
     /// "It feels slow" is in force: speed-related learned values are not
@@ -170,6 +185,12 @@ impl Learning {
             strict: read("learning.json")
                 .and_then(|t| serde_json::from_str::<SavedSwitch>(&t).ok())
                 .is_some_and(|s| s.strict),
+            heavy: read("learning.json")
+                .and_then(|t| serde_json::from_str::<SavedSwitch>(&t).ok())
+                .is_some_and(|s| s.heavy),
+            activity_seen: None,
+            activity: Some(Activity::Everyday),
+            overlay_activity: None,
             relief: false,
             overlay_relief: false,
             records: read("calibration.json")
@@ -207,10 +228,24 @@ impl Learning {
     /// own, plus the values tuned together for the current power mode, each
     /// as a record from its original value (`baseline`) to the learned one.
     pub fn learned(&self) -> Vec<Record> {
+        self.learned_for(Some(Activity::Everyday))
+    }
+
+    /// The results for one activity: speed settings measured in it, every
+    /// other setting from any activity. For calls and games (`None`), and
+    /// for heavy work unless learning for it is on, no speed settings.
+    pub fn learned_for(&self, act: Option<Activity>) -> Vec<Record> {
+        let speed = self.speed_records(act);
         let mut out: Vec<Record> = Vec::new();
-        // The latest settled result per setting: an inconclusive re-check
-        // leaves the earlier result in place.
         for r in self.records.iter().rev() {
+            if r.verdict != Verdict::Inconclusive
+                && !activity::per_activity(&r.setting)
+                && !out.iter().any(|o| o.setting == r.setting)
+            {
+                out.push(r.clone());
+            }
+        }
+        for r in speed.iter().flatten().rev() {
             if r.verdict != Verdict::Inconclusive
                 && !tune::in_group(&r.setting)
                 && !out.iter().any(|o| o.setting == r.setting)
@@ -219,20 +254,49 @@ impl Learning {
             }
         }
         out.retain(|r| r.verdict == Verdict::Keep);
-        out.extend(self.tuned());
+        if let Some(recs) = &speed {
+            out.extend(self.tuned_from(recs));
+        }
         out
     }
 
+    /// The results that count for one activity's speed settings: those
+    /// measured in it (everything else is unaffected). `None` where speed
+    /// settings are not learned (calls, games, heavy work unless allowed).
+    pub(crate) fn speed_records(&self, act: Option<Activity>) -> Option<Vec<Record>> {
+        let act = act.filter(|a| *a != Activity::Heavy || self.heavy)?;
+        Some(
+            self.records
+                .iter()
+                .filter(|r| !activity::per_activity(&r.setting) || Activity::of_record(r) == act)
+                .cloned()
+                .collect(),
+        )
+    }
+
+    /// A reading: the activity now. It counts once it has lasted a minute,
+    /// so learned speed settings do not flap.
+    pub(crate) fn observe_activity(&mut self, act: Option<Activity>, now: f64) {
+        match self.activity_seen {
+            Some((a, since)) if a == act => {
+                if now - since >= ACTIVITY_SETTLE_S {
+                    self.activity = act;
+                }
+            }
+            _ => self.activity_seen = Some((act, now)),
+        }
+    }
+
     /// The values tuned together that differ from the original, for the
-    /// current power mode.
-    fn tuned(&self) -> Vec<Record> {
+    /// current power mode, from these results.
+    fn tuned_from(&self, records: &[Record]) -> Vec<Record> {
         let (Some(best), Some(orig)) = (
-            tune::learned(&self.records, &self.tune_ctx),
+            tune::learned(records, &self.tune_ctx),
             tune::original(&self.records),
         ) else {
             return Vec::new();
         };
-        let steps = tune::kept_steps(&self.records, &self.tune_ctx);
+        let steps = tune::kept_steps(records, &self.tune_ctx);
         let mut out = Vec::new();
         for (id, value) in &best {
             let Some(o) = orig.get(id).filter(|o| *o != value) else {
@@ -456,9 +520,28 @@ impl Core {
                 v: FORMAT_VERSION,
                 enabled: on,
                 strict: self.learn.strict,
+                heavy: self.learn.heavy,
             })
             .map_err(|e| e.to_string())?,
         )
+    }
+
+    /// Also learn speed settings during heavy work (decision 0026). Off
+    /// again: heavy work uses the mode's own speed values.
+    pub fn set_learn_heavy(&mut self, on: bool) -> Result<(), String> {
+        self.learn.heavy = on;
+        self.learn.overlay_on = None;
+        if !on
+            && self
+                .learn
+                .running
+                .as_ref()
+                .is_some_and(|r| Activity::of(r.workload) == Some(Activity::Heavy))
+        {
+            self.stop_experiment("learning during heavy work was switched off");
+        }
+        let enabled = self.learn.enabled;
+        self.set_learning(enabled)
     }
 
     /// Forget what was learned about a setting and put its original value back.
@@ -499,6 +582,7 @@ impl Core {
 
     /// One learning reading, with the same context auto mode uses.
     pub(crate) fn learn_tick(&mut self, now: f64, ctx: &Context, workload: Workload) {
+        self.learn.observe_activity(Activity::of(workload), now);
         self.apply_overlay(ctx.on_ac);
 
         if let (Some(b), Some(w)) = (ctx.brightness_pct, ctx.power_w) {
@@ -581,7 +665,15 @@ impl Core {
         if ctx.max_temp_c.is_some_and(|t| t >= MAX_TEMP_C) {
             return Err(("warm", "the laptop is warm".into()));
         }
-        if !self.quiet_enough(workload, ctx) {
+        // Video, and heavy work when allowed, have their own tests of the
+        // speed settings (decision 0026), once the activity has settled.
+        let act = Activity::of(workload);
+        let own_tests = match act {
+            Some(Activity::Video) => true,
+            Some(Activity::Heavy) => self.learn.heavy,
+            _ => false,
+        } && self.learn.activity == act;
+        if !self.quiet_enough(workload, ctx) && !own_tests {
             return Err(("busy", format!("{} right now", workload.describe())));
         }
         // Light work on a slow laptop counts only while power is steady.
@@ -653,6 +745,7 @@ impl Core {
         &self,
         engine: &dynamis_core::engine::Engine,
         with_tune: bool,
+        act: Activity,
     ) -> Option<(Plan, State)> {
         let blocked = engine.blocked();
         let t = self.learn.timing;
@@ -677,6 +770,21 @@ impl Core {
             let v = allowed.check(v).ok()?;
             engine.quirks().blocking(id, &v).is_none().then_some(v)
         };
+
+        // Video and heavy work: only the speed settings tuned together,
+        // from that activity's own results (decision 0026).
+        if act != Activity::Everyday {
+            if !with_tune {
+                return None;
+            }
+            let records = self.learn.speed_records(Some(act))?;
+            let state = self.tune_state();
+            let (id, v) = tune::next(&records, &state, MAX_TRIES, |id, v| {
+                allowed(id, v).is_some_and(|a| a == v)
+            })?;
+            let current = state.get(&id)?.clone();
+            return Some((plan(&id, current, v), tune::record_group(&state, &id)));
+        }
 
         // Re-checks come first (everyday problem §6): the learned value
         // against the original, if both are still allowed here.
@@ -703,13 +811,15 @@ impl Core {
 
         // Phase 5: the processor settings that affect each other, together.
         let state = self.tune_state();
-        let (id, v) = tune::next(&self.learn.records, &state, MAX_TRIES, |id, v| {
+        let everyday = self.learn.speed_records(Some(Activity::Everyday))?;
+        let (id, v) = tune::next(&everyday, &state, MAX_TRIES, |id, v| {
             allowed(id, v).is_some_and(|a| a == v)
         })?;
         let current = state.get(&id)?.clone();
         Some((plan(&id, current, v), tune::record_group(&state, &id)))
     }
 
+    /// (See `candidates_here` below for the values tried.)
     /// Every single-setting test this machine allows, and whether it is
     /// done (settled, tried enough times, or the setting already learned).
     fn single_tests(&self, engine: &dynamis_core::engine::Engine) -> Vec<SingleTest> {
@@ -731,8 +841,8 @@ impl Core {
                 continue;
             }
             let is_learned = learned.iter().any(|r| r.setting == id);
-            for v in calibrate::candidates(id) {
-                let Ok(v) = allowed.check(v) else { continue };
+            for v in candidates_here(id, &allowed) {
+                let Ok(v) = allowed.check(&v) else { continue };
                 if engine.quirks().blocking(id, &v).is_some() {
                     continue;
                 }
@@ -849,7 +959,13 @@ impl Core {
                     self.learn.note_wait("dry_run", now);
                     return;
                 }
-                self.next_plan(&e, with_tune)
+                let act = Activity::of(workload).unwrap_or(Activity::Everyday);
+                let act = if self.quiet_enough(workload, _ctx) {
+                    Activity::Everyday
+                } else {
+                    act
+                };
+                self.next_plan(&e, with_tune, act)
             }
             Err(e) => {
                 self.learn.status = format!("Waiting: {e}");
@@ -857,7 +973,13 @@ impl Core {
             }
         };
         let Some((plan, group)) = plan else {
-            self.learn.status = "Every setting has been tested".into();
+            self.learn.status = match Activity::of(workload) {
+                Some(Activity::Video) if !self.quiet_enough(workload, _ctx) => {
+                    "Waiting: nothing left to test during video".into()
+                }
+                Some(Activity::Heavy) => "Waiting: nothing left to test during heavy work".into(),
+                _ => "Every setting has been tested".into(),
+            };
             return;
         };
         eprintln!(
@@ -888,6 +1010,12 @@ impl Core {
         let still_quiet = self.quiet_enough(workload, ctx);
         let Some(run) = self.learn.running.as_mut() else {
             return;
+        };
+        // A test of video or heavy work holds only while that goes on.
+        let run_act = Activity::of(run.workload);
+        let still_quiet = match run_act {
+            Some(Activity::Video | Activity::Heavy) => Activity::of(workload) == run_act,
+            _ => still_quiet,
         };
         let problems = run.monitor.check();
         let changed = if ctx.on_ac {
@@ -1051,24 +1179,37 @@ impl Core {
         }
         let ctx = tune::context_of(&self.tune_state());
         let relief = self.learn.relief;
+        let act = self.learn.activity;
         if self.learn.overlay_on == Some(want)
             && ctx == self.learn.tune_ctx
             && relief == self.learn.overlay_relief
+            && self.learn.overlay_activity == Some(act)
         {
             return;
         }
         self.learn.overlay_relief = relief;
+        self.learn.overlay_activity = Some(act);
+        // Speed settings follow the activity (decision 0026); none are
+        // learned for calls, games, or heavy work unless allowed.
+        let speed = self.learn.speed_records(act);
         // Values tuned together: the best for this power mode on battery,
         // otherwise (mains, or nothing learned for this mode) the original.
         if let Some(orig) = self.tune_base() {
             // "It feels slow": the mode's own values, not the learned ones.
-            let best = tune::learned(&self.learn.records, &ctx).filter(|_| want && !relief);
+            let best = speed
+                .as_ref()
+                .and_then(|r| tune::learned(r, &ctx))
+                .filter(|_| want && !relief);
             for (id, o) in &orig {
                 let (v, why) = match best.as_ref().and_then(|b| b.get(id)) {
                     Some(v) => (v.clone(), "learned: tuned together for this power mode"),
                     None if want && relief => {
                         (o.clone(), "it feels slow: the mode's own value today")
                     }
+                    None if want && speed.is_none() => (
+                        o.clone(),
+                        "a call, a game or heavy work: the mode's own value",
+                    ),
                     None if want => (o.clone(), "nothing tuned yet for this power mode"),
                     None => (
                         o.clone(),
@@ -1083,10 +1224,28 @@ impl Core {
         self.learn.tune_ctx = ctx;
         let learned: Vec<Record> = self
             .learn
-            .learned()
+            .learned_for(act)
             .into_iter()
             .filter(|r| !tune::in_group(&r.setting))
             .collect();
+        // Speed settings learned for another activity but not this one go
+        // back to their original value while this one lasts.
+        let elsewhere: Vec<Record> = [Activity::Everyday, Activity::Video, Activity::Heavy]
+            .into_iter()
+            .flat_map(|a| self.learn.learned_for(Some(a)))
+            .filter(|r| activity::per_activity(&r.setting) && !tune::in_group(&r.setting))
+            .filter(|r| !learned.iter().any(|l| l.setting == r.setting))
+            .collect();
+        for r in &elsewhere {
+            if let Err(e) = self.apply_value(
+                &r.setting,
+                &r.baseline,
+                "not learned for what the laptop is doing now: original value",
+                None,
+            ) {
+                eprintln!("dynamisd: learned setting {}: {e}", r.setting);
+            }
+        }
         for r in &learned {
             // A control gone after an update: dropped from what is applied,
             // with one line in Activity.
@@ -1150,6 +1309,33 @@ impl Core {
     }
 }
 
+/// The values to try for a setting on this laptop: the fixed candidates,
+/// and for graphics speed (decision 0026) a top speed about three quarters
+/// of the highest this chip offers, or the low power level.
+fn candidates_here(id: &str, allowed: &dynamis_core::settings::Allowed) -> Vec<String> {
+    match id {
+        "gpu.max_freq" => {
+            let dynamis_core::settings::Allowed::Choices { values } = allowed else {
+                return Vec::new();
+            };
+            let mhz: Vec<u64> = values.iter().filter_map(|v| v.parse().ok()).collect();
+            let Some(top) = mhz.iter().max() else {
+                return Vec::new();
+            };
+            mhz.iter()
+                .filter(|m| **m * 4 <= top * 3)
+                .max()
+                .map(|m| vec![m.to_string()])
+                .unwrap_or_default()
+        }
+        "gpu.amd_power_level" => vec!["low".to_string()],
+        _ => calibrate::candidates(id)
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1188,6 +1374,59 @@ mod tests {
                 firmware: "X 01/01/2025".into(),
             }),
         }
+    }
+
+    #[test]
+    fn speed_settings_are_learned_per_activity() {
+        let mut l = learning();
+        let mut gpu = rec(Verdict::Keep, 1, None);
+        gpu.setting = "gpu.max_freq".into();
+        gpu.value = "800".into();
+        gpu.baseline = "1100".into();
+        let mut video = gpu.clone();
+        video.value = "900".into();
+        video.context.workload = Workload::Video;
+        let mut heavy = gpu.clone();
+        heavy.value = "1000".into();
+        heavy.context.workload = Workload::SustainedCompute;
+        let other = rec(Verdict::Keep, 1, None); // the watchdog: not per activity
+        l.records = vec![gpu, video, heavy, other];
+        let values = |l: &Learning, a: Option<Activity>| -> Vec<(String, String)> {
+            let mut v: Vec<_> = l
+                .learned_for(a)
+                .into_iter()
+                .map(|r| (r.setting, r.value))
+                .collect();
+            v.sort();
+            v
+        };
+        let w = ("kernel.nmi_watchdog".to_string(), "off".to_string());
+        let g = |v: &str| ("gpu.max_freq".to_string(), v.to_string());
+        assert_eq!(values(&l, Some(Activity::Everyday)), [g("800"), w.clone()]);
+        assert_eq!(values(&l, Some(Activity::Video)), [g("900"), w.clone()]);
+        // Heavy work: only when allowed. Calls and games: never.
+        assert_eq!(values(&l, Some(Activity::Heavy)), std::slice::from_ref(&w));
+        assert_eq!(values(&l, None), std::slice::from_ref(&w));
+        l.heavy = true;
+        assert_eq!(values(&l, Some(Activity::Heavy)), [g("1000"), w]);
+        // The activity counts once it has lasted a minute.
+        l.observe_activity(Some(Activity::Video), 0.0);
+        l.observe_activity(Some(Activity::Video), 30.0);
+        assert_eq!(l.activity, Some(Activity::Everyday));
+        l.observe_activity(Some(Activity::Video), 61.0);
+        assert_eq!(l.activity, Some(Activity::Video));
+    }
+
+    #[test]
+    fn graphics_speed_candidates() {
+        let a = dynamis_core::settings::Allowed::Choices {
+            values: ["300", "350", "600", "800", "850", "900", "1100"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        };
+        assert_eq!(candidates_here("gpu.max_freq", &a), ["800"]);
+        assert_eq!(candidates_here("pcie.aspm", &a), ["powersave"]);
     }
 
     #[test]

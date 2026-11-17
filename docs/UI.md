@@ -28,7 +28,7 @@ A sidebar, in this order: Dashboard, Modes, Apps, Battery, Devices, Learning, Ac
 | Modes | Everyone | Choose or schedule profiles; "Last until" |
 | Battery | Everyone | Health, charge limit, forecast, charging |
 | Devices | Everyone | Let idle USB devices and built-in hardware sleep on battery; every device listed by its friendly name (from the system's `pci.ids` and `usb.ids`, as `lspci` and `lsusb` use), with why some stay awake and *Keep awake* per device |
-| Learning | Everyone | How far learning has got (a percentage, tests and quiet time left), a note while learned settings are re-checked after a system update or a few months on (built), what it kept with Forget, the tests so far, *Learn now* and the sleep test |
+| Learning | Everyone | How far learning has got (a percentage, tests and quiet time left), a note while learned settings are re-checked after a system update or a few months on (built), how many video tests have run and *Also learn during heavy work* (built, off by default), what it kept with Forget, the tests so far, *Learn now* and the sleep test |
 | Apps | Everyone | What uses power; per-app rules. Dynamis Power's own app and panel icon are never listed |
 | Activity | Everyone | Plain-language history of changes, with Undo; logs and export |
 | Sharing | Everyone | Opt-in results sharing, what's sent, delete my data |

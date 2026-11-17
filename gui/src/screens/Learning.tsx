@@ -57,6 +57,13 @@ export function Learning(props: { status: Status; refresh: () => void }) {
             <p>{t(`learn_wait_${s.waiting.reason}` as "learn_wait_busy")}</p>
           </div>
         )}
+        {props.status.power.has_battery && (
+          <div className="stack" style={{ gap: 4 }}>
+            <p className="small muted">{t("learning_activities", { video: s.activity_tests?.video ?? 0 })}</p>
+            <Switch checked={!!s.heavy} label={t("learning_heavy")} disabled={!!props.status.safe_mode} onChange={(on) => run(() => backend.setLearnHeavy(on))} />
+            <p className="muted small">{t("learning_heavy_desc")}</p>
+          </div>
+        )}
         {s.power_update_s != null && s.power_update_s >= 20 && (
           <p className="muted small">{t("learn_slow_battery", { s: Math.round(s.power_update_s) })}</p>
         )}

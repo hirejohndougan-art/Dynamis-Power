@@ -21,6 +21,11 @@ export interface Status {
     waiting?: { reason: WaitReason; share_pct: number } | null;
     /** How often the battery's power reading changes, in seconds. */
     power_update_s?: number | null;
+    /** Also learn speed settings during heavy work (off unless chosen). */
+    heavy?: boolean;
+    /** What the laptop is doing, for learning: speed settings follow it. Null: a call or a game. */
+    activity?: "everyday" | "video" | "heavy" | null;
+    activity_tests?: { video: number; heavy: number };
     /** Learned settings to measure again (after a system update, or a few months on), and why. */
     rechecks?: { count: number; why: string | null };
   };
@@ -319,6 +324,8 @@ export interface Backend {
   endRelief(): Promise<void>;
   /** The screen to open at start (`activity:report` from the panel menu), if any. */
   launchView?(): Promise<string | null>;
+  /** Also learn speed settings during heavy work. */
+  setLearnHeavy(on: boolean): Promise<void>;
   /** "Something stopped working": undo the last hour and hold it. */
   somethingBroke(): Promise<Trouble>;
   /** What stopped working; `none` if nothing after all. Returns what was blocked. */

@@ -243,7 +243,8 @@ impl Core {
                         self.stop_learn_session(&format!("safe mode is on ({why})"));
                         return;
                     }
-                    self.next_plan(&e, with_tune).is_none()
+                    self.next_plan(&e, with_tune, dynamis_core::activity::Activity::Everyday)
+                        .is_none()
                 }
                 Err(e) => {
                     self.learn.status = format!("Learn now: waiting: {e}");

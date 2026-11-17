@@ -36,6 +36,7 @@ export const tauriBackend: Backend = {
   endRelief: () => invoke("end_relief"),
   launchView: () => invoke("launch_view"),
   somethingBroke: () => invoke("something_broke"),
+  setLearnHeavy: (on) => invoke("set_learn_heavy", { on }),
   whatBroke: (kind) => invoke("what_broke", { kind }),
   answerSuggestion: (id, yes) => invoke("answer_suggestion", { id, yes }),
   sleeps: () => invoke("sleeps"),

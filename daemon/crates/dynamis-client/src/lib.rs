@@ -363,6 +363,15 @@ impl Client {
         Ok(())
     }
 
+    /// Also learn speed settings during heavy work.
+    pub async fn set_learn_during_heavy_work(&self, on: bool) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("SetLearnDuringHeavyWork", &(on,))
+            .await
+            .map_err(explain)
+    }
+
     /// "Something stopped working": undo the last hour (step 1).
     pub async fn something_broke(&self) -> Result<Value> {
         self.json("SomethingBroke", &()).await
