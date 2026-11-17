@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession, Suggestion, SleepRecord } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession, Suggestion, SleepRecord, Trouble, TroubleKind } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -235,6 +235,14 @@ export function mockBackend(): Backend {
     }, SLEEP_MS);
   };
   let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [], off_when_docked: [] };
+  // "Something stopped working".
+  let trouble: Trouble | null = null;
+  const KINDS: TroubleKind[] = ["wifi", "bluetooth", "sound", "input", "screen", "storage", "sleep", "freeze", "other"];
+  const SUSPECTS: Partial<Record<TroubleKind, string[]>> = {
+    wifi: ["wifi.power_save", "pcie.aspm"], sound: ["audio.power_save", "pcie.aspm"], screen: ["pcie.aspm"],
+    storage: ["vm.dirty_writeback", "pcie.aspm"], sleep: ["system.mem_sleep"], freeze: ["pcie.aspm", "system.mem_sleep"],
+  };
+  const held = new Set<string>();
   // A habit noticed from modes picked by hand.
   let suggestion: Suggestion | null = { kind: "time", id: "time:21:power-saver", from_hour: 21, to_hour: 23, profile: "power-saver", days: 3 };
   // The last nights asleep.
@@ -369,6 +377,7 @@ export function mockBackend(): Backend {
       relief: relief && relief > now() ? relief : null,
       suggestion,
       hotter: null,
+      trouble,
       learning_strict: learningStrict,
       unclean,
       full_charge: { supported: true, active: fullCharge !== null, restore_to: fullCharge, ended: fullChargeEnded },
@@ -570,6 +579,38 @@ export function mockBackend(): Backend {
       suggestion = null;
     },
     sleeps: async () => delay({ sleeps: sleepLog }),
+    somethingBroke: async () => {
+      const at = now();
+      const recent = journal.filter((j) => j.time >= at - 3600 && j.event === "done" && j.id in original);
+      const seen = new Set<string>();
+      const undone: Trouble["undone"] = [];
+      for (const j of [...recent].reverse()) {
+        if (seen.has(j.id)) continue;
+        seen.add(j.id);
+        const to = recent.find((r) => r.id === j.id)?.from ?? original[j.id];
+        if (values[j.id] === to) continue;
+        values[j.id] = to;
+        log({ event: "restore", id: j.id, label: label(j.id), from: j.to, to, reason: "something stopped working; ok" });
+        undone.push({ id: j.id, label: label(j.id), to, ok: true });
+        held.add(j.id);
+      }
+      trouble = { at, until: at + 12 * 3600, undone, kinds: KINDS };
+      return delay(trouble);
+    },
+    whatBroke: async (kind) => {
+      if (kind !== "none" && !KINDS.includes(kind)) throw new Error(`${kind} is not a kind of trouble`);
+      const undone = trouble?.undone.map((u) => u.id) ?? [];
+      const suspects = kind === "none" ? [] : kind === "other" ? undone : SUSPECTS[kind] ?? [];
+      const blocked = suspects.filter((id) => undone.includes(id) || (id in original && values[id] !== original[id]));
+      for (const id of blocked) {
+        if (id in original) values[id] = original[id];
+        log({ event: "block", id, label: label(id), reason: "you said it stopped working after it was changed" });
+      }
+      log({ event: "problem", id: kind, label: kind, reason: blocked.length ? `blocked: ${blocked.join(", ")}` : "nothing Dynamis Power changed could cause it" });
+      held.clear();
+      trouble = null;
+      return delay({ kind, blocked: blocked.map((id) => ({ id, label: label(id) })) });
+    },
     recalibration: async () => delay({ ...recal, battery_pct: recal.phase === "running_down" ? 41 : recal.phase === "charging" ? 63 : 79 }),
     startRecalibration: async () => {
       refuse();

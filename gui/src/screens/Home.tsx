@@ -4,6 +4,7 @@ import { Dialog, PowerChart, ProgressBar, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { clock, duration, formatTime, hourName, profileName, t, tn } from "../i18n";
 import { describe } from "../activity";
+import { useTrouble } from "./Trouble";
 
 function Estimate({ s }: { s: Status }) {
   const p = s.power;
@@ -144,6 +145,7 @@ export function Home(props: { status: Status; watts: number[]; temps?: number[];
     journal.reload();
   });
   const [restoring, setRestoring] = useState(false);
+  const trouble = useTrouble(s, run);
 
   const last = (journal.data ?? []).map(describe).find((i) => i !== null) ?? null;
   const held = s.holds[0];
@@ -164,10 +166,15 @@ export function Home(props: { status: Status; watts: number[]; temps?: number[];
     <>
       <header className="page-head">
         <h1>{t("home_title")}</h1>
-        <button type="button" className="btn" onClick={() => setRestoring(true)}>
-          {t("home_restore")}
-        </button>
+        <div className="row">
+          {trouble.button}
+          <button type="button" className="btn" onClick={() => setRestoring(true)}>
+            {t("home_restore")}
+          </button>
+        </div>
       </header>
+      {trouble.notice}
+      {trouble.dialog}
 
       <UncleanNotice s={s} />
       {(s.missing_parts ?? []).length > 0 && (

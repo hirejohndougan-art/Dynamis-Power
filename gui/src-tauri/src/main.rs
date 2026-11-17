@@ -241,6 +241,16 @@ async fn end_relief(conn: State<'_, Conn>) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn something_broke(conn: State<'_, Conn>) -> Result<Value, String> {
+    client(&conn).await?.something_broke().await
+}
+
+#[tauri::command]
+async fn what_broke(conn: State<'_, Conn>, kind: String) -> Result<Value, String> {
+    client(&conn).await?.what_broke(&kind).await
+}
+
+#[tauri::command]
 async fn answer_suggestion(conn: State<'_, Conn>, id: String, yes: bool) -> Result<(), String> {
     client(&conn).await?.answer_suggestion(&id, yes).await
 }
@@ -432,6 +442,8 @@ fn main() {
             feels_slow,
             end_relief,
             answer_suggestion,
+            something_broke,
+            what_broke,
             sleeps,
             recalibration,
             start_recalibration,

@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Something stopped working** (everyday problem §1), on the Dashboard and in the panel menu: undoes every change from the last hour and holds those settings (learning waits) until you say what stopped working: Wi-Fi, Bluetooth, sound, mouse or keyboard, the screen, a disk, sleep, a freeze, or something else. Only the settings that could cause that kind of trouble, and that Dynamis Power changed, are put back and blocked on this laptop; if none were changed, nothing is blocked. The answer goes into the journal and so into *Report a problem*. `SomethingBroke`, `WhatBroke`; `trouble` in `Status`.
+
 - From the Power Daemon design:
   - **Temperature line** on the Home chart (dashed, own scale).
   - **Heating up fast:** on battery, auto mode steps down a mode when the temperature climbs quickly, before the firmware throttles. Only modes, never fans or trip points.

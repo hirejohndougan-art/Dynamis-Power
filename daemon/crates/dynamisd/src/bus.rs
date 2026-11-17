@@ -795,6 +795,46 @@ impl DynamisPower {
         Ok(r.to_string())
     }
 
+    /// "Something stopped working", step 1: undo every change from the last
+    /// hour and hold those settings until `WhatBroke`. Returns the open
+    /// question (as `trouble` in `Status`).
+    async fn something_broke(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<String> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let r = self
+            .0
+            .lock()
+            .something_broke()
+            .map(|v| v.to_string())
+            .map_err(fdo::Error::Failed);
+        notify(conn, &self.0).await;
+        notify_auto(conn, &self.0).await;
+        r
+    }
+
+    /// Step 2: what stopped working (`wifi`, `bluetooth`, `sound`, `input`,
+    /// `screen`, `storage`, `sleep`, `freeze`, `other`, or `none`). The
+    /// settings that could cause it, if changed, are put back and blocked.
+    async fn what_broke(
+        &self,
+        kind: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<String> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        let r = self
+            .0
+            .lock()
+            .what_broke(&kind)
+            .map(|v| v.to_string())
+            .map_err(fdo::Error::InvalidArgs);
+        notify_auto(conn, &self.0).await;
+        r
+    }
+
     /// Yes or no to the suggestion in `Status` (`suggestion.id`). Yes adds
     /// the rule and switches automatic choice on.
     async fn answer_suggestion(

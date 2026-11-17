@@ -45,7 +45,7 @@ Found on the VivoBook E410MA: Longer battery and Faster are hidden, so the mode 
 
 The plan for each, and why, is in [docs/EVERYDAY-ISSUES.md](docs/EVERYDAY-ISSUES.md) (section numbers below).
 
-- [ ] "Something stopped working": undo the last hour's changes, ask which device misbehaved, block the matching settings (§1)
+- [x] "Something stopped working": undo the last hour's changes, ask which device misbehaved, block the matching settings (§1)
 - [ ] Watch the kernel log on every reading; undo and block a change only when trouble follows it within ten minutes (§1)
 - [x] Learning says exactly why it is waiting, with the main reason over the last day and what to do (§2)
 - [x] Measure how often the battery updates its power reading; make test blocks at least four update periods long (§2)

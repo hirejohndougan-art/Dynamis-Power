@@ -91,6 +91,8 @@ export function describe(e: JournalEntry): Item | null {
       return item(t(e.to === "off" ? "ev_radio_off" : "ev_radio_on", { name: e.label || e.id }), reason, reason === "restore" ? "rollbacks" : "auto");
     case "import":
       return item(t("ev_import"), reason, "mine");
+    case "problem":
+      return item(t("ev_problem"), reason, "problems");
     case "brightness":
       return item(t("ev_brightness", { from: e.from ?? "", to: e.to ?? "" }), reason, reason.startsWith("you chose") ? "mine" : "auto");
     case "outside": {

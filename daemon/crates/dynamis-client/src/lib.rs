@@ -363,6 +363,16 @@ impl Client {
         Ok(())
     }
 
+    /// "Something stopped working": undo the last hour (step 1).
+    pub async fn something_broke(&self) -> Result<Value> {
+        self.json("SomethingBroke", &()).await
+    }
+
+    /// Step 2: what stopped working.
+    pub async fn what_broke(&self, kind: &str) -> Result<Value> {
+        self.json("WhatBroke", &(kind,)).await
+    }
+
     /// Yes or no to the suggestion in `Status`.
     pub async fn answer_suggestion(&self, id: &str, yes: bool) -> Result<()> {
         self.own()

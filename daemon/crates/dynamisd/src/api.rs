@@ -100,6 +100,8 @@ impl Core {
             "missing_parts": self.missing_parts,
             // Notably hotter at light use than in an earlier month.
             "hotter": self.heat.hotter(),
+            // "Something stopped working": waiting for the answer.
+            "trouble": self.trouble.json(crate::core::unix_now() as u64),
             // A rule offered from the person's own choices.
             "suggestion": self.habits.json(&self.auto.rules.prefs),
             "missing_modes": profiles::missing(&self.root).into_iter().map(|(p, why)| json!({"profile": p.as_str(), "why": why})).collect::<Vec<_>>(),
@@ -191,6 +193,8 @@ impl Core {
         self.devices.clear(&dir);
         self.radios.clear(&dir);
         self.brightness.clear(&dir);
+        let root = self.root.clone();
+        self.trouble.clear(&root, &dir);
         self.stop_recalibration("everything was restored");
         self.fullcharge.drop_it(&dir, "everything was restored");
         if self.apps.policy.changes_shares() {

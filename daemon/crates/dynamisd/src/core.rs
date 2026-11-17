@@ -110,6 +110,8 @@ pub struct Core {
     pub relief: crate::relief::Relief,
     /// Modes picked by hand, for suggestions.
     pub habits: crate::habits::Habits,
+    /// "Something stopped working": the open question, if any.
+    pub trouble: crate::trouble::Trouble,
     /// Temperature at light use, month by month ("runs hotter").
     pub heat: dynamis_core::heat::HeatHistory,
     heat_unsaved: usize,
@@ -206,6 +208,7 @@ impl Core {
                 .unwrap_or_default(),
             heat_unsaved: 0,
             habits: crate::habits::Habits::load(&state_dir_for_radios),
+            trouble: crate::trouble::Trouble::load(&state_dir_for_radios, unix_now() as u64),
         };
         let on = core.relief.active(unix_now());
         core.learn.relief = on;
@@ -594,6 +597,20 @@ impl Core {
             "until": until,
             "lasting": lasting,
         }))
+    }
+
+    /// "Something stopped working", step 1: undo the last hour and hold it.
+    pub fn something_broke(&mut self) -> Result<serde_json::Value, String> {
+        self.stop_experiment_for("something stopped working");
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.trouble.start(&root, &dir, unix_now() as u64)
+    }
+
+    /// Step 2: what stopped working (`wifi`, `sound`, …, `other`, or
+    /// `none`).
+    pub fn what_broke(&mut self, kind: &str) -> Result<serde_json::Value, String> {
+        let (root, dir) = (self.root.clone(), self.state_dir.clone());
+        self.trouble.answer(&root, &dir, kind)
     }
 
     /// End "It feels slow" (by hand, a mode chosen by hand, or midnight).

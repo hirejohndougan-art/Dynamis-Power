@@ -31,6 +31,7 @@ mod recal;
 mod relief;
 mod sleeps;
 mod sleeptest;
+mod trouble;
 
 use std::path::PathBuf;
 use std::process::ExitCode;

@@ -237,6 +237,26 @@ struct Blocked {
     blocked: BTreeMap<String, String>,
 }
 
+/// Settings held after "Something stopped working": not changed again
+/// until the person says what broke, or until `until` (Unix seconds).
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Held {
+    v: u32,
+    until: u64,
+    ids: BTreeMap<String, String>,
+}
+
+/// One thing put back by [`Engine::undo_since`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Undone {
+    /// A setting id, `devices` (devices let sleep when idle) or a radio
+    /// switch (`rfkill0`).
+    pub id: String,
+    /// The value it was put back to (`on`/`off` for a radio).
+    pub to: String,
+    pub ok: bool,
+}
+
 /// What [`Engine::apply`] did.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
@@ -493,10 +513,10 @@ impl Engine {
             }
             _ => {}
         }
-        if let Some(reason) = self.blocked().get(req.id) {
+        if let Some(reason) = self.refused(req.id) {
             return Err(EngineError::Blocked {
                 id: req.id.into(),
-                reason: reason.clone(),
+                reason,
             });
         }
         if let Some(tool) = crate::tools::managed_elsewhere(&self.root).get(req.id) {
@@ -926,10 +946,10 @@ impl Engine {
         if let Some(why) = self.safe_mode() {
             return Err(EngineError::SafeMode(why));
         }
-        if let Some(why) = self.blocked().get(kind.setting_id()) {
+        if let Some(why) = self.refused(kind.setting_id()) {
             return Err(EngineError::Blocked {
                 id: kind.setting_id().to_string(),
-                reason: why.clone(),
+                reason: why,
             });
         }
         if !matches!(value, "auto" | "on") {
@@ -1061,10 +1081,10 @@ impl Engine {
             if let Some(why) = self.safe_mode() {
                 return Err(EngineError::SafeMode(why));
             }
-            if let Some(why) = self.blocked().get("radios") {
+            if let Some(why) = self.refused("radios") {
                 return Err(EngineError::Blocked {
                     id: "radios".into(),
-                    reason: why.clone(),
+                    reason: why,
                 });
             }
         }
@@ -1198,6 +1218,136 @@ impl Engine {
         } else {
             Err(EngineError::Write(result))
         }
+    }
+
+    // --- "Something stopped working" (everyday problem §1) ---------------
+
+    /// Why `id` may not be changed now: blocked on this laptop, or held
+    /// after something stopped working.
+    fn refused(&self, id: &str) -> Option<String> {
+        self.blocked()
+            .get(id)
+            .cloned()
+            .or_else(|| self.held().get(id).cloned())
+    }
+
+    /// The settings held now (empty once the hold has ended).
+    pub fn held(&self) -> BTreeMap<String, String> {
+        read_json::<Held>(&self.dir.join("held.json"))
+            .filter(|h| now() < h.until)
+            .map(|h| h.ids)
+            .unwrap_or_default()
+    }
+
+    /// Hold these ids (not changed again) until `until`, or until
+    /// [`Engine::end_hold`]. Replaces any earlier hold.
+    pub fn hold(&mut self, ids: &[String], until: u64, reason: &str) -> Result<()> {
+        write_json(
+            &self.dir.join("held.json"),
+            &Held {
+                v: STATE_FORMAT_VERSION,
+                until,
+                ids: ids
+                    .iter()
+                    .map(|i| (i.clone(), reason.to_string()))
+                    .collect(),
+            },
+        )
+    }
+
+    pub fn end_hold(&mut self) -> Result<()> {
+        match fs::remove_file(self.dir.join("held.json")) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Put back everything changed since `since` (Unix seconds), newest
+    /// first: each setting to the value it had before its first change in
+    /// that time, devices let sleep back to their own setting, radios
+    /// switched off by rule back on. Works in safe mode. Each is journaled.
+    pub fn undo_since(&mut self, since: u64, reason: &str) -> Result<Vec<Undone>> {
+        if self.pending().is_some() {
+            self.revert(reason)?;
+        }
+        let recent: Vec<Entry> = self
+            .journal(usize::MAX)
+            .into_iter()
+            .filter(|e| e.time >= since)
+            .collect();
+        // Settings: newest change first; the value before the first change.
+        let mut order: Vec<String> = Vec::new();
+        let mut before: BTreeMap<String, String> = BTreeMap::new();
+        for e in recent
+            .iter()
+            .filter(|e| matches!(e.event.as_str(), "start" | "done"))
+        {
+            if let Some(from) = &e.from {
+                before.entry(e.id.clone()).or_insert_with(|| from.clone());
+            }
+            order.retain(|i| i != &e.id);
+            order.insert(0, e.id.clone());
+        }
+        let mut out = Vec::new();
+        for id in order {
+            let (Some(s), Some(to)) = (settings::by_id(&id), before.get(&id)) else {
+                continue;
+            };
+            let Ok(current) = s.read(&self.root) else {
+                continue;
+            };
+            if &current == to {
+                continue;
+            }
+            let result = self.put_back(s, to);
+            self.log(
+                "restore",
+                &id,
+                Some(&current),
+                Some(to),
+                &format!("{reason}; {result}"),
+            )?;
+            out.push(Undone {
+                id,
+                to: to.clone(),
+                ok: result == "ok",
+            });
+        }
+        // Devices let sleep when idle.
+        if recent
+            .iter()
+            .any(|e| e.event == "device-power" && e.to.as_deref() == Some("auto"))
+            && self.restore_device_power()? > 0
+        {
+            out.push(Undone {
+                id: "devices".into(),
+                to: "on".into(),
+                ok: true,
+            });
+        }
+        // Radios switched off by rule.
+        let mut radios: Vec<String> = recent
+            .iter()
+            .filter(|e| e.event == "radio" && e.to.as_deref() == Some("off"))
+            .map(|e| e.id.clone())
+            .collect();
+        radios.dedup();
+        for id in radios {
+            if self.reset_radio(&id, reason)? {
+                out.push(Undone {
+                    id,
+                    to: "on".into(),
+                    ok: true,
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    /// Block a setting because the person said it broke something.
+    pub fn block_by_person(&mut self, id: &str, reason: &str) -> Result<()> {
+        self.block(id, reason)
     }
 
     pub fn unblock(&mut self, id: &str) -> Result<bool> {

@@ -43,6 +43,8 @@ export interface Status {
   unclean?: Unclean;
   /** "Charge fully once". */
   full_charge?: { supported: boolean; active: boolean; restore_to: string | null; ended: string | null };
+  /** "Something stopped working": the last hour was undone; waiting for what broke. */
+  trouble?: Trouble | null;
   /** A rule offered from the modes picked by hand; nothing changes before a yes. */
   suggestion?: Suggestion | null;
   /** The laptop runs hotter at light use than it used to (dust, dried paste). */
@@ -161,6 +163,16 @@ export interface Conflict {
 export interface AppRule {
   app: string;
   profile: Profile;
+}
+
+export type TroubleKind = "wifi" | "bluetooth" | "sound" | "input" | "screen" | "storage" | "sleep" | "freeze" | "other";
+
+export interface Trouble {
+  at: number;
+  /** Held until then if there is no answer. */
+  until: number;
+  undone: { id: string; label: string; to: string; ok: boolean }[];
+  kinds: TroubleKind[];
 }
 
 export type Suggestion =
@@ -301,6 +313,10 @@ export interface Backend {
   /** "It feels slow": undo what costs speed for the rest of the day. */
   feelsSlow(lasting: boolean): Promise<FeelsSlowResult>;
   endRelief(): Promise<void>;
+  /** "Something stopped working": undo the last hour and hold it. */
+  somethingBroke(): Promise<Trouble>;
+  /** What stopped working; `none` if nothing after all. Returns what was blocked. */
+  whatBroke(kind: TroubleKind | "none"): Promise<{ kind: string; blocked: { id: string; label: string }[] }>;
   /** Yes or no to `Status.suggestion`. Yes adds the rule and switches automatic choice on. */
   answerSuggestion(id: string, yes: boolean): Promise<void>;
   /** The last sleeps, newest first. */
@@ -363,6 +379,7 @@ export type WaitReason =
   | "busy"
   | "unsteady"
   | "app_hold"
+  | "trouble"
   | "safe_mode"
   | "trial"
   | "dry_run";

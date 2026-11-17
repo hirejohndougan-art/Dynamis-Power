@@ -2310,3 +2310,80 @@ fn the_app_hears_about_changes_at_once() {
     });
     wait_for(|| heard.load(std::sync::atomic::Ordering::SeqCst) > 0);
 }
+
+#[test]
+fn something_stopped_working_undoes_then_blocks_only_what_could_cause_it() {
+    let Some(env) = Env::new("trouble") else {
+        return;
+    };
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let row = |all: &serde_json::Value, id: &str| {
+            all.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["id"] == id)
+                .unwrap()
+                .clone()
+        };
+        c.set_setting("kernel.nmi_watchdog", "off", false)
+            .await
+            .unwrap();
+        c.set_setting("audio.power_save", "7", false).await.unwrap();
+
+        // Step 1: both undone, newest first, and held.
+        let t = c.something_broke().await.unwrap();
+        let ids: Vec<&str> = t["undone"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|u| u["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["audio.power_save", "kernel.nmi_watchdog"], "{t}");
+        let s = c.settings().await.unwrap();
+        assert_eq!(row(&s, "kernel.nmi_watchdog")["current"], "on");
+        assert!(c.status().await.unwrap()["trouble"].is_object());
+        let err = c
+            .set_setting("kernel.nmi_watchdog", "off", false)
+            .await
+            .unwrap_err();
+        assert!(err.contains("held"), "{err}");
+
+        // Step 2: sound. Only the sound setting is blocked; the hold ends.
+        assert!(c.what_broke("toaster").await.is_err());
+        let r = c.what_broke("sound").await.unwrap();
+        let blocked: Vec<&str> = r["blocked"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(blocked, ["audio.power_save"], "{r}");
+        let s = c.settings().await.unwrap();
+        assert!(row(&s, "audio.power_save")["blocked"]
+            .as_str()
+            .unwrap()
+            .contains("sound stopped working"));
+        assert!(row(&s, "kernel.nmi_watchdog")["blocked"].is_null());
+        assert!(c.status().await.unwrap()["trouble"].is_null());
+        c.set_setting("kernel.nmi_watchdog", "off", false)
+            .await
+            .unwrap();
+        let journal = c.journal(20).await.unwrap();
+        assert!(journal
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["event"] == "problem" && e["id"] == "sound"));
+
+        // Trouble nothing here could cause: nothing blocked.
+        c.something_broke().await.unwrap();
+        let r = c.what_broke("screen").await.unwrap();
+        assert_eq!(r["blocked"].as_array().unwrap().len(), 0, "{r}");
+    });
+}

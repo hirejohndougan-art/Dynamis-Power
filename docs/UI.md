@@ -42,6 +42,7 @@ The first screen (called Home in older notes).
 - **Big estimate:** "About 4 h 10 min left" as a range ("3 h 50 – 4 h 30"), or "Fully charged in 40 min".
 - **Status sentence:** "Saving battery while you browse." with the active mode as a chip.
 - **The slider:** Longer battery ↔ Faster, five steps.
+- **Something stopped working** (built), next to *Restore original settings* (and in the panel menu): one click undoes the last hour, then a dialog lists what was undone and asks which of these stopped working (Wi-Fi, Bluetooth, Sound, Mouse, keyboard or touchpad, The screen, A disk or USB drive, Sleep or waking up, The laptop froze, Something else), with *It works again*, *Later* and *Done*. The result says what was put back and blocked, or that nothing Dynamis Power changed can affect it. After *Later*, a notice keeps the question open. See [EVERYDAY-ISSUES.md](EVERYDAY-ISSUES.md) §1.
 - **It feels slow** (built), under the mode: a confirmation with *Keep it this way*, then "Faster settings until midnight" with what was undone and *End now*. See [EVERYDAY-ISSUES.md](EVERYDAY-ISSUES.md) §3.
 - **Offers from habits** (built): when the same mode was picked by hand three times with the same app in front, or around the same hour on three days, a notice offers to do it automatically ("You picked Longer battery around 9 PM on 3 different days. Use Longer battery by itself from 9 PM to 11 PM?") with *Yes, do that* and *No thanks*. Nothing changes without a yes; a no is not asked again.
 - **Runs hotter** (built): "At light use, this laptop now runs about 7 °C warmer than in March 2026…" with the usual cause (dust in the vents), only when it has risen 5 °C or more over three months.
@@ -112,7 +113,7 @@ Advanced always shows the technical details (setting IDs, raw kernel values, all
 
 - The icon is the app's logo, coloured by mode (green Longer battery, canary yellow Balanced with a dark bolt, orange Faster, grey when the service is not running or safe mode is on). The tooltip says the mode, battery level and time left.
 - **Left click** opens the app.
-- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *Open Dynamis Power*; *Hide this icon*.
+- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *It feels slow*; *Something stopped working…* (undoes the last hour and opens the app to ask what stopped working; works in safe mode too); *Open Dynamis Power*; *Hide this icon*.
 - Every change goes to the service exactly as the app sends it (polkit, safe mode and every rail apply). In safe mode the controls are greyed out.
 - *Hide this icon*, or the switch on Modes, turns it off; the choice is remembered per person.
 

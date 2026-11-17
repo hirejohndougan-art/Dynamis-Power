@@ -59,6 +59,7 @@ mod id {
     pub const LAST_STOP: i32 = 34;
     pub const FULL_CHARGE: i32 = 35;
     pub const FEELS_SLOW: i32 = 36;
+    pub const SOMETHING_BROKE: i32 = 37;
     pub const OPEN: i32 = 40;
     pub const HIDE: i32 = 41;
 }
@@ -209,6 +210,14 @@ pub fn menu(status: Option<&Value>) -> Vec<Entry> {
             Kind::Plain,
         )
     });
+    // "Something stopped working" (everyday problem §1): undoes the last
+    // hour, then the app asks what stopped working. Works in safe mode too.
+    out.push(e(
+        id::SOMETHING_BROKE,
+        0,
+        s("tray_something_broke").into(),
+        Kind::Plain,
+    ));
     out.push(e(id::SEP3, 0, String::new(), Kind::Separator));
     out.push(e(id::OPEN, 0, s("tray_open").into(), Kind::Plain));
     out.push(e(id::HIDE, 0, s("tray_hide").into(), Kind::Plain));
@@ -486,6 +495,27 @@ impl Shared {
                 )
                 .await
                 .map(|_| ()),
+            id::SOMETHING_BROKE => {
+                // Undo first (unless already waiting for an answer), then
+                // the app asks what stopped working.
+                let waiting = self.status().is_some_and(|st| st["trouble"].is_object());
+                let r = if waiting {
+                    Ok(())
+                } else {
+                    self.service
+                        .call_method(
+                            Some(SERVICE),
+                            SERVICE_PATH,
+                            Some(SERVICE_IFACE),
+                            "SomethingBroke",
+                            &(),
+                        )
+                        .await
+                        .map(|_| ())
+                };
+                open_app();
+                r
+            }
             id::OPEN => {
                 open_app();
                 Ok(())

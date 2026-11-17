@@ -27,6 +27,7 @@ const EN: &[(&str, &str)] = &[
     ("tray_no_service", "Dynamis Power is not running"),
     ("tray_feels_slow", "It feels slow"),
     ("tray_feels_slow_end", "Back to normal settings"),
+    ("tray_something_broke", "Something stopped working…"),
     ("tray_auto_reason", "Chosen automatically: {reason}"),
     (
         "tray_relief",

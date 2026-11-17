@@ -499,6 +499,12 @@ impl Core {
         workload: Workload,
         session: bool,
     ) -> Result<(), (&'static str, String)> {
+        if self.trouble.waiting(crate::core::unix_now() as u64) {
+            return Err((
+                "trouble",
+                "you said something stopped working; tests wait for your answer".into(),
+            ));
+        }
         if !session && now - self.learn.last_end < self.learn.timing.cooldown_s {
             return Err(("resting", "resting between tests".into()));
         }

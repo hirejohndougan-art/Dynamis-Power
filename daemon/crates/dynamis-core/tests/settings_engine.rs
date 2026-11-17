@@ -1655,3 +1655,74 @@ fn hard_disk_power_level_needs_a_yes_and_never_goes_below_128() {
     e.restore().unwrap();
     assert_eq!(apm(), "254");
 }
+
+#[test]
+fn something_stopped_working_undoes_the_last_hour_only_and_holds_it() {
+    let sb = Sandbox::new();
+    let mut e = sb.engine();
+    let swap_before = sb.file("/proc/sys/vm/swappiness").trim().to_string();
+    e.apply(&req("vm.swappiness", "17")).unwrap();
+    // That change was two hours ago.
+    let journal = sb.state().join("journal.jsonl");
+    let old = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        - 7200) as i64;
+    let text: String = fs::read_to_string(&journal)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            let mut v: serde_json::Value = serde_json::from_str(l).unwrap();
+            v["time"] = old.into();
+            format!("{v}\n")
+        })
+        .collect();
+    fs::write(&journal, text).unwrap();
+    let nmi_before = sb.file("/proc/sys/kernel/nmi_watchdog").trim().to_string();
+    let nmi_to = if nmi_before == "0" { "on" } else { "off" };
+    e.apply(&req("kernel.nmi_watchdog", nmi_to)).unwrap();
+    e.apply(&req("audio.power_save", "7")).unwrap();
+    let now = old as u64 + 7200;
+
+    let undone = e
+        .undo_since(now - 3600, "something stopped working")
+        .unwrap();
+    let ids: Vec<&str> = undone.iter().map(|u| u.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["audio.power_save", "kernel.nmi_watchdog"],
+        "newest first"
+    );
+    assert!(undone.iter().all(|u| u.ok));
+    assert_eq!(sb.file("/proc/sys/kernel/nmi_watchdog").trim(), nmi_before);
+    assert_eq!(
+        sb.file("/proc/sys/vm/swappiness").trim(),
+        "17",
+        "older change kept"
+    );
+    assert_ne!(swap_before, "17");
+
+    // Held: not changed again until the hold ends.
+    e.hold(
+        &["kernel.nmi_watchdog".into()],
+        now + 3600,
+        "held: something stopped working",
+    )
+    .unwrap();
+    assert!(matches!(
+        e.apply(&req("kernel.nmi_watchdog", nmi_to)),
+        Err(EngineError::Blocked { .. })
+    ));
+    assert!(
+        !e.blocked().contains_key("kernel.nmi_watchdog"),
+        "held, not blocked"
+    );
+    e.end_hold().unwrap();
+    assert!(e.held().is_empty());
+    e.apply(&req("kernel.nmi_watchdog", nmi_to)).unwrap();
+    // A hold that has run out holds nothing.
+    e.hold(&["audio.power_save".into()], now - 1, "old")
+        .unwrap();
+    assert!(e.held().is_empty());
+}

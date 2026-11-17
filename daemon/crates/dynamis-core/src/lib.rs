@@ -38,6 +38,7 @@ pub mod sensors;
 pub mod settings;
 pub mod tlpimport;
 pub mod tools;
+pub mod trouble;
 pub mod tune;
 pub mod wakeups;
 pub mod wifi;

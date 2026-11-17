@@ -469,4 +469,26 @@ describe("the app with the stand-in backend", () => {
     expect(within(card).getByText(/Woken by a USB device/)).toBeTruthy();
     expect(within(card).getByText(/more than usual for sleep/)).toBeTruthy();
   });
+  it("undoes the last hour when something stopped working, then blocks only what could cause it", async () => {
+    await backend.setSetting("audio.power_save", "10", false);
+    window.location.hash = "#home";
+    render(<App />);
+    const button = await screen.findByRole("button", { name: "Something stopped working" }, { timeout: 4000 });
+    await act(async () => fireEvent.click(button));
+    const dialog = await screen.findByRole("dialog", { name: "What stopped working?", hidden: true });
+    await waitFor(() => expect(dialog.textContent).toMatch(/Sound chip sleep/));
+    const send = within(dialog).getByRole("button", { name: "Done", hidden: true });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => fireEvent.click(within(dialog).getByRole("radio", { name: "Sound", hidden: true })));
+    await act(async () => fireEvent.click(send));
+    const result = await screen.findByRole("dialog", { name: "Thanks", hidden: true });
+    expect(result.textContent).toMatch(/blocked on this laptop, because they can affect Sound/);
+    expect(result.textContent).toMatch(/Sound chip sleep/);
+    await act(async () => fireEvent.click(within(result).getByRole("button", { name: "Close", hidden: true })));
+    expect((await backend.status()).trouble).toBeNull();
+    // Nothing that could affect the screen was changed: nothing blocked.
+    await backend.somethingBroke();
+    const r = await backend.whatBroke("screen");
+    expect(r.blocked).toHaveLength(0);
+  });
 });
