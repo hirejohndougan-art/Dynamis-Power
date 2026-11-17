@@ -82,7 +82,12 @@ impl Core {
                     "video": self.learn.records.iter().filter(|r| dynamis_core::activity::Activity::of_record(r) == dynamis_core::activity::Activity::Video).count(),
                     "heavy": self.learn.records.iter().filter(|r| dynamis_core::activity::Activity::of_record(r) == dynamis_core::activity::Activity::Heavy).count(),
                 },
-                "rechecks": {"count": rechecks.len(), "why": rechecks.first().map(|(_, w)| w.clone())},
+                "rechecks": {
+                    "count": rechecks.len(),
+                    "why": rechecks.first().map(|(_, w)| w.clone()),
+                    // Turbo and the speed limit, tuned together: learned again.
+                    "tuned": self.learn.relearning_tuned(crate::core::unix_now() as u64),
+                },
             },
             "power": {
                 "on_ac": on_ac,

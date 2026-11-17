@@ -27,7 +27,7 @@ export interface Status {
     activity?: "everyday" | "video" | "heavy" | null;
     activity_tests?: { video: number; heavy: number };
     /** Learned settings to measure again (after a system update, or a few months on), and why. */
-    rechecks?: { count: number; why: string | null };
+    rechecks?: { count: number; why: string | null; tuned?: string | null };
   };
   power: {
     on_ac: boolean;

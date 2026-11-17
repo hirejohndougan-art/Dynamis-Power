@@ -263,14 +263,46 @@ impl Learning {
     /// The results that count for one activity's speed settings: those
     /// measured in it (everything else is unaffected). `None` where speed
     /// settings are not learned (calls, games, heavy work unless allowed).
+    ///
+    /// Results for the settings tuned together that were measured on
+    /// another kernel or firmware, or a few months ago, no longer count:
+    /// those settings are tuned again from the power mode's own values
+    /// (everyday problem §6). They interact, so re-testing one learned
+    /// value on its own would not say whether the set still helps.
     pub(crate) fn speed_records(&self, act: Option<Activity>) -> Option<Vec<Record>> {
         let act = act.filter(|a| *a != Activity::Heavy || self.heavy)?;
+        let now_s = crate::core::unix_now() as u64;
         Some(
             self.records
                 .iter()
                 .filter(|r| !activity::per_activity(&r.setting) || Activity::of_record(r) == act)
+                .filter(|r| !(tune::in_group(&r.setting) && r.stale(&self.system, now_s)))
                 .cloned()
                 .collect(),
+        )
+    }
+
+    /// Why the settings tuned together are being learned again, if they
+    /// are: kept results exist, but none still count.
+    pub fn relearning_tuned(&self, now_s: u64) -> Option<String> {
+        let kept: Vec<&Record> = self
+            .records
+            .iter()
+            .filter(|r| tune::in_group(&r.setting) && r.verdict == Verdict::Keep)
+            .collect();
+        if kept.is_empty() || kept.iter().any(|r| !r.stale(&self.system, now_s)) {
+            return None;
+        }
+        let last = kept.last()?;
+        Some(
+            match last
+                .system
+                .as_ref()
+                .and_then(|s| self.system.change_from(s))
+            {
+                Some(change) => format!("after a system update ({change})"),
+                None => "a few months on".to_string(),
+            },
         )
     }
 
@@ -1415,6 +1447,36 @@ mod tests {
         assert_eq!(l.activity, Some(Activity::Everyday));
         l.observe_activity(Some(Activity::Video), 61.0);
         assert_eq!(l.activity, Some(Activity::Video));
+    }
+
+    #[test]
+    fn settings_tuned_together_are_learned_again_after_an_update() {
+        let now = 1_800_000_000;
+        let mut l = learning();
+        l.system = dynamis_core::sysid::SystemId {
+            kernel: "6.11.0".into(),
+            firmware: "X 01/01/2025".into(),
+        };
+        let mut turbo = rec(Verdict::Keep, now - 86_400, Some("6.8.0"));
+        turbo.setting = "cpu.turbo".into();
+        turbo.baseline = "on".into();
+        turbo.value = "off".into();
+        turbo.group = [("cpu.max_perf_pct".to_string(), "100".to_string())].into();
+        l.records = vec![turbo.clone()];
+        // Measured on the old kernel: no longer counts, learned again.
+        assert!(!l.learned().iter().any(|r| r.setting == "cpu.turbo"));
+        assert!(l
+            .relearning_tuned(now)
+            .unwrap()
+            .contains("kernel 6.8.0 → 6.11.0"));
+        // Measured on this kernel: counts.
+        turbo.system = Some(l.system.clone());
+        l.records = vec![turbo];
+        assert!(l
+            .learned()
+            .iter()
+            .any(|r| r.setting == "cpu.turbo" && r.value == "off"));
+        assert!(l.relearning_tuned(now).is_none());
     }
 
     #[test]

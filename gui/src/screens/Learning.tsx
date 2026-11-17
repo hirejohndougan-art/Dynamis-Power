@@ -45,6 +45,11 @@ export function Learning(props: { status: Status; refresh: () => void }) {
             {tn("learning_rechecks", s.rechecks!.count, { why: s.rechecks!.why ?? "" })}
           </p>
         )}
+        {s.rechecks?.tuned && (
+          <p className="notice notice-info" role="note">
+            {t("learning_relearn_tuned", { why: s.rechecks.tuned })}
+          </p>
+        )}
         {s.on && (
           <p className="small">
             <span className="muted">{t("learning_now")}: </span>

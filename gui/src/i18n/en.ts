@@ -101,6 +101,7 @@ export const en = {
   learning_activities: "Speed settings are learned separately for everyday use and for video ({video} video tests so far). During calls and games they stay as the power mode sets them.",
   learning_heavy: "Also learn during heavy work",
   learning_heavy_desc: "Off: heavy work (compiling, exporting video) always gets the power mode's full speed. On: speed settings are tested during heavy work too, which can slow it a little while a test runs.",
+  learning_relearn_tuned: "Turbo and the speed limit are being learned again {why}. They affect each other, so they start again from the power mode's own values.",
   learning_kept_heading: "What it kept",
   learning_kept_none: "Nothing yet. A change is kept only when it saves power without slowing the laptop.",
   learning_kept_saves: "Saves about {w} W",
