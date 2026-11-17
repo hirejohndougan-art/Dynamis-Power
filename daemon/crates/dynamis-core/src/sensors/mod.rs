@@ -6,6 +6,7 @@
 
 pub mod backlight;
 pub mod cpu;
+pub mod gpu;
 pub mod idle;
 pub mod power;
 pub mod pressure;

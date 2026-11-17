@@ -994,6 +994,26 @@ pub fn open_engine(root: &SysRoot, state_dir: &Path) -> Result<Engine, String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn during_video_graphics_speed_is_tested_when_it_can_be_measured() {
+        use dynamis_core::activity::Activity;
+        let (dir, core) = sandbox("video-gpu");
+        let engine = open_engine(&core.root, &core.state_dir).unwrap();
+        // Without the keep-up counters, nothing to test during video.
+        assert!(core.next_plan(&engine, false, Activity::Video).is_none());
+        let card = dir.join("root/sys/class/drm/card0");
+        fs::create_dir_all(card.join("gt/gt0")).unwrap();
+        fs::write(card.join("gt_act_freq_mhz"), "300\n").unwrap();
+        fs::write(card.join("gt/gt0/rc6_residency_ms"), "0\n").unwrap();
+        let (plan, _) = core.next_plan(&engine, false, Activity::Video).unwrap();
+        assert_eq!(plan.setting, "gpu.max_freq");
+        // Heavy work: never graphics.
+        let mut heavy = core;
+        heavy.learn.heavy = true;
+        assert!(heavy.next_plan(&engine, false, Activity::Heavy).is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     /// A copy of the fixture with a firmware profile added, so every profile
     /// changes something.
     fn sandbox(name: &str) -> (PathBuf, Core) {

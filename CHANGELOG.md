@@ -6,6 +6,9 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Graphics speed during video**: graphics speed tests now judge lag by whether the graphics chip keeps up (fully busy at its speed limit, from Intel RC6 residency or AMD busy percent; `sensors/gpu.rs`), and video gets its own graphics speed where that can be read.
+- **Turbo and the speed limit learned again** after kernel or firmware updates and 120 days on: their old results stop counting and they are tuned again from the power mode's own values. Learning says so.
+
 - **Learning per activity** ([decision 0026](docs/decisions/0026-learning-per-activity.md)): turbo, the speed limit and graphics speed are learned separately for everyday use and for video, and follow what the laptop is doing once it has lasted a minute. Calls, games and heavy work keep the power mode's own speed, unless *Also learn during heavy work* is switched on (Learning screen, `SetLearnDuringHeavyWork`). Graphics speed (Intel top speed, AMD low level) is now tested for everyday use.
 
 - **Re-checking learned results** (everyday problem §6): each result records the kernel and firmware it was measured on. After an update, or 120 days on, learned settings are measured again before new tests; they stay applied meanwhile and go back only if they no longer help. Activity notes system updates and settings the laptop no longer offers (then no longer applied). Learning says what it is re-checking and why. Quirks can be limited by `kernel_min`, `kernel_below` and `firmware_before`.

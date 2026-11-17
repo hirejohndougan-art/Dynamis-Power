@@ -53,9 +53,9 @@ impl Activity {
     }
 }
 
-/// Graphics speed settings learned per activity (everyday only for now:
-/// dropped frames cannot be measured yet, so video and heavy work keep the
-/// driver's own graphics speed).
+/// Graphics speed settings learned per activity: for everyday use and for
+/// video, judged by whether the graphics chip keeps up
+/// ([`crate::sensors::gpu`]); heavy work keeps the driver's own speed.
 pub const GRAPHICS: &[&str] = &["gpu.max_freq", "gpu.amd_power_level"];
 
 /// Whether a setting is learned per activity.

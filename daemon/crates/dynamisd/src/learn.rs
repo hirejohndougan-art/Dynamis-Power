@@ -140,6 +140,8 @@ pub struct Learning {
     pub(crate) activity: Option<Activity>,
     /// `activity` when learned settings were last applied.
     overlay_activity: Option<Option<Activity>>,
+    /// Whether the graphics chip keeps up, for graphics speed tests.
+    gpu_meter: dynamis_core::sensors::gpu::GpuMeter,
     /// Keep only changes with no measurable lag (see `SavedSwitch`).
     pub strict: bool,
     /// "It feels slow" is in force: speed-related learned values are not
@@ -191,6 +193,7 @@ impl Learning {
             activity_seen: None,
             activity: Some(Activity::Everyday),
             overlay_activity: None,
+            gpu_meter: Default::default(),
             relief: false,
             overlay_relief: false,
             records: read("calibration.json")
@@ -804,18 +807,46 @@ impl Core {
         };
 
         // Video and heavy work: only the speed settings tuned together,
-        // from that activity's own results (decision 0026).
+        // from that activity's own results (decision 0026); during video,
+        // then graphics speed, judged by whether the chip keeps up.
         if act != Activity::Everyday {
-            if !with_tune {
+            let records = self.learn.speed_records(Some(act))?;
+            if with_tune {
+                let state = self.tune_state();
+                if let Some((id, v)) = tune::next(&records, &state, MAX_TRIES, |id, v| {
+                    allowed(id, v).is_some_and(|a| a == v)
+                }) {
+                    let current = state.get(&id)?.clone();
+                    return Some((plan(&id, current, v), tune::record_group(&state, &id)));
+                }
+            }
+            if act != Activity::Video || !dynamis_core::sensors::gpu::available(&self.root) {
                 return None;
             }
-            let records = self.learn.speed_records(Some(act))?;
-            let state = self.tune_state();
-            let (id, v) = tune::next(&records, &state, MAX_TRIES, |id, v| {
-                allowed(id, v).is_some_and(|a| a == v)
-            })?;
-            let current = state.get(&id)?.clone();
-            return Some((plan(&id, current, v), tune::record_group(&state, &id)));
+            for id in activity::GRAPHICS {
+                let Some(s) = settings::by_id(id) else {
+                    continue;
+                };
+                let Probe::Supported { allowed: a } = s.probe(&self.root) else {
+                    continue;
+                };
+                let Ok(current) = s.read(&self.root) else {
+                    continue;
+                };
+                for v in candidates_here(id, &a) {
+                    let Some(v) = allowed(id, &v) else { continue };
+                    let tries: Vec<&Record> = records
+                        .iter()
+                        .filter(|r| r.setting == *id && r.value == v)
+                        .collect();
+                    let done = tries.iter().any(|r| r.verdict != Verdict::Inconclusive)
+                        || tries.len() >= MAX_TRIES;
+                    if !done && v != current {
+                        return Some((plan(id, current.clone(), v), State::new()));
+                    }
+                }
+            }
+            return None;
         }
 
         // Re-checks come first (everyday problem §6): the learned value
@@ -1086,13 +1117,20 @@ impl Core {
         }
 
         let Some(power_w) = ctx.power_w else { return };
-        let action = run.exp.observe(
-            now,
-            Sample {
-                power_w,
-                stall_pct: ctx.stall_pct,
-            },
-        );
+        // Graphics speed tests judge lag by whether the graphics chip
+        // keeps up (fully busy at its limit), not by processor stalls.
+        let stall_pct = if activity::GRAPHICS.contains(&run.exp.plan.setting.as_str()) {
+            self.learn
+                .gpu_meter
+                .sample(&self.root, now)
+                .unwrap_or(ctx.stall_pct)
+        } else {
+            ctx.stall_pct
+        };
+        let Some(run) = self.learn.running.as_mut() else {
+            return;
+        };
+        let action = run.exp.observe(now, Sample { power_w, stall_pct });
         let setting = run.exp.plan.setting.clone();
         let (step, total) = run.exp.progress();
         match action {
