@@ -178,8 +178,29 @@ impl Facts {
     }
 }
 
+/// On SIGTERM, SIGINT or SIGHUP (logout, `systemctl --user stop`): put the
+/// desktop back as it was before exiting. A separate thread with its own
+/// session connection, so it works whatever the main loop is waiting on.
+fn put_back_on_stop(verbose: bool) {
+    use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+    let Ok(mut signals) = signal_hook::iterator::Signals::new([SIGTERM, SIGINT, SIGHUP]) else {
+        return;
+    };
+    std::thread::spawn(move || {
+        if signals.forever().next().is_some() {
+            zbus::block_on(async {
+                if let Ok(session) = Connection::session().await {
+                    desktop::Desktop::new(verbose).put_back_all(&session).await;
+                }
+            });
+            std::process::exit(0);
+        }
+    });
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
+    put_back_on_stop(args.verbose);
     match zbus::block_on(run(args)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

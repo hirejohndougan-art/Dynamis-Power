@@ -18,7 +18,9 @@
 //!   the `color-scheme` setting. Both saved by the desktop, so put back.
 //!
 //! What was changed is written to `~/.local/state/dynamis-power/desktop.json`
-//! before acting, so if the agent is killed it is put back at the next start.
+//! before acting. When the agent is stopped (logout, `systemctl --user
+//! stop`), it puts everything back before exiting; if it is killed outright,
+//! the next start puts it back.
 //! Putting back leaves anything the person changed since: only a value that
 //! is still the one the agent set is put back.
 //!
@@ -164,10 +166,16 @@ impl Desktop {
     /// At start: put back whatever a previous run left (it was killed), and
     /// tell the service what this desktop can do.
     pub async fn start(&mut self, session: &Connection, service: &Connection) {
+        self.put_back_all(session).await;
+        self.report(session, service).await;
+    }
+
+    /// Put back everything recorded as changed (at start, and when the
+    /// agent is stopped at logout).
+    pub async fn put_back_all(&mut self, session: &Connection) {
         self.put_back_indexing(session).await;
         self.put_back_refresh(session).await;
         self.put_back_style();
-        self.report(session, service).await;
     }
 
     /// Look at what the service wants; act on what changed.
