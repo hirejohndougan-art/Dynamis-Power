@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Processor rest limit tracked with learned results**: each result records any start-up limit on processor rest (such as `intel_idle.max_cstate=1`); when it changes, the results are re-checked, as after a kernel or BIOS update. Older results, which did not record it, are not affected.
+
 - **Screen page** in the main menu: brightness now, brightness for each mode (moved from Modes), the screen-off time on battery and plugged in, *Animated dim* (fades to 10% over the last 15 seconds before the screen turns off, brightens quickly on return; on by default, decision 0029), and the refresh rate and dark style on battery (moved from Devices).
 
 - **Quick panel**: a left click on the panel icon opens a small panel with the battery, the modes, automatic choice, a screen brightness slider and a gear for the full app. The right-click menu's *Open Dynamis Power* is now *Settings…*.

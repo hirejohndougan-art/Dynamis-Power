@@ -1442,6 +1442,7 @@ mod tests {
             system: system.map(|k| dynamis_core::sysid::SystemId {
                 kernel: k.into(),
                 firmware: "X 01/01/2025".into(),
+                idle_limit: None,
             }),
         }
     }
@@ -1494,6 +1495,7 @@ mod tests {
         l.system = dynamis_core::sysid::SystemId {
             kernel: "6.11.0".into(),
             firmware: "X 01/01/2025".into(),
+            idle_limit: None,
         };
         let mut turbo = rec(Verdict::Keep, now - 86_400, Some("6.8.0"));
         turbo.setting = "cpu.turbo".into();
@@ -1536,6 +1538,7 @@ mod tests {
         l.system = dynamis_core::sysid::SystemId {
             kernel: "6.11.0".into(),
             firmware: "X 01/01/2025".into(),
+            idle_limit: None,
         };
         // Same kernel, recent: nothing to re-check.
         l.records = vec![rec(Verdict::Keep, now - 86_400, Some("6.11.0"))];

@@ -223,7 +223,9 @@ prints, for each workload, the average power and how long a full battery would l
 
 Power comes from the drop in the battery's stored energy when the gauge reports it, otherwise from the average of its power readings; the results file says which. Differences smaller than the spread between repeats are not differences.
 
-On the VivoBook, say in any write-up that its earlier freezes were never explained, and run each configuration at least twice.
+**Measuring a start-up limit on processor rest.** On a laptop running with `intel_idle.max_cstate=N` (a common workaround for freezes on Intel Celeron and Pentium laptops), `dynamis bench` measures what the limit costs: run `--only idle,light` with the limit, label it (`--label cap1`), then again at each step you try (`--label cap3`, `--label nocap`), and compare. Learned results are re-checked by themselves when the limit changes.
+
+On the VivoBook, say in any write-up how its freezes were handled (the `intel_idle.max_cstate=1` workaround since 15 November 2026, cause not proven), and run each configuration at least twice.
 
 ## Known limits
 

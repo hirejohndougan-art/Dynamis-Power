@@ -54,7 +54,7 @@ Full specification: `docs/UI.md`. The app must be usable by someone who has neve
 
 ## Test hardware
 
-Primary test laptop: ASUS VivoBook E410MA — Celeron N4020 (2 cores), 4 GB RAM, 58 GB eMMC, Intel UHD 600, fanless, KDE Plasma 6 on Wayland. It used to have unexplained hard freezes; the owner reported on 2026-11-16 that they have stopped (cause not known). Its results can be used, but treat a run interrupted by an unclean shutdown as suspect, and say in any write-up that the earlier freezes were never explained.
+Primary test laptop: ASUS VivoBook E410MA — Celeron N4020 (2 cores), 4 GB RAM, 58 GB eMMC, Intel UHD 600, fanless, KDE Plasma 6 on Wayland. It used to have hard freezes (5 of 11 boots ended uncleanly, Dec 2025 to Aug 2026, several right after KWin DRM "atomic commit failed" errors). On 2026-11-15 `intel_idle.max_cstate=1` was added to its kernel command line as a workaround, and no freeze has happened since; at the same time Plasma, the kernel (now 7.0) and `preempt=full` changed, so the cause is not proven. With the cap the processor only uses C1 (no deep idle), so its idle power is higher than normal: results measured on it describe the capped state, and learned results are re-checked when the cap changes (`SystemId.idle_limit`). Plan: keep the cap about a week, then raise it a step at a time (3 first), measuring each with `dynamis bench`. Treat a run interrupted by an unclean shutdown as suspect.
 
 ## Commits
 

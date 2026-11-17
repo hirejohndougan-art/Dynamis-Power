@@ -137,9 +137,12 @@ pub struct Record {
 
 impl Record {
     /// Whether this result should be measured again: it was measured on
-    /// another kernel or firmware, or more than a few months ago.
+    /// another kernel, firmware or processor rest limit, or more than a few
+    /// months ago.
     pub fn stale(&self, now: &crate::sysid::SystemId, now_s: u64) -> bool {
-        self.system.as_ref().is_some_and(|s| s != now)
+        self.system
+            .as_ref()
+            .is_some_and(|s| now.change_from(s).is_some())
             || now_s.saturating_sub(self.time) > crate::sysid::RECHECK_AFTER_S
     }
 }

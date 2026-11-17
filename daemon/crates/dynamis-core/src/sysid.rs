@@ -1,7 +1,8 @@
-//! What a learning result was measured on (everyday problem §6): the kernel
-//! and the firmware (BIOS) version and date. An update to either can change
-//! what is best, so results measured on another kernel or firmware are
-//! re-checked, as are results more than a few months old.
+//! What a learning result was measured on (everyday problem §6): the kernel,
+//! the firmware (BIOS) version and date, and any start-up limit on how
+//! deeply the processor may rest (`intel_idle.max_cstate=1` and the like:
+//! with it, idle power is much higher, so what saves power changes). A
+//! change to any of these re-checks the results, as does age.
 
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,31 @@ pub struct SystemId {
     pub kernel: String,
     /// BIOS version and date, e.g. `E410MA.316 05/12/2023`.
     pub firmware: String,
+    /// The start-up limits on processor rest, as on the kernel command line
+    /// (`intel_idle.max_cstate=1`), or `none`. `None`: not recorded (a
+    /// result from before this was kept), which never counts as a change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idle_limit: Option<String>,
+}
+
+/// The kernel command line's limits on processor rest, or `none`.
+pub fn idle_limit(root: &SysRoot) -> String {
+    let caps: Vec<String> = root
+        .read_string("/proc/cmdline")
+        .unwrap_or_default()
+        .split_whitespace()
+        .filter(|p| {
+            p.starts_with("intel_idle.max_cstate=")
+                || p.starts_with("processor.max_cstate=")
+                || p.starts_with("idle=")
+        })
+        .map(str::to_string)
+        .collect();
+    if caps.is_empty() {
+        "none".into()
+    } else {
+        caps.join(" ")
+    }
 }
 
 impl SystemId {
@@ -36,6 +62,7 @@ impl SystemId {
         SystemId {
             kernel: read("/proc/sys/kernel/osrelease"),
             firmware: fw,
+            idle_limit: Some(idle_limit(root)),
         }
     }
 
@@ -55,6 +82,11 @@ impl SystemId {
                 or_unknown(&old.firmware),
                 or_unknown(&self.firmware)
             ));
+        }
+        if let (Some(o), Some(n)) = (&old.idle_limit, &self.idle_limit) {
+            if o != n {
+                parts.push(format!("processor rest limit {o} → {n}"));
+            }
         }
         (!parts.is_empty()).then(|| parts.join(", "))
     }
@@ -98,6 +130,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_change_in_the_rest_limit_counts_but_an_unrecorded_one_does_not() {
+        let capped = SystemId {
+            kernel: "7.0.0".into(),
+            firmware: "E410MA.303".into(),
+            idle_limit: Some("intel_idle.max_cstate=1".into()),
+        };
+        let raised = SystemId {
+            idle_limit: Some("intel_idle.max_cstate=3".into()),
+            ..capped.clone()
+        };
+        assert_eq!(
+            raised.change_from(&capped).unwrap(),
+            "processor rest limit intel_idle.max_cstate=1 → intel_idle.max_cstate=3"
+        );
+        let old = SystemId {
+            idle_limit: None,
+            ..capped.clone()
+        };
+        assert_eq!(
+            capped.change_from(&old),
+            None,
+            "older results did not record it"
+        );
+        let dir = std::env::temp_dir().join(format!("dynamis-sysid-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("proc")).unwrap();
+        std::fs::write(
+            dir.join("proc/cmdline"),
+            "ro quiet intel_idle.max_cstate=1 preempt=full\n",
+        )
+        .unwrap();
+        assert_eq!(idle_limit(&SysRoot::at(&dir)), "intel_idle.max_cstate=1");
+        std::fs::write(dir.join("proc/cmdline"), "ro quiet\n").unwrap();
+        assert_eq!(idle_limit(&SysRoot::at(&dir)), "none");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn versions_and_dates() {
         assert_eq!(kernel_numbers("6.11.0-21-generic"), [6, 11, 0]);
         assert_eq!(kernel_numbers("6.8.12-arch1-1"), [6, 8, 12]);
@@ -112,6 +181,7 @@ mod tests {
         let a = SystemId {
             kernel: "6.8.0".into(),
             firmware: "A 01/01/2024".into(),
+            idle_limit: None,
         };
         let b = SystemId {
             kernel: "6.11.0".into(),
