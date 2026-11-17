@@ -54,7 +54,7 @@ Full specification: `docs/UI.md`. The app must be usable by someone who has neve
 
 ## Test hardware
 
-Primary test laptop: ASUS VivoBook E410MA — Celeron N4020 (2 cores), 4 GB RAM, 58 GB eMMC, Intel UHD 600, fanless, KDE Plasma 6 on Wayland. It has unexplained hard freezes; do not trust experiment results from it until those are resolved or explained.
+Primary test laptop: ASUS VivoBook E410MA — Celeron N4020 (2 cores), 4 GB RAM, 58 GB eMMC, Intel UHD 600, fanless, KDE Plasma 6 on Wayland. It used to have unexplained hard freezes; the owner reported on 2026-11-16 that they have stopped (cause not known). Its results can be used, but treat a run interrupted by an unclean shutdown as suspect, and say in any write-up that the earlier freezes were never explained.
 
 ## Commits
 
