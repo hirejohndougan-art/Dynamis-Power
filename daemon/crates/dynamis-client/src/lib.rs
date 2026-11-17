@@ -419,6 +419,15 @@ impl Client {
             .map_err(explain)
     }
 
+    /// Hide a piece of advice for 30 days.
+    pub async fn dismiss_tip(&self, id: &str) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("DismissTip", &(id,))
+            .await
+            .map_err(explain)
+    }
+
     /// The choices for acting through the desktop on battery.
     pub async fn set_desktop_policy(&self, policy: &Value) -> Result<()> {
         self.own()

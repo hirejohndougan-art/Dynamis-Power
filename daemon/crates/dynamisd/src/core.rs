@@ -118,6 +118,8 @@ pub struct Core {
     pub deepidle: crate::deepidle::DeepIdle,
     /// Acting through the desktop (decision 0027).
     pub desktop: crate::desktop::DesktopState,
+    /// Advice from readings (video decoding, screen dimming).
+    pub tips: crate::tips::Tips,
     /// Temperature at light use, month by month ("runs hotter").
     pub heat: dynamis_core::heat::HeatHistory,
     heat_unsaved: usize,
@@ -219,6 +221,7 @@ impl Core {
             trouble: crate::trouble::Trouble::load(&state_dir_for_radios, unix_now() as u64),
             deepidle: crate::deepidle::DeepIdle::load(&state_dir_for_radios),
             desktop: crate::desktop::DesktopState::load(&state_dir_for_radios, &root_for_kernel),
+            tips: crate::tips::Tips::load(&state_dir_for_radios),
         };
         let on = core.relief.active(unix_now());
         core.learn.relief = on;
@@ -588,6 +591,12 @@ impl Core {
         self.devices.mark_dirty();
     }
 
+    /// Hide a piece of advice for 30 days.
+    pub fn dismiss_tip(&mut self, id: &str) -> Result<(), String> {
+        let dir = self.state_dir.clone();
+        self.tips.dismiss(id, &dir, unix_now() as u64)
+    }
+
     /// Start "Check deep idle" (read-only, one minute).
     pub fn check_deep_idle(&mut self) {
         let root = self.root.clone();
@@ -863,6 +872,8 @@ impl Core {
         self.fullcharge.tick(&root, &dir, unix, ctx.on_ac);
         self.sleeptest.tick(&root, &dir, unix, &ctx);
         self.deepidle.tick(&root, &dir, unix, ctx.user_idle);
+        let fit = self.learn.display.fit();
+        self.tips.tick(&root, &ctx, fit, unix);
         self.predict.hold_charge = self.fullcharge.is_active();
         let mut target_changed = false;
         if self

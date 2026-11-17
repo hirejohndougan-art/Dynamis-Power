@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Advice from readings** on the Dashboard: *Videos may be decoded the slow way* (processor busy, graphics chip idle during a video) with how to turn on hardware decoding, and *The screen uses a lot of the battery* with where to shorten the desktop's dim and screen-off times. Each can be dismissed for 30 days (`DismissTip`, `tips` in `Status`).
+
 - **Your desktop on battery** (Devices; decision 0027): the session helper pauses file indexing (KDE Baloo, GNOME LocalSearch/Tracker; on by default), runs a fast screen at 60 Hz (KDE `kscreen-doctor`, GNOME Mutter as temporary), and uses the dark style (OLED guessed from the screen's EDID), putting each back when plugged in and leaving any change you make yourself.
 - **Bluetooth off when unused**: on battery, Bluetooth is switched off after 10 minutes with nothing connected, and back on when plugged in.
 

@@ -87,6 +87,40 @@ impl GpuMeter {
     }
 }
 
+/// How busy the graphics chip was since the previous reading, 0–100
+/// (Intel: from RC6 idle residency; AMD: `gpu_busy_percent`). Used for the
+/// video decoding tip.
+#[derive(Debug, Default)]
+pub struct BusyMeter {
+    last: Option<(f64, u64)>,
+}
+
+impl BusyMeter {
+    pub fn sample(&mut self, root: &SysRoot, now: f64) -> Option<f64> {
+        for b in cards(root) {
+            if let Ok(busy) = root.read_u64(&format!("{b}/device/gpu_busy_percent")) {
+                return Some((busy as f64).clamp(0.0, 100.0));
+            }
+            let Some(rc6) = rc6_ms(root, &b) else {
+                continue;
+            };
+            let (t0, r0) = self.last.replace((now, rc6))?;
+            let dt_ms = (now - t0) * 1000.0;
+            if dt_ms <= 0.0 {
+                return None;
+            }
+            let idle = (rc6.saturating_sub(r0) as f64 / dt_ms * 100.0).clamp(0.0, 100.0);
+            return Some(100.0 - idle);
+        }
+        None
+    }
+
+    /// Start again (after a gap, so the next reading is not over the gap).
+    pub fn reset(&mut self) {
+        self.last = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

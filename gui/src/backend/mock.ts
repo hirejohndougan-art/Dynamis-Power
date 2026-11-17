@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession, Suggestion, SleepRecord, Trouble, TroubleKind, DeepIdle, DesktopInfo } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession, Suggestion, SleepRecord, Trouble, TroubleKind, DeepIdle, DesktopInfo, Tip } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -256,6 +256,7 @@ export function mockBackend(): Backend {
     found: { desktop: "kde", indexer: "baloo", refresh_hz: 120, low_hz: 60, can_style: true },
     oled: true,
   };
+  let tips: Tip[] = [{ id: "video_decode", pct: 42 }];
   let deepIdle: DeepIdle = { running: false, seconds_left: null, at: null, report: null };
   const KINDS: TroubleKind[] = ["wifi", "bluetooth", "sound", "input", "screen", "storage", "sleep", "freeze", "other"];
   const SUSPECTS: Partial<Record<TroubleKind, string[]>> = {
@@ -403,6 +404,7 @@ export function mockBackend(): Backend {
       hotter: null,
       trouble,
       deep_idle: deepIdle,
+      tips,
       desktop,
       kernel_watch: true,
       learning_strict: learningStrict,
@@ -529,6 +531,11 @@ export function mockBackend(): Backend {
       }
     },
     sleepTest: async () => delay({ ...sleep, active: values["system.mem_sleep"] }),
+    dismissTip: async (id) => {
+      refuse();
+      tips = tips.filter((x) => x.id !== id);
+      return delay(undefined);
+    },
     setDesktopPolicy: async (p) => {
       refuse();
       desktop = { ...desktop, policy: { ...p }, want: { ...p } };

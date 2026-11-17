@@ -532,6 +532,15 @@ describe("the app with the stand-in backend", () => {
     render(<App />);
     expect(await screen.findByRole("dialog", { name: "Report a problem", hidden: true }, { timeout: 4000 })).toBeTruthy();
   });
+  it("shows advice on Home and hides it when dismissed", async () => {
+    window.location.hash = "#home";
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Videos may be decoded the slow way")).toBeTruthy(), { timeout: 3000 });
+    const note = screen.getByText("Videos may be decoded the slow way").closest("[role=note]") as HTMLElement;
+    await act(async () => fireEvent.click(within(note).getByRole("button", { name: "Dismiss" })));
+    await waitFor(() => expect(screen.queryByText("Videos may be decoded the slow way")).toBeNull());
+  });
+
   it("checks deep idle and lists what may keep the processor awake", async () => {
     window.location.hash = "#learning";
     render(<App />);

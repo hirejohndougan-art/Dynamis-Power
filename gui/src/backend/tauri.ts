@@ -34,6 +34,7 @@ export const tauriBackend: Backend = {
   radios: () => invoke("radios"),
   setRadioPolicy: (policy) => invoke("set_radio_policy", { policy }),
   setDesktopPolicy: (policy) => invoke("set_desktop_policy", { policy }),
+  dismissTip: (id) => invoke("dismiss_tip", { id }),
   feelsSlow: (lasting) => invoke("feels_slow", { lasting }),
   endRelief: () => invoke("end_relief"),
   launchView: () => invoke("launch_view"),

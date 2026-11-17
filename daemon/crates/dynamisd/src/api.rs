@@ -118,6 +118,9 @@ impl Core {
             "hotter": self.heat.hotter(),
             // Whether the kernel log can be read (needs root).
             "kernel_watch": self.kernel.watching(),
+            // Advice from readings: video decoded by the processor, screen
+            // dimming.
+            "tips": self.tips.json(crate::core::unix_now() as u64),
             // Acting through the desktop (decision 0027).
             "desktop": self.desktop.json(on_ac, self.active(), engine.as_ref().and_then(|e| e.safe_mode()).is_some()),
             // "Check deep idle": running, or the last report.

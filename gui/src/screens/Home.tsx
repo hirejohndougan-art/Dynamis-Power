@@ -206,6 +206,7 @@ export function Home(props: { status: Status; watts: number[]; temps?: number[];
         </div>
       )}
       <SuggestionNotice s={s} run={run} />
+      <TipNotices s={s} run={run} />
       {s.hotter && (
         <p className="notice notice-info" role="status">
           {t("hotter", { by: Math.round(s.hotter.by_c), since: monthName(s.hotter.since) })}
@@ -467,6 +468,30 @@ function SuggestionNotice(props: { s: Status; run: (a: () => Promise<string | vo
         </button>
       </div>
     </div>
+  );
+}
+
+/** Advice from readings: why it is shown, what to do, and Dismiss (hidden
+ * for 30 days). The how-to is behind Details. */
+function TipNotices(props: { s: Status; run: (a: () => Promise<string | void>) => void }) {
+  const tips = props.s.tips ?? [];
+  if (tips.length === 0) return null;
+  return (
+    <>
+      {tips.map((tip) => (
+        <div key={tip.id} className="notice notice-info" role="note" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+          <strong>{t(`tip_${tip.id}_title` as "tip_video_decode_title")}</strong>
+          <p>{t(`tip_${tip.id}` as "tip_video_decode", { pct: tip.pct })}</p>
+          <details>
+            <summary className="small">{t("tip_how")}</summary>
+            <p className="small">{t(`tip_${tip.id}_how` as "tip_video_decode_how")}</p>
+          </details>
+          <button type="button" className="btn btn-small" onClick={() => props.run(() => backend.dismissTip(tip.id))}>
+            {t("tip_dismiss")}
+          </button>
+        </div>
+      ))}
+    </>
   );
 }
 

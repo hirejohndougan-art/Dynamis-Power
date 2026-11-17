@@ -184,7 +184,9 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 
 **Not taken, by design:** a trained prediction model (XGBoost) choosing settings by itself. Dynamis Power decides from measured, repeatable tests that can each be explained ("saves 0.4 W, no lag") and undone; a model's choices cannot. Calendar access for predictive hibernation (personal data the service does not need).
 
-## To do: beat TLP on savings
+## Built: beat TLP on savings
+
+All twelve are built and fixture-tested; each still needs a real laptop (and, for B, a real KDE and GNOME desktop) to confirm, as part of the hardware tests.
 
 Where the remaining watts are, and what TLP cannot do because it applies fixed settings blind and knows nothing of the desktop. Build order: kernel side first (A), then through the desktop (B, decision [0027](docs/decisions/0027-acting-through-the-desktop.md)), then advice (C). Every change is runtime-only, journaled and put back by Restore; nothing here is on the never-touch list.
 
@@ -206,8 +208,8 @@ Where the remaining watts are, and what TLP cannot do because it applies fixed s
 
 **C. Advice**
 
-- [ ] **Video decoded by the processor**: during video, if the processor stays busy while the graphics chip is idle, say how to turn on hardware video decoding in the browser.
-- [ ] **Screen dimming**: when the screen is the biggest user of the battery, suggest a shorter dim and off time in the desktop's own power settings (advice only; those are the person's settings).
+- [x] **Video decoded by the processor**: during video, if the processor stays busy while the graphics chip is idle, say how to turn on hardware video decoding in the browser.
+- [x] **Screen dimming**: when the screen is the biggest user of the battery, suggest a shorter dim and off time in the desktop's own power settings (advice only; those are the person's settings).
 
 ## To do: catch up on maker-specific support
 

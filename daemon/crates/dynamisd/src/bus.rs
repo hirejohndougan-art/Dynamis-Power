@@ -990,6 +990,23 @@ impl DynamisPower {
         c.sleeptest.json(&c.root).to_string()
     }
 
+    /// Hide a piece of advice (`video_decode`, `screen_dimming`) for 30
+    /// days.
+    async fn dismiss_tip(
+        &self,
+        id: String,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0
+            .lock()
+            .dismiss_tip(&id)
+            .map_err(fdo::Error::InvalidArgs)?;
+        notify(conn, &self.0).await;
+        Ok(())
+    }
+
     /// Start "Check deep idle": a one-minute, read-only measurement of how
     /// deeply the processor rests and which devices may be in the way. The
     /// result is `deep_idle` in `Status`.

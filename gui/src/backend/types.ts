@@ -58,6 +58,8 @@ export interface Status {
   deep_idle?: DeepIdle;
   /** Acting through the desktop on battery (decision 0027). */
   desktop?: DesktopInfo;
+  /** Advice from readings, until dismissed. */
+  tips?: Tip[];
   /** A rule offered from the modes picked by hand; nothing changes before a yes. */
   suggestion?: Suggestion | null;
   /** The laptop runs hotter at light use than it used to (dust, dried paste). */
@@ -176,6 +178,11 @@ export interface Conflict {
 export interface AppRule {
   app: string;
   profile: Profile;
+}
+
+export interface Tip {
+  id: "video_decode" | "screen_dimming";
+  pct: number;
 }
 
 export interface DesktopPolicy {
@@ -366,6 +373,8 @@ export interface Backend {
   setRadioPolicy(p: RadioPolicy): Promise<void>;
   /** Acting through the desktop on battery (decision 0027). */
   setDesktopPolicy(p: DesktopPolicy): Promise<void>;
+  /** Hide a piece of advice for 30 days. */
+  dismissTip(id: Tip["id"]): Promise<void>;
   /** "It feels slow": undo what costs speed for the rest of the day. */
   feelsSlow(lasting: boolean): Promise<FeelsSlowResult>;
   endRelief(): Promise<void>;

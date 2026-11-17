@@ -34,6 +34,7 @@ mod recal;
 mod relief;
 mod sleeps;
 mod sleeptest;
+mod tips;
 mod trouble;
 
 use std::path::PathBuf;
