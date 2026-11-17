@@ -60,6 +60,7 @@ mod id {
     pub const FULL_CHARGE: i32 = 35;
     pub const FEELS_SLOW: i32 = 36;
     pub const SOMETHING_BROKE: i32 = 37;
+    pub const REPORT: i32 = 38;
     pub const OPEN: i32 = 40;
     pub const HIDE: i32 = 41;
 }
@@ -218,6 +219,7 @@ pub fn menu(status: Option<&Value>) -> Vec<Entry> {
         s("tray_something_broke").into(),
         Kind::Plain,
     ));
+    out.push(e(id::REPORT, 0, s("tray_report").into(), Kind::Plain));
     out.push(e(id::SEP3, 0, String::new(), Kind::Separator));
     out.push(e(id::OPEN, 0, s("tray_open").into(), Kind::Plain));
     out.push(e(id::HIDE, 0, s("tray_hide").into(), Kind::Plain));
@@ -520,6 +522,10 @@ impl Shared {
                 open_app();
                 Ok(())
             }
+            id::REPORT => {
+                open_app_with(&["--report"]);
+                Ok(())
+            }
             _ => Ok(()),
         };
         if let Err(e) = result {
@@ -543,8 +549,13 @@ fn mode_of(st: &Value) -> &str {
 
 /// Open the app, whatever name it was installed under.
 fn open_app() {
+    open_app_with(&[]);
+}
+
+/// Open the app with arguments (`--report` opens *Report a problem*).
+fn open_app_with(args: &[&str]) {
     for cmd in ["dynamis-power-app", "dynamis-power"] {
-        if std::process::Command::new(cmd).spawn().is_ok() {
+        if std::process::Command::new(cmd).args(args).spawn().is_ok() {
             return;
         }
     }

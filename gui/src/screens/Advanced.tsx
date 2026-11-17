@@ -295,6 +295,12 @@ function SafetyTab(props: { status: Status; rows: SettingRow[]; run: Run }) {
         <button type="button" className="btn" onClick={() => setRestoring(true)}>{t("home_restore")}</button>
       </div>
       <RestoreDialog open={restoring} onClose={() => setRestoring(false)} onDone={(m) => props.run(async () => m)} />
+
+      <h2 style={{ marginTop: 12 }}>{t("report_button")}</h2>
+      <p className="muted small">{t("safety_report_desc")}</p>
+      <div>
+        <a className="btn" href="#activity:report">{t("report_button")}…</a>
+      </div>
     </>
   );
 }

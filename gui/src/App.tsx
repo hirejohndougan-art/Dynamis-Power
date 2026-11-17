@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { backend } from "./backend";
 import { Logo } from "./components";
 import { useStatus } from "./hooks";
 import { t } from "./i18n";
@@ -25,6 +26,12 @@ export function App() {
   const { status, error, refresh, watts, temps } = useStatus();
   const [showWelcome, setShowWelcome] = useState(() => !welcomed());
 
+  // Started from the panel menu's "Report a problem…": open that dialog.
+  useEffect(() => {
+    void backend.launchView?.().then((v) => {
+      if (v) window.location.hash = v;
+    });
+  }, []);
   useEffect(() => {
     const on = () => setRoute(fromHash());
     window.addEventListener("hashchange", on);
@@ -94,7 +101,7 @@ export function App() {
         ) : screen === "learning" ? (
           <Learning status={status} refresh={refresh} />
         ) : screen === "activity" ? (
-          <Activity version={status.version} onChange={refresh} />
+          <Activity key={sub} version={status.version} onChange={refresh} report={sub === "report"} />
         ) : (
           <Advanced key={sub} status={status} refresh={refresh} initialTab={TABS.includes(sub as Tab) ? (sub as Tab) : "settings"} />
         )}

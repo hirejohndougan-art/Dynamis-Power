@@ -240,6 +240,15 @@ async fn end_relief(conn: State<'_, Conn>) -> Result<(), String> {
     client(&conn).await?.end_relief().await
 }
 
+/// The screen to open at start: `--report` (from the panel menu) opens
+/// *Report a problem*. Asked once by the app when it starts.
+#[tauri::command]
+fn launch_view() -> Option<String> {
+    std::env::args()
+        .any(|a| a == "--report")
+        .then(|| "activity:report".to_string())
+}
+
 #[tauri::command]
 async fn something_broke(conn: State<'_, Conn>) -> Result<Value, String> {
     client(&conn).await?.something_broke().await
@@ -443,6 +452,7 @@ fn main() {
             end_relief,
             answer_suggestion,
             something_broke,
+            launch_view,
             what_broke,
             sleeps,
             recalibration,

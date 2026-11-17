@@ -15,7 +15,7 @@ const FILTERS: { key: Category | "all"; label: Parameters<typeof t>[0] }[] = [
   { key: "problems", label: "filter_problems" },
 ];
 
-export function Activity(props: { version: string; onChange: () => void }) {
+export function Activity(props: { version: string; onChange: () => void; report?: boolean }) {
   const journal = useLoad(() => backend.journal(500), []);
   const { run, toast } = useAction(() => {
     journal.reload();
@@ -24,7 +24,7 @@ export function Activity(props: { version: string; onChange: () => void }) {
   const [tab, setTab] = useState<"activity" | "logs">("activity");
   const [filter, setFilter] = useState<Category | "all">("all");
   const [exporting, setExporting] = useState(false);
-  const [reporting, setReporting] = useState(false);
+  const [reporting, setReporting] = useState(!!props.report);
 
   const items = useMemo(
     () => groupAuto((journal.data ?? []).map(describe).filter((i): i is Item => !!i && (filter === "all" || i.category === filter))),

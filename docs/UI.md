@@ -103,7 +103,7 @@ Advanced always shows the technical details (setting IDs, raw kernel values, all
 | Learning | Pause learning; how much time to spend testing (low, normal, eager); test only on battery / also plugged in; allow running from battery while plugged in; reset everything learned (with confirmation) |
 | Profiles | **Built:** choose what each mode sets on this laptop (from the values it offers), back to standard, export and import as a file. *Planned:* goals, limits and cloning, with extended profiles |
 | Sensors | **Built:** live readings every 2 s while open: whole-laptop and processor power, time in the deepest sleep state, average speed (with small charts), waiting (stall) for processor, memory and disk, temperatures, brightness |
-| Safety | Safe-mode status and switch, whether the kernel log is watched for trouble after changes (built), quirk list version and blocked settings for this machine, trial in progress, rollback history, dead-man timer length, battery floor for tests |
+| Safety | Safe-mode status and switch, whether the kernel log is watched for trouble after changes (built), *Report a problem* (built), quirk list version and blocked settings for this machine, trial in progress, rollback history, dead-man timer length, battery floor for tests |
 | System | **Built:** versions, the service's own memory and processor use against its budget, *Import from TLP* (the TLP configuration as Dynamis Power would use it, line by line with a checkbox each, the lines not imported with why, then *Import*; [decision 0017](decisions/0017-importing-a-tlp-configuration.md)), other power tools with *Switch off*, what the desktop controls (sleep is never touched; brightness only when a brightness is chosen for a mode), where updates come from |
 | Developer | **Built:** dry run (changes journaled as "would", nothing written; learning waits; restore still writes), advisor (the mode in use plus what was learned, as a TLP or TuneD configuration, shown and saved as a file, never installed), raw data from the service, *Restore original settings*. *Not built:* log level (the service logs to the journal; `journalctl -u dynamisd`) |
 
@@ -113,7 +113,7 @@ Advanced always shows the technical details (setting IDs, raw kernel values, all
 
 - The icon is the app's logo, coloured by mode (green Longer battery, canary yellow Balanced with a dark bolt, orange Faster, grey when the service is not running or safe mode is on). The tooltip says the mode, battery level and time left.
 - **Left click** opens the app.
-- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *It feels slow*; *Something stopped working…* (undoes the last hour and opens the app to ask what stopped working; works in safe mode too); *Open Dynamis Power*; *Hide this icon*.
+- **Menu:** a summary line; *Longer battery*, *Balanced*, *Faster* (radio); *Choose automatically* (check); *Make it last* ▸ 2, 4 or 6 hours, or *Stop making it last*; *It feels slow*; *Something stopped working…* (undoes the last hour and opens the app to ask what stopped working; works in safe mode too); *Report a problem…* (opens the app with that dialog); *Open Dynamis Power*; *Hide this icon*.
 - Every change goes to the service exactly as the app sends it (polkit, safe mode and every rail apply). In safe mode the controls are greyed out.
 - *Hide this icon*, or the switch on Modes, turns it off; the choice is remembered per person.
 

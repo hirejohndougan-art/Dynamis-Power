@@ -542,6 +542,7 @@ export const en = {
   forget_all_body: "Learned settings go back to their original values and every test result is deleted. Learning starts again from the beginning.",
   safety_safe_mode: "Safe mode",
   safety_safe_mode_desc: "While on, Dynamis Power changes nothing. Restoring original settings still works. It also switches on by itself after three unclean shutdowns in a row.",
+  safety_report_desc: "Saves one file with everything useful (personal details removed) and opens the project's page for a new report, filled in.",
   safety_kernel: "Watching for trouble",
   safety_kernel_on: "The kernel log is watched all the time. If Wi-Fi, a USB device, sound, the screen or a disk reports trouble within 10 minutes of a change that could cause it, that change is undone and blocked on this laptop. Trouble with no such change is only noted in Activity.",
   safety_kernel_off: "The kernel log cannot be read here, so trouble after a change is only caught during tests.",

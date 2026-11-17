@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- *Report a problem* is now also in Advanced → Safety and in the panel menu (which opens the app with the dialog, `--report`).
+
 - **Watching for trouble all the time** (everyday problem §1): on every reading the service checks new kernel log records for signs of trouble from Wi-Fi, Bluetooth, sound, graphics, disks, USB or a lockup. Trouble within 10 minutes of a change that could cause it undoes and blocks that change on this laptop; otherwise it is only noted in Activity. Quiet during tests and for two minutes after waking. `kernel_watch` in `Status`; Advanced → Safety says whether the log can be read.
 
 - **Something stopped working** (everyday problem §1), on the Dashboard and in the panel menu: undoes every change from the last hour and holds those settings (learning waits) until you say what stopped working: Wi-Fi, Bluetooth, sound, mouse or keyboard, the screen, a disk, sleep, a freeze, or something else. Only the settings that could cause that kind of trouble, and that Dynamis Power changed, are put back and blocked on this laptop; if none were changed, nothing is blocked. The answer goes into the journal and so into *Report a problem*. `SomethingBroke`, `WhatBroke`; `trouble` in `Status`.

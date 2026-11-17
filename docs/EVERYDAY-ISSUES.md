@@ -119,7 +119,7 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 - **"Report a problem"** in Activity, Advanced and the panel menu: builds the existing export (with the privacy filter on), adds the answers from section 1's "Something stopped working", the diagnosis from section 8 and the outside changes from section 4, saves it as one file, and opens a pre-filled issue page on GitHub with a plain summary and no personal data, asking the person to attach the file.
 - **A diagnostic report like `tlp-stat`** (built): `dynamis stat`, also in the app's Export ("Full diagnostic report").
 
-**Status: built** in Activity: *Report a problem* asks what went wrong (optional), saves one text file (journal, results, hardware, settings and the diagnostic report, privacy filter on) to Downloads, and opens the project's new-issue page with the description and a short summary filled in, asking for the file to be attached. Nothing is sent by Dynamis Power itself. Not yet in Advanced or the panel menu.
+**Status: built** in Activity: *Report a problem* asks what went wrong (optional), saves one text file (journal, results, hardware, settings and the diagnostic report, privacy filter on) to Downloads, and opens the project's new-issue page with the description and a short summary filled in, asking for the file to be attached. Nothing is sent by Dynamis Power itself. Also in Advanced → Safety and in the panel menu (*Report a problem…* opens the app with that dialog).
 
 ## Follow-up: needs research, hardware or a decision
 

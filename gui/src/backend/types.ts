@@ -315,6 +315,8 @@ export interface Backend {
   /** "It feels slow": undo what costs speed for the rest of the day. */
   feelsSlow(lasting: boolean): Promise<FeelsSlowResult>;
   endRelief(): Promise<void>;
+  /** The screen to open at start (`activity:report` from the panel menu), if any. */
+  launchView?(): Promise<string | null>;
   /** "Something stopped working": undo the last hour and hold it. */
   somethingBroke(): Promise<Trouble>;
   /** What stopped working; `none` if nothing after all. Returns what was blocked. */

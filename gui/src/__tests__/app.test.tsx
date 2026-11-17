@@ -491,4 +491,14 @@ describe("the app with the stand-in backend", () => {
     const r = await backend.whatBroke("screen");
     expect(r.blocked).toHaveLength(0);
   });
+  it("opens Report a problem from Advanced", async () => {
+    window.location.hash = "#advanced:safety";
+    render(<App />);
+    const link = await screen.findByRole("link", { name: "Report a problem…" }, { timeout: 4000 });
+    expect(link.getAttribute("href")).toBe("#activity:report");
+    cleanup();
+    window.location.hash = "#activity:report";
+    render(<App />);
+    expect(await screen.findByRole("dialog", { name: "Report a problem", hidden: true }, { timeout: 4000 })).toBeTruthy();
+  });
 });
