@@ -234,7 +234,8 @@ fieldset.choice { border: 0; padding: 0; margin-inline: 0; min-width: 0; }
 .plain-list { list-style: none; margin: 0; padding: 0; }
 
 /* The quick panel (panel icon, left click): a small window of its own. */
-.quick { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; min-height: 100vh; box-sizing: border-box; background: var(--surface); }
+.quick { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; min-height: 100vh; box-sizing: border-box; background: var(--surface); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.45; text-align: left; }
+.quick .segment { color: var(--text); }
 .quick-battery { margin: 0; font-size: 22px; font-weight: 700; }
 .quick-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .quick-modes .segment { min-height: 44px; padding: 6px; font-size: 13px; text-align: center; }
