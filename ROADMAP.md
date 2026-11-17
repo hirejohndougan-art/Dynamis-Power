@@ -184,6 +184,31 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 
 **Not taken, by design:** a trained prediction model (XGBoost) choosing settings by itself. Dynamis Power decides from measured, repeatable tests that can each be explained ("saves 0.4 W, no lag") and undone; a model's choices cannot. Calendar access for predictive hibernation (personal data the service does not need).
 
+## To do: beat TLP on savings
+
+Where the remaining watts are, and what TLP cannot do because it applies fixed settings blind and knows nothing of the desktop. Build order: kernel side first (A), then through the desktop (B, decision [0027](docs/decisions/0027-acting-through-the-desktop.md)), then advice (C). Every change is runtime-only, journaled and put back by Restore; nothing here is on the never-touch list.
+
+**A. Kernel side**
+
+- [ ] **Keyboard light off on battery** (`/sys/class/leds/*::kbd_backlight`), back as it was when plugged in; the person's keys win between changes. Devices screen.
+- [ ] **SSD power states**: an NVMe drive whose power-state switching (APST) is held off by its latency tolerance (`power/pm_qos_latency_tolerance_us` = 0) gets the kernel's default back, as a tested setting. Drives the kernel already restricts are left alone.
+- [ ] **AMD screen colour power saving** (`amdgpu/panel_power_savings`) in Longer battery mode, as power-profiles-daemon does; a setting in Advanced, not learned (its cost is how colours look, which cannot be measured).
+- [ ] **Wake-ups per app**: how often each app wakes the processor (context switches per second), on the Apps screen, with a note for apps that wake it a lot.
+- [ ] **Deep idle check** (Learning screen, *Check deep idle*): with the screen off for a minute, how much of the time the processor package reached its deepest idle states (Intel `pmc_core`), and the likely blockers in plain words: devices still awake, devices whose link never sleeps, and on Intel the parts reporting a short latency tolerance.
+- [ ] **Deeper link sleep per device** (PCIe L1.1/L1.2 substates, `link/l1_*`), a Devices switch, off by default and Experimental: each capable device that is not graphics and not excluded by a quirk; trouble in the kernel log within 10 minutes undoes it and blocks it. The deep idle check suggests it when links are the blocker.
+
+**B. Through the desktop** (the session agent, decision 0027)
+
+- [ ] **Pause file indexing on battery** (KDE Baloo, GNOME Tracker, through their own pause and resume calls), resumed when plugged in or when the agent stops.
+- [ ] **Lower screen refresh rate on battery**: fast screens (above 60 Hz) go to the slowest mode at the same size that is at least 60 Hz, and back when plugged in. KDE: `kscreen-doctor`; GNOME: Mutter's display configuration, applied as temporary.
+- [ ] **Dark style on battery for OLED screens** (found from the screen's EDID), opt-in, back when plugged in.
+- [ ] **Bluetooth off when nothing has been connected for 10 minutes on battery** (BlueZ), a radio rule, back on with one click.
+
+**C. Advice**
+
+- [ ] **Video decoded by the processor**: during video, if the processor stays busy while the graphics chip is idle, say how to turn on hardware video decoding in the browser.
+- [ ] **Screen dimming**: when the screen is the biggest user of the battery, suggest a shorter dim and off time in the desktop's own power settings (advice only; those are the person's settings).
+
 ## To do: catch up on maker-specific support
 
 TLP's lead is years of per-maker knowledge. The facts behind it (which kernel file a laptop uses, which setting misbehaves on which model) are public; the code and config text are GPL and are not copied. Knowledge matters less for *savings* here, because Dynamis Power measures instead of trusting presets; it matters for *safety* (what never to touch on a given laptop) and *reach* (controls only some makers offer). Five steps, in order:

@@ -30,6 +30,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0024](0024-gnome-extension-in-the-package.md) | The GNOME extension ships in the package |
 | [0025](0025-hibernate-on-low-battery-is-advice.md) | Sleep that turns into hibernation is advice only |
 | [0026](0026-learning-per-activity.md) | Learning per activity |
+| [0027](0027-acting-through-the-desktop.md) | Acting through the desktop |
 
 ## Adding a record
 
