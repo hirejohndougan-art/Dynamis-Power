@@ -18,6 +18,7 @@ Start here. Each document has one job, so you can read only what you need.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The pieces, how they talk, and where the code lives |
 | [DESIGN.md](DESIGN.md) | Profiles, auto mode, and how the learning works |
 | [SETTINGS.md](SETTINGS.md) | Every setting the app can tune, with its risk tier |
+| [HARDWARE-COVERAGE.md](HARDWARE-COVERAGE.md) | Every maker-specific power control in the kernel, and what Dynamis Power does with it |
 | [UI.md](UI.md) | The app's screens, Advanced area, logs and export |
 | [MEASUREMENT.md](MEASUREMENT.md) | How power and responsiveness are measured, and why it's hard |
 | [SHARING.md](SHARING.md) | The results format and the submission service |

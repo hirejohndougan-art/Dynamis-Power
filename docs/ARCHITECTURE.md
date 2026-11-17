@@ -55,7 +55,7 @@ dynamis set cpu.epp balance_power --trial 60
 | `dynamis` **(built)** | user (root for changes) | Command line: inventory, status, logs, settings, restore, journal, quirks, safe mode, auto mode | `daemon/crates/dynamis-cli/` |
 | App **(built: Home, Battery, Activity, Advanced)** | user, on demand | Dashboard and controls; talks to `dynamisd` through `dynamis-client` | `gui/`, `daemon/crates/dynamis-client/` |
 | Results schema | — | Format of shared results | `schema/` |
-| Submission service | Cloudflare Worker | Receives opt-in results, validates, stores, publishes summaries | separate repository (planned) |
+| Results repository | GitHub issue form and Actions | Receives opt-in results through an issue form, validates, stores, publishes signed summaries (decision 0028) | separate repository (planned) |
 
 **Why the network is split out:** the root daemon never opens a network connection. `dynamis-sync` runs without privileges, verifies signatures, and hands verified files to the daemon. A bug in network code therefore cannot become a root exploit.
 

@@ -4,23 +4,28 @@ Users can optionally share what worked on their laptop, so others with the same 
 
 ## Flow
 
+Decided in [decision 0028](decisions/0028-sharing-through-github.md) (which replaced the earlier Cloudflare plan, 0005).
+
 ```
- App (user clicks "Share")
-   └─ shows exactly what will be sent
-        └─ dynamis-sync uploads over HTTPS
-             └─ Submission service (Cloudflare Worker)
-                  ├─ validates against schema/v1 (rejects unknown fields)
-                  ├─ rate-limits per anonymous install ID
-                  └─ stores in database (Cloudflare D1)
-                       └─ nightly job
-                            ├─ combines submissions per laptop model, drops outliers
-                            └─ publishes summaries to a public data repository
- App on another laptop
-   └─ downloads its model's summary (no account needed)
-        └─ uses it as a starting point, then re-verifies locally
+ App (person clicks "Share my results")
+   └─ shows exactly what will be sent, and that the GitHub account will be shown
+        └─ opens the results repository's "Share results" issue form in the browser
+           (results filled in, or on the clipboard when too long for a web address)
+             └─ the person signs in to GitHub and submits
+                  └─ GitHub Action on the new issue
+                       ├─ validates against schema/v1 (rejects unknown fields)
+                       ├─ account at least 30 days old; one account counts once per model
+                       └─ commits submissions/<model>/<issue>.json, closes the issue
+                            └─ nightly Action
+                                 ├─ combines per laptop model (3 accounts or more), drops outliers
+                                 └─ signs and publishes summaries/<model>.json
+ Another laptop
+   └─ dynamis-sync downloads its model's summary (no account needed)
+        └─ checks the signature, then the service uses it as a starting point
+           and re-verifies every setting locally
 ```
 
-No GitHub account is needed to submit or download. The summaries are public and auditable; raw submissions are not published.
+Submitting needs a GitHub account; downloading does not. Dynamis Power never handles a GitHub password or token: the person submits in their own browser. Submissions are public and show the account that made them.
 
 ## The results format
 
@@ -42,12 +47,12 @@ Key rules:
 
 ## Abuse protection
 
-Strict schema validation, per-install rate limits, outlier rejection when combining, a minimum number of independent reports before a result appears in a summary, and local re-verification on every machine. A shared result can never be applied without the receiving machine confirming it.
+Strict schema validation, accounts at least 30 days old, one account counting once per laptop model, outlier rejection when combining, at least 3 different accounts before a result appears in a summary, signed summaries, and local re-verification on every machine. A shared result can never be applied without the receiving machine confirming it.
 
 ## Deletion
 
-Each submission carries a random anonymous install ID. The app's "Delete my submissions" button asks the service to delete every record with that ID. Summaries rebuilt afterwards no longer include them.
+Comment `/delete` on your own submission issue, or open a "Delete my results" issue in the results repository: an Action removes every file submitted from your account and rebuilds the affected summaries. The app's *Delete my submissions* button opens that page.
 
 ## Status
 
-Planned for phase 8. The schema exists now so that the app's internal experiment records use the same shape from the start.
+Planned for phase 8; how it works is decided (0028), nothing is built yet. The schema exists now so that the app's internal experiment records use the same shape from the start.

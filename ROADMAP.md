@@ -178,7 +178,7 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 - [x] **What wakes the laptop** (built: wake-up counts read before and after each sleep, `sleeps.json` keeps the last 30, Battery → "While asleep" shows the drain per hour and what woke it; `Sleeps`): list wake-up sources and wake reasons after sleep (`/sys/power/wakeup_sources`, the kernel log), to explain overnight drain.
 - [x] **Sleep that turns into hibernation when the battery runs low:** advice only, never set up by the service ([0025](docs/decisions/0025-hibernate-on-low-battery-is-advice.md)).
 - [x] **Signals for the app** (built as the standard `PropertiesChanged` signals the service already sends, which the app now listens to and refreshes on at once; separate named signals were not needed): `ThermalAlert`, `AppDetected`, `LearningProgress` on D-Bus, so the app and panel icon update without asking.
-- [ ] **Shared hardware profiles** (phase 8): a new laptop starts from what similar laptops learned; still opt-in, through the separate signed helper, publishing only per-model results (as in `schema/`), never per-person data. Federated averaging of model weights is not needed: the results are already small, per-setting measurements.
+- [ ] **Shared hardware profiles** (phase 8; how it works is decided in [0028](docs/decisions/0028-sharing-through-github.md): a public GitHub repository, submitting through an issue form in the browser, which needs a GitHub account): a new laptop starts from what similar laptops learned; still opt-in, through the separate signed helper, publishing only per-model results (as in `schema/`), never per-person data. Federated averaging of model weights is not needed: the results are already small, per-setting measurements.
 
 **Left out, by the safety rules** ([docs/SAFETY.md](docs/SAFETY.md)): changing graphics or processor voltage, clocks beyond the driver's own range, fan speed, thermal trip points and switching processor cores off (rule 5); the service talking to the network (rule 6).
 
@@ -217,15 +217,15 @@ TLP's lead is years of per-maker knowledge. The facts behind it (which kernel fi
 
 **1. Coverage inventory** (one sitting). Go through the kernel's own documentation for every laptop maker's driver (`Documentation/ABI/testing/sysfs-platform-*`, `sysfs-class-power`, `sysfs-platform_profile`, the ThinkPad and ASUS admin guides) and list every power-related control in `docs/HARDWARE-COVERAGE.md`: maker, kernel driver, file, what it does, how common the laptops are, and its status here (supported, to add, not allowed by the safety rules, or needs a decision).
 
-- [ ] `docs/HARDWARE-COVERAGE.md` with the matrix, ranked by how common the laptops are
-- [ ] A decision record for controls the safety rules do not settle clearly, such as processor power limits through maker drivers (ASUS `asus-armoury` PPT, Lenovo Legion), maker fan or "silent" modes, and panel overdrive
+- [x] [`docs/HARDWARE-COVERAGE.md`](docs/HARDWARE-COVERAGE.md) with the matrix, ranked by how common the laptops are (kernel tree of 16 November 2026)
+- [ ] A decision record for controls the safety rules do not settle clearly ("Needs a decision" in HARDWARE-COVERAGE.md): processor and graphics power limits through maker drivers (ASUS PPT, Lenovo gaming PPT, Uniwill cTGP), maker fan and performance modes, screen modes (panel overdrive, Mini LED), turning a second graphics chip off, and a charge limit by "inhibit charge" for HP laptops
 
 Already supported: the standard charge limit (`charge_control_end_threshold`: ThinkPad, ASUS, Dell, System76, Framework, MSI, Toshiba and most recent kernels), IdeaPad conservation mode, LG, Samsung, Sony and Huawei charge controls, the firmware power mode (`platform_profile`, every maker that offers it), Intel and AMD graphics speed, and the generic processor, device, Wi-Fi, disk and radio controls.
 
 **2. Close the common gaps** (two to three sittings, most common makers first: Lenovo, HP, Dell, ASUS, Acer, MSI, then Framework, Microsoft Surface, Chromebooks and the rest). Each control is a setting plugin with probe, read, apply and revert, a risk tier, a fixture and tests, like every other setting.
 
-- [ ] Charge start thresholds and charge types (`charge_control_start_threshold`, `charge_types`: Standard / Long Life / Adaptive / Custom) where the standard limit alone is not enough
-- [ ] Maker controls the inventory finds for the top six makers
+- [ ] Charge types (`charge_types`: Standard / Long Life / Adaptive / Custom) where the standard limit alone is not enough; also replaces IdeaPad's deprecated `conservation_mode` route. (The start threshold is already supported: `battery.charge_start`.)
+- [ ] Maker controls the inventory finds for the top six makers: USB charging while off or asleep (Lenovo, Samsung, LG, Toshiba, Wilco), ASUS `mcu_powersave`, keyboard light timeout (Dell, Toshiba), Panasonic and older MSI eco mode (the "To add" list in HARDWARE-COVERAGE.md)
 - [ ] Each new control in the TLP import map where TLP has an equivalent line
 
 **3. Seed the quirk list** (one sitting, then ongoing). Turn public reports into quirk entries with a source link each: kernel bug tracker, distribution wikis (the Arch wiki's per-model pages), maker forums and TLP's public issue tracker. Each entry gives the models, the setting, the plain reason, and a kernel or firmware range where a fix is known (`kernel_below`, `firmware_before`), so it lifts itself when the fix arrives.
@@ -240,7 +240,7 @@ Already supported: the standard charge limit (`charge_control_end_threshold`: Th
 
 **5. Stay current** (ongoing).
 
-- [ ] A monthly check of new kernel releases' documentation changes and other tools' release notes, for new maker controls and fixed bugs (facts only), turned into issues on this list
+- [x] A monthly check of new kernel releases' documentation changes and other tools' release notes, for new maker controls and fixed bugs (facts only), turned into issues labelled `hardware-coverage` (a scheduled task on the 2nd of each month, from December 2026; it only opens issues, never changes code)
 - [ ] Sharing (phase 8): per-model results show which settings fail on which models across many laptops, the long-term source of quirks
 
 ## Realistic expectations

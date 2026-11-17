@@ -67,7 +67,7 @@ A kill switch for a setting everywhere is a quirk with an empty `match` and no `
 | --- | --- | --- |
 | Release signing key | Signing packages | Offline, with a backup; public key in the repository (to be added) |
 | Quirk list signing key | Signing the quirk feed | Separate from the release key; public key compiled into the app |
-| Submission service account | Cloudflare Worker and D1 | Owned by a project account, not a personal one, with a second admin |
+| Results repository | Public GitHub repository with Actions (decision 0028) | Owned by the project organisation, not a personal account, with a second admin; the summary signing key is an Actions secret |
 | GitHub repository | Code and data | At least two people with admin rights once there is a team |
 
 Losing a signing key means shipping a new public key in an app update and rotating. Never store private keys in the repository.

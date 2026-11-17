@@ -8,7 +8,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0002](0002-tauri-react-gui.md) | Tauri and React for the app |
 | [0003](0003-mit-licence.md) | MIT licence |
 | [0004](0004-standard-power-profiles-interface.md) | Serve the standard power-profiles D-Bus interface |
-| [0005](0005-sharing-service.md) | Cloudflare Worker and D1 for shared results |
+| [0005](0005-sharing-service.md) | Cloudflare Worker and D1 for shared results (superseded by 0028) |
 | [0006](0006-no-llm-in-control-loop.md) | No language model in the control loop |
 | [0007](0007-plain-file-change-journal.md) | Plain files for the change journal |
 | [0008](0008-standard-profiles-through-the-engine.md) | Standard profiles go through the change engine |
@@ -31,6 +31,7 @@ Each file records one significant decision: the context, what was decided, why, 
 | [0025](0025-hibernate-on-low-battery-is-advice.md) | Sleep that turns into hibernation is advice only |
 | [0026](0026-learning-per-activity.md) | Learning per activity |
 | [0027](0027-acting-through-the-desktop.md) | Acting through the desktop |
+| [0028](0028-sharing-through-github.md) | Sharing results through a public GitHub repository (supersedes 0005) |
 
 ## Adding a record
 

@@ -1,6 +1,6 @@
 # 0005. Cloudflare Worker and D1 for shared results
 
-- **Status:** Accepted
+- **Status:** Superseded by [0028](0028-sharing-through-github.md)
 - **Date:** 2026-11-15
 
 ## Context

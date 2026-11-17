@@ -21,13 +21,15 @@ Sharing is off by default. Before anything is sent, the app shows you every fiel
 
 **What is never shared:** app names, what you use your computer for, when you use it, your location, network names, serial numbers, usernames, or anything else that identifies you.
 
-**Anonymous install ID.** Each install creates a random ID that is not linked to you, your account or your hardware serial numbers. It exists only so you can delete your submissions later.
+**You submit through GitHub, and your GitHub account is shown.** Sharing opens a form on GitHub in your browser; you sign in and press Submit yourself. Dynamis Power never sees your GitHub password or a token. Your submission is public, and GitHub shows the account that made it. The results inside contain nothing personal. Downloading other people's shared results needs no account.
+
+**Anonymous install ID.** Each install creates a random ID that is not linked to you or your hardware serial numbers. It lets several submissions from one install count as one report.
 
 ## Your controls
 
-- **Delete my submissions:** one button in the app removes everything sent from your install.
+- **Delete my submissions:** the app's button opens a page on GitHub; commenting `/delete` on your submission, or opening a "Delete my results" issue, removes every file you submitted and rebuilds the summaries without them.
 - **Stop sharing:** turn sharing off at any time; nothing more is sent.
 
 ## Retention
 
-Raw submissions are kept for a limited period, to be set before launch, and then only the combined per-model summaries remain. The summaries are public and contain no install IDs.
+Submissions are public files in the results repository until you delete them; how long they are kept will be set before launch. The per-model summaries are public and contain no install IDs or account names.
