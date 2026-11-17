@@ -190,9 +190,9 @@ Where the remaining watts are, and what TLP cannot do because it applies fixed s
 
 **A. Kernel side**
 
-- [ ] **Keyboard light off on battery** (`/sys/class/leds/*::kbd_backlight`), back as it was when plugged in; the person's keys win between changes. Devices screen.
-- [ ] **SSD power states**: an NVMe drive whose power-state switching (APST) is held off by its latency tolerance (`power/pm_qos_latency_tolerance_us` = 0) gets the kernel's default back, as a tested setting. Drives the kernel already restricts are left alone.
-- [ ] **AMD screen colour power saving** (`amdgpu/panel_power_savings`) in Longer battery mode, as power-profiles-daemon does; a setting in Advanced, not learned (its cost is how colours look, which cannot be measured).
+- [x] **Keyboard light off on battery** (`/sys/class/leds/*::kbd_backlight`), back as it was when plugged in; the person's keys win between changes. Devices screen.
+- [x] **SSD power states**: an NVMe drive whose power-state switching (APST) is held off by its latency tolerance (`power/pm_qos_latency_tolerance_us` = 0) gets the kernel's default back, as a tested setting. Drives the kernel already restricts are left alone.
+- [x] **AMD screen colour power saving** (`amdgpu/panel_power_savings`) in Longer battery mode, as power-profiles-daemon does; a setting in Advanced, not learned (its cost is how colours look, which cannot be measured).
 - [ ] **Wake-ups per app**: how often each app wakes the processor (context switches per second), on the Apps screen, with a note for apps that wake it a lot.
 - [ ] **Deep idle check** (Learning screen, *Check deep idle*): with the screen off for a minute, how much of the time the processor package reached its deepest idle states (Intel `pmc_core`), and the likely blockers in plain words: devices still awake, devices whose link never sleeps, and on Intel the parts reporting a short latency tolerance.
 - [ ] **Deeper link sleep per device** (PCIe L1.1/L1.2 substates, `link/l1_*`), a Devices switch, off by default and Experimental: each capable device that is not graphics and not excluded by a quirk; trouble in the kernel log within 10 minutes undoes it and blocks it. The deep idle check suggests it when links are the blocker.

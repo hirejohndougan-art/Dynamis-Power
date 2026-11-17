@@ -41,6 +41,8 @@ pub fn all() -> &'static [&'static dyn Setting] {
         &BatteryChargeLimit,
         &BatteryChargeStart,
         &SystemMemSleep,
+        &NvmePowerStates,
+        &AmdPanelPowerSavings,
     ]
 }
 
@@ -1639,6 +1641,146 @@ impl Setting for DiskApm {
             .into_iter()
             .map(|(d, _)| Write {
                 path: format!("ata-apm:{d}"),
+                contents: value.into(),
+            })
+            .collect())
+    }
+}
+
+// --- Beating TLP: SSD power states, AMD screen colour saving --------------
+
+/// NVMe drives' own power states (APST). The kernel lets a drive drop into
+/// deeper idle states only up to its latency tolerance; 0 holds APST off.
+/// `on` gives drives held off the kernel's default tolerance (100 ms) back;
+/// `off` holds them off. Left alone where the kernel command line sets the
+/// tolerance (someone chose it, often for a drive that misbehaves).
+pub struct NvmePowerStates;
+
+const NVME_DEFAULT_US: &str = "100000";
+
+impl NvmePowerStates {
+    fn paths(root: &SysRoot) -> Vec<String> {
+        let mut v: Vec<String> = root
+            .list_dir("/sys/class/nvme")
+            .into_iter()
+            .filter(|n| {
+                n.strip_prefix("nvme")
+                    .is_some_and(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit()))
+            })
+            .map(|n| format!("/sys/class/nvme/{n}/power/pm_qos_latency_tolerance_us"))
+            .filter(|p| root.exists(p))
+            .collect();
+        v.sort();
+        v
+    }
+}
+
+impl Setting for NvmePowerStates {
+    fn id(&self) -> &'static str {
+        "storage.nvme_power_states"
+    }
+    fn label(&self) -> &'static str {
+        "SSD power saving states"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if root
+            .read_string("/proc/cmdline")
+            .is_ok_and(|c| c.contains("nvme_core.default_ps_max_latency_us"))
+        {
+            return unsupported("set on the kernel command line; left as chosen");
+        }
+        if Self::paths(root).is_empty() {
+            return unsupported("no NVMe drive with power states here");
+        }
+        Probe::Supported {
+            allowed: Allowed::OnOff,
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let mut vals = Vec::new();
+        for p in Self::paths(root) {
+            let v = root.read_string(&p)?;
+            vals.push(if v.trim() == "0" { "off" } else { "on" });
+        }
+        match vals.first() {
+            None => Err(ReadError::Missing),
+            Some(f) if vals.iter().all(|v| v == f) => Ok(f.to_string()),
+            Some(_) => Ok("mixed".into()),
+        }
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        let to = if value == "on" { NVME_DEFAULT_US } else { "0" };
+        Ok(Self::paths(root)
+            .into_iter()
+            .map(|path| Write {
+                path,
+                contents: to.into(),
+            })
+            .collect())
+    }
+}
+
+/// AMD "adaptive backlight modulation": the panel's backlight is lowered and
+/// colours lifted to match, 0 (off) to 4 (strongest). Longer battery mode
+/// uses 3, as power-profiles-daemon does. Not learned: its cost is how
+/// colours look, which cannot be measured.
+pub struct AmdPanelPowerSavings;
+
+impl AmdPanelPowerSavings {
+    fn paths(root: &SysRoot) -> Vec<String> {
+        let mut v: Vec<String> = root
+            .list_dir("/sys/class/drm")
+            .into_iter()
+            .filter(|c| c.starts_with("card") && c.contains("-eDP-") && !c.contains(".."))
+            .map(|c| format!("/sys/class/drm/{c}/amdgpu/panel_power_savings"))
+            .filter(|p| root.exists(p))
+            .collect();
+        v.sort();
+        v
+    }
+}
+
+impl Setting for AmdPanelPowerSavings {
+    fn id(&self) -> &'static str {
+        "display.amd_panel_power_savings"
+    }
+    fn label(&self) -> &'static str {
+        "Screen colour power saving (AMD)"
+    }
+    fn risk(&self) -> RiskTier {
+        RiskTier::UsuallySafe
+    }
+    fn probe(&self, root: &SysRoot) -> Probe {
+        if Self::paths(root).is_empty() {
+            return unsupported("no AMD built-in screen with this control here");
+        }
+        Probe::Supported {
+            allowed: Allowed::Range {
+                min: 0,
+                max: 4,
+                unit: "",
+            },
+        }
+    }
+    fn read(&self, root: &SysRoot) -> ReadResult<String> {
+        let mut vals = Vec::new();
+        for p in Self::paths(root) {
+            vals.push(root.read_string(&p)?.trim().to_string());
+        }
+        match vals.first() {
+            None => Err(ReadError::Missing),
+            Some(f) if vals.iter().all(|v| v == f) => Ok(f.clone()),
+            Some(_) => Ok("mixed".into()),
+        }
+    }
+    fn plan(&self, root: &SysRoot, value: &str) -> Result<Vec<Write>, String> {
+        Ok(Self::paths(root)
+            .into_iter()
+            .map(|path| Write {
+                path,
                 contents: value.into(),
             })
             .collect())

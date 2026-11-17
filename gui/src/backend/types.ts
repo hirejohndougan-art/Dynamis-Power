@@ -415,7 +415,7 @@ export type Unclean = {
 };
 
 export type RadioKind = "bluetooth" | "wlan" | "wwan";
-export type RadioPolicy = { off_on_battery: RadioKind[]; wifi_off_when_wired: boolean; off_at_startup: RadioKind[]; off_when_docked?: RadioKind[] };
+export type RadioPolicy = { off_on_battery: RadioKind[]; wifi_off_when_wired: boolean; off_at_startup: RadioKind[]; off_when_docked?: RadioKind[]; keyboard_light_off_on_battery?: boolean };
 export type RadiosInfo = {
   policy: RadioPolicy;
   radios: { id: string; kind: RadioKind; name: string; off: boolean; hard_off: boolean; managed: boolean }[];
@@ -423,6 +423,8 @@ export type RadiosInfo = {
   wired: boolean;
   /** The laptop is in a dock now. */
   docked?: boolean;
+  /** Keyboard lights the service can switch (0 when there are none). */
+  keyboard_lights?: number;
 };
 
 export type FeelsSlowResult = {

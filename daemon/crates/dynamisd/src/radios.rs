@@ -26,6 +26,8 @@ use serde_json::{json, Value};
 use crate::core::{open_engine, write_atomic};
 
 const FILE: &str = "radios-policy.json";
+/// The keyboard light, handled with the radios (same on-battery rule).
+const KEYBOARD: &str = "keyboard_light";
 const VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -43,6 +45,9 @@ pub struct RadioPolicy {
     /// `DEVICES_TO_DISABLE_ON_DOCK`).
     #[serde(default)]
     pub off_when_docked: Vec<String>,
+    /// The keyboard light off on battery, back when plugged in.
+    #[serde(default)]
+    pub keyboard_light_off_on_battery: bool,
 }
 
 impl RadioPolicy {
@@ -70,6 +75,7 @@ impl RadioPolicy {
         !self.off_on_battery.is_empty()
             || self.wifi_off_when_wired
             || !self.off_when_docked.is_empty()
+            || self.keyboard_light_off_on_battery
     }
 }
 
@@ -152,6 +158,9 @@ impl RadiosState {
         let mut want: BTreeSet<String> = BTreeSet::new();
         if !on_ac {
             want.extend(self.policy.off_on_battery.iter().cloned());
+            if self.policy.keyboard_light_off_on_battery {
+                want.insert(KEYBOARD.into());
+            }
         }
         if self.policy.wifi_off_when_wired && radios::wired_up(root) {
             want.insert("wlan".into());
@@ -197,6 +206,7 @@ impl RadiosState {
         json!({
             "policy": self.policy,
             "radios": list,
+            "keyboard_lights": radios::keyboard_lights(root).len(),
             "wired": radios::wired_up(root),
             "docked": radios::docked(root),
         })
@@ -227,6 +237,20 @@ fn switch(root: &SysRoot, dir: &Path, kinds: &BTreeSet<String>, off: bool, why: 
             return;
         }
     };
+    if kinds.contains(KEYBOARD) {
+        for dir in radios::keyboard_lights(root) {
+            let r = if off {
+                engine.set_kbd_light_off(&dir, why)
+            } else {
+                engine.reset_kbd_light(&dir, why)
+            };
+            match r {
+                Ok(_) | Err(EngineError::Blocked { .. }) => {}
+                Err(EngineError::SafeMode(_)) => return,
+                Err(e) => eprintln!("dynamisd: keyboard light: {e}"),
+            }
+        }
+    }
     for r in radios::scan(root)
         .into_iter()
         .filter(|r| kinds.contains(&r.kind))
@@ -279,6 +303,7 @@ mod tests {
                 wifi_off_when_wired: true,
                 off_at_startup: vec![],
                 off_when_docked: vec![],
+                keyboard_light_off_on_battery: false,
             },
             &root,
             &state,
@@ -304,6 +329,46 @@ mod tests {
         std::fs::write(dir.join("root/sys/class/rfkill/rfkill0/soft"), "1").unwrap();
         r.tick(&root, &state, true);
         assert_eq!(soft(&dir, "rfkill0"), "0");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn keyboard_light_off_on_battery_and_back() {
+        let (dir, root, state) = sandbox("kbd");
+        fixture::kbd_light(&dir.join("root"), "tpacpi::kbd_backlight", 2, 2);
+        let mut r = RadiosState::load(&state);
+        r.set_policy(
+            RadioPolicy {
+                keyboard_light_off_on_battery: true,
+                ..RadioPolicy::default()
+            },
+            &root,
+            &state,
+            true,
+        )
+        .unwrap();
+        let level = || {
+            std::fs::read_to_string(
+                dir.join("root/sys/class/leds/tpacpi::kbd_backlight/brightness"),
+            )
+            .unwrap()
+            .trim()
+            .to_string()
+        };
+        assert_eq!(level(), "2", "plugged in: left alone");
+        r.tick(&root, &state, false);
+        assert_eq!(level(), "0", "on battery: off");
+        r.tick(&root, &state, true);
+        assert_eq!(level(), "2", "plugged in: back");
+        // Turned on by hand on battery: left on, nothing to put back.
+        r.tick(&root, &state, false);
+        std::fs::write(
+            dir.join("root/sys/class/leds/tpacpi::kbd_backlight/brightness"),
+            "1",
+        )
+        .unwrap();
+        r.tick(&root, &state, true);
+        assert_eq!(level(), "1");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -340,6 +405,7 @@ mod tests {
                 wifi_off_when_wired: false,
                 off_at_startup: vec!["bluetooth".into()],
                 off_when_docked: vec![],
+                keyboard_light_off_on_battery: false,
             },
             &root,
             &state,

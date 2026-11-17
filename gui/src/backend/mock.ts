@@ -234,7 +234,7 @@ export function mockBackend(): Backend {
       sleepStep();
     }, SLEEP_MS);
   };
-  let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [], off_when_docked: [] };
+  let radioPolicy: RadioPolicy = { off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [], off_when_docked: [], keyboard_light_off_on_battery: false };
   let learnHeavy = false;
   // The battery drains slowly on battery and fills when "plugged in", so
   // the panel icon's fill moves as in real use.
@@ -571,10 +571,11 @@ export function mockBackend(): Backend {
       }
       devicePolicy = p;
     },
-    radios: async () => delay({ policy: { ...radioPolicy }, radios: [{ id: "rfkill0", kind: "bluetooth", name: "hci0", off: radioPolicy.off_on_battery.includes("bluetooth"), hard_off: false, managed: radioPolicy.off_on_battery.includes("bluetooth") }, { id: "rfkill1", kind: "wlan", name: "phy0", off: false, hard_off: false, managed: false }], wired: false }),
+    radios: async () => delay({ policy: { ...radioPolicy }, radios: [{ id: "rfkill0", kind: "bluetooth", name: "hci0", off: radioPolicy.off_on_battery.includes("bluetooth"), hard_off: false, managed: radioPolicy.off_on_battery.includes("bluetooth") }, { id: "rfkill1", kind: "wlan", name: "phy0", off: false, hard_off: false, managed: false }], wired: false, keyboard_lights: 1 }),
     setRadioPolicy: async (p) => {
       refuse();
       if (p.off_on_battery.includes("bluetooth") && !radioPolicy.off_on_battery.includes("bluetooth")) log({ event: "radio", id: "rfkill0", label: "Bluetooth", from: "on", to: "off", reason: "on battery" });
+      if (p.keyboard_light_off_on_battery && !radioPolicy.keyboard_light_off_on_battery) log({ event: "keyboard-light", id: "/sys/class/leds/asus::kbd_backlight", label: "Keyboard light", from: "2", to: "0", reason: "on battery" });
       radioPolicy = { ...p };
     },
     feelsSlow: async (lasting) => {

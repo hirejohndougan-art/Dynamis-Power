@@ -105,7 +105,7 @@ function DeviceLists(props: { locked: boolean; run: (a: () => Promise<string | v
 function Radios(props: { locked: boolean; hasBattery: boolean; run: (a: () => Promise<string | void>) => void }) {
   const info = useLoad<RadiosInfo>(() => backend.radios(), []);
   const d = info.data;
-  if (!d || d.radios.length === 0) return null;
+  if (!d || (d.radios.length === 0 && !d.keyboard_lights)) return null;
   const kinds = Array.from(new Set(d.radios.map((r) => r.kind)));
   const set = (p: RadiosInfo["policy"]) =>
     props.run(async () => {
@@ -131,6 +131,14 @@ function Radios(props: { locked: boolean; hasBattery: boolean; run: (a: () => Pr
                 onChange={(on) => set({ ...d.policy, off_on_battery: toggle(d.policy.off_on_battery, k, on) })}
               />
             ))}
+        {props.hasBattery && (d.keyboard_lights ?? 0) > 0 && (
+          <Switch
+            checked={!!d.policy.keyboard_light_off_on_battery}
+            disabled={props.locked}
+            label={t("radio_keyboard_off_on_battery")}
+            onChange={(on) => set({ ...d.policy, keyboard_light_off_on_battery: on })}
+          />
+        )}
         {kinds.includes("wlan") && (
           <Switch
             checked={d.policy.wifi_off_when_wired}

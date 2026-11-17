@@ -231,6 +231,13 @@ struct RadiosTouched {
     soft: BTreeMap<String, String>,
 }
 
+/// Keyboard lights switched off by rule, with their brightness before.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct KbdTouched {
+    v: u32,
+    brightness: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Blocked {
     v: u32,
@@ -1167,6 +1174,82 @@ impl Engine {
         Ok(n)
     }
 
+    // --- Keyboard light ----------------------------------------------------
+
+    /// Switch a keyboard light (`/sys/class/leds/<name>`) off, keeping its
+    /// brightness to put back. Refused in safe mode and while
+    /// `keyboard.light` is blocked. Returns whether anything changed.
+    pub fn set_kbd_light_off(&mut self, dir: &str, reason: &str) -> Result<bool> {
+        if let Some(why) = self.safe_mode() {
+            return Err(EngineError::SafeMode(why));
+        }
+        if let Some(why) = self.refused("keyboard.light") {
+            return Err(EngineError::Blocked {
+                id: "keyboard.light".into(),
+                reason: why,
+            });
+        }
+        let path = format!("{dir}/brightness");
+        let current = self
+            .root
+            .read_string(&path)
+            .map_err(|e| EngineError::Unsupported(format!("{path}: {e}")))?
+            .trim()
+            .to_string();
+        if current == "0" {
+            return Ok(false);
+        }
+        if self.dry_run() {
+            self.log("would", "keyboard.light", Some(&current), Some("0"), reason)?;
+            return Ok(false);
+        }
+        let file = self.dir.join("keyboard-light.json");
+        let mut t: KbdTouched = read_json(&file).unwrap_or_default();
+        if !t.brightness.contains_key(dir) {
+            t.v = STATE_FORMAT_VERSION;
+            t.brightness.insert(dir.to_string(), current.clone());
+            write_json(&file, &t)?;
+        }
+        self.log("keyboard-light", dir, Some(&current), Some("0"), reason)?;
+        self.write_device(&path, "0")?;
+        Ok(true)
+    }
+
+    /// Put a keyboard light back to its brightness before the rule, and
+    /// forget it. Works in safe mode. Returns whether it changed.
+    pub fn reset_kbd_light(&mut self, dir: &str, reason: &str) -> Result<bool> {
+        let file = self.dir.join("keyboard-light.json");
+        let mut t: KbdTouched = read_json(&file).unwrap_or_default();
+        let Some(original) = t.brightness.remove(dir) else {
+            return Ok(false);
+        };
+        write_json(&file, &t)?;
+        let path = format!("{dir}/brightness");
+        let Ok(current) = self.root.read_string(&path) else {
+            return Ok(false);
+        };
+        // The person turned it on by hand meanwhile: theirs wins.
+        if current.trim() != "0" || current.trim() == original {
+            return Ok(false);
+        }
+        self.log("keyboard-light", dir, Some("0"), Some(&original), reason)?;
+        self.write_device(&path, &original)?;
+        Ok(true)
+    }
+
+    /// Put every keyboard light back (Restore).
+    pub fn restore_kbd_lights(&mut self) -> Result<usize> {
+        let t: KbdTouched = read_json(&self.dir.join("keyboard-light.json")).unwrap_or_default();
+        let mut n = 0;
+        for dir in t.brightness.keys() {
+            if self.reset_kbd_light(dir, "restore")? {
+                n += 1;
+            }
+        }
+        let _ = fs::remove_file(self.dir.join("keyboard-light.json"));
+        Ok(n)
+    }
+
     /// Put every changed setting back to its original value. Works in safe
     /// mode and on blocked settings. Returns (id, original, ok) per setting
     /// that needed changing. Also puts app CPU weights back.
@@ -1177,6 +1260,7 @@ impl Engine {
         self.restore_app_weights()?;
         self.restore_device_power()?;
         self.restore_radios()?;
+        self.restore_kbd_lights()?;
         let mut done = Vec::new();
         for (id, original) in self.baseline() {
             let Some(s) = settings::by_id(&id) else {

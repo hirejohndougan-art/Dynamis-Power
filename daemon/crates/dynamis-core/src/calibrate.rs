@@ -390,6 +390,7 @@ pub fn candidates(setting: &str) -> &'static [&'static str] {
         "storage.sata_alpm" => &["med_power_with_dipm"],
         "wifi.power_save" => &["on"],
         "gpu.dgpu_runtime_pm" => &["on"],
+        "storage.nvme_power_states" => &["on"],
         // cpu.turbo and cpu.max_perf_pct are tuned together: crate::tune.
         _ => &[],
     }

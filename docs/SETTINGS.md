@@ -37,14 +37,15 @@ Some firmware expects either `platform.profile` or `cpu.epp`, not both. Each plu
 | `gpu.min_freq` | Intel graphics lowest speed (TLP's `INTEL_GPU_MIN_FREQ`) | `/sys/class/drm/cardN/gt_min_freq_mhz`, the same steps; never above the top speed now | Usually safe |
 | `gpu.dgpu_runtime_pm` | A second graphics chip sleeps when idle (TLP's runtime PM for the discrete GPU) | PCI `power/control` of display controllers with `boot_vga` = 0 (never the chip driving the screen). Learning tests `on`; left to supergfxctl while it runs | Usually safe |
 | `gpu.amd_power_level` | AMD graphics power level (`auto`, `low`, `high`) | `/sys/class/drm/card*/device/power_dpm_force_performance_level` | Usually safe |
+| `display.amd_panel_power_savings` | AMD screen colour power saving (adaptive backlight modulation), 0 off to 4 strongest; Longer battery mode uses 3, as power-profiles-daemon does. Not learned: its cost is how colours look | `/sys/class/drm/card*-eDP-*/amdgpu/panel_power_savings` | Usually safe |
 | `kbd.backlight` | Keyboard backlight | `/sys/class/leds/*kbd_backlight*/brightness` | Safe |
 
 ## Storage
 
 | ID | What it controls | Typical interface | Risk |
 | --- | --- | --- | --- |
+| `storage.nvme_power_states` | NVMe drives' own idle power states (APST): `on` gives drives held off (latency tolerance 0) the kernel's default tolerance back; `off` holds them off. Learning tests `on`. Not offered where the kernel command line sets `nvme_core.default_ps_max_latency_us` | `/sys/class/nvme/nvme*/power/pm_qos_latency_tolerance_us` | Usually safe |
 | `storage.sata_alpm` | SATA link power | `/sys/class/scsi_host/host*/link_power_management_policy` | Medium usually safe; minimum power risky |
-| `storage.nvme_apst` | NVMe low-power states | Boot parameter | Advisory |
 | `storage.io_scheduler` | I/O scheduler | `/sys/block/*/queue/scheduler` | Safe |
 | `storage.readahead` | Read-ahead size | `/sys/block/*/queue/read_ahead_kb` | Safe |
 | `vm.dirty_writeback` | Write-back batching | `/proc/sys/vm/dirty_writeback_centisecs` | Usually safe |
@@ -126,6 +127,8 @@ Code: `daemon/crates/dynamis-core/src/settings/plugins.rs`. Values are what peop
 | `audio.controller_power` | `on`, `off` | Usually safe |
 | `storage.io_scheduler` | The schedulers every real disk offers | Applied to every real disk (not loop, RAM, zram, device-mapper, RAID or optical) |
 | `gpu.amd_power_level` | `auto`, `low`, `high` | Every AMD card. Manual and profiling levels not offered |
+| `storage.nvme_power_states` | `on`, `off` | Every NVMe drive. `on` writes the kernel's default tolerance (100000 µs) only; it never picks a deeper one |
+| `display.amd_panel_power_savings` | 0–4 | Every AMD built-in screen. Set by Longer battery mode, not learned |
 | `battery.charge_start` | 40–95%, below the charge limit | Refused at or above the limit |
 | `system.mem_sleep` | `s2idle`, `deep` | Risky: needs an explicit yes. Offered only where both exist. Takes effect at the next sleep |
 | `battery.charge_limit` | 50–100% | First battery with `charge_control_end_threshold` |

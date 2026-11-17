@@ -35,6 +35,10 @@ const ONE_FILE_ONLY: &[(&str, &str)] = &[
         "/sys/class/drm/",
         "/device/power_dpm_force_performance_level",
     ),
+    // NVMe power states: the latency tolerance only.
+    ("/sys/class/nvme/", "/power/pm_qos_latency_tolerance_us"),
+    // AMD screen colour power saving (adaptive backlight modulation).
+    ("/sys/class/drm/", "/amdgpu/panel_power_savings"),
     // Intel graphics frequency limits (i915).
     ("/sys/class/drm/", "/gt_max_freq_mhz"),
     ("/sys/class/drm/", "/gt_min_freq_mhz"),
@@ -61,6 +65,12 @@ fn allowed(path: &str) -> bool {
         || crate::settings::plugins::BatteryChargeLimit::is_ideapad_file(path)
     {
         return true;
+    }
+    // Keyboard backlights only, nothing else under leds.
+    if let Some(rest) = path.strip_prefix("/sys/class/leds/") {
+        return rest
+            .strip_suffix("/brightness")
+            .is_some_and(crate::radios::valid_kbd_light);
     }
     if path.starts_with(CGROUP_PREFIX) {
         return path.ends_with(CGROUP_FILE);
@@ -174,6 +184,8 @@ mod tests {
             "nl80211:../x/power_save",
             "nl80211:wlan0/../../power_save",
             "/sys/class/backlight/intel_backlight/max_brightness",
+            "/sys/class/leds/input3::capslock/brightness",
+            "/sys/class/leds/tpacpi::kbd_backlight/trigger",
         ] {
             let err = write_all(
                 &root,

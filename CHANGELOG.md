@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Keyboard light off on battery** (Devices → Radios, off by default): back to its earlier brightness when plugged in, unless you turned it on yourself in between.
+- **SSD power states** (`storage.nvme_power_states`): NVMe drives whose idle power states are held off get the kernel's default back; learning tests it like any setting. Left alone where the kernel command line sets it.
+- **AMD screen colour power saving** (`display.amd_panel_power_savings`): set to 3 in Longer battery mode and 0 in the others, as power-profiles-daemon does; not learned.
+
 - **Battery panel icon**: the panel icon is a battery filled to the charge in the power mode's colour (red at 20% or less, a bolt while charging), updated when UPower reports a change; the percentage shows beside it on panels that show text.
 - **Changing mode while making it last**: on the Dashboard, picking Balanced or Faster while *Make it last* is on asks "Stop making it last?" first; picking them in the panel menu or the desktop's power slider stops it (the menu says so) instead of being silently held back. Longer battery keeps it going.
 

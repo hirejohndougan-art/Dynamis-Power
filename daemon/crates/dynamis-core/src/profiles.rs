@@ -51,14 +51,17 @@ impl Profile {
             Profile::PowerSaver => &[
                 ("platform.profile", &["low-power", "quiet", "cool"]),
                 ("cpu.epp", &["power", "balance_power"]),
+                ("display.amd_panel_power_savings", &["3"]),
             ],
             Profile::Balanced => &[
                 ("platform.profile", &["balanced"]),
                 ("cpu.epp", &["balance_performance"]),
+                ("display.amd_panel_power_savings", &["0"]),
             ],
             Profile::Performance => &[
                 ("platform.profile", &["performance"]),
                 ("cpu.epp", &["performance"]),
+                ("display.amd_panel_power_savings", &["0"]),
             ],
         }
     }
@@ -77,18 +80,21 @@ impl Profile {
                 ("cpu.max_perf_pct", &["60"]),
                 ("cpu.max_freq", &["pct:60"]),
                 ("cpu.governor", CALM),
+                ("display.amd_panel_power_savings", &["3"]),
             ],
             Profile::Balanced => &[
                 ("cpu.turbo", &["on"]),
                 ("cpu.max_perf_pct", &["100"]),
                 ("cpu.max_freq", &["pct:100"]),
                 ("cpu.governor", CALM),
+                ("display.amd_panel_power_savings", &["0"]),
             ],
             Profile::Performance => &[
                 ("cpu.turbo", &["on"]),
                 ("cpu.max_perf_pct", &["100"]),
                 ("cpu.max_freq", &["pct:100"]),
                 ("cpu.governor", &["performance"]),
+                ("display.amd_panel_power_savings", &["0"]),
             ],
         }
     }

@@ -107,8 +107,37 @@ pub fn docked(root: &SysRoot) -> bool {
 }
 
 /// For tests: make an rfkill switch in a fixture.
+/// Keyboard backlights (`/sys/class/leds/*::kbd_backlight`): their
+/// directories, sorted.
+pub fn keyboard_lights(root: &SysRoot) -> Vec<String> {
+    let mut v: Vec<String> = root
+        .list_dir("/sys/class/leds")
+        .into_iter()
+        .filter(|n| valid_kbd_light(n))
+        .map(|n| format!("/sys/class/leds/{n}"))
+        .collect();
+    v.sort();
+    v
+}
+
+/// A keyboard backlight's name (`tpacpi::kbd_backlight`, `asus::kbd_backlight`).
+pub fn valid_kbd_light(name: &str) -> bool {
+    name.ends_with("::kbd_backlight")
+        && !name.contains('/')
+        && !name.contains("..")
+        && name.len() < 64
+}
+
 pub mod fixture {
     use std::path::Path;
+
+    /// A keyboard backlight at `level` of `max`.
+    pub fn kbd_light(root: &Path, name: &str, level: u32, max: u32) {
+        let d = root.join("sys/class/leds").join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("brightness"), format!("{level}\n")).unwrap();
+        std::fs::write(d.join("max_brightness"), format!("{max}\n")).unwrap();
+    }
 
     pub fn add(root: &Path, id: &str, kind: &str, name: &str, soft_off: bool) {
         let d = root.join("sys/class/rfkill").join(id);

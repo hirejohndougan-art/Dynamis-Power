@@ -48,10 +48,12 @@ pub fn suspects(kind: &str) -> &'static [&'static str] {
             "gpu.min_freq",
             "gpu.amd_power_level",
             "gpu.dgpu_runtime_pm",
+            "display.amd_panel_power_savings",
             "pcie.aspm",
             "pci.runtime_pm",
         ],
         "storage" => &[
+            "storage.nvme_power_states",
             "storage.sata_alpm",
             "storage.disk_apm",
             "storage.io_scheduler",
@@ -70,6 +72,7 @@ pub fn suspects(kind: &str) -> &'static [&'static str] {
             "pci.runtime_pm",
             "system.mem_sleep",
             "storage.sata_alpm",
+            "storage.nvme_power_states",
             "gpu.max_freq",
             "gpu.min_freq",
             "gpu.amd_power_level",
@@ -150,6 +153,7 @@ pub fn label(id: &str) -> String {
         "pci.runtime_pm" => "Built-in devices sleeping when idle".into(),
         "devices" => "Devices sleeping when idle".into(),
         "radios" => "Radios switched off by rule".into(),
+        "keyboard.light" => "Keyboard light off on battery".into(),
         _ if crate::radios::valid_id(id) => format!("Radio switch {id}"),
         _ => crate::settings::by_id(id)
             .map(|s| s.label().to_string())

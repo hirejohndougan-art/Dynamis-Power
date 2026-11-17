@@ -1726,3 +1726,77 @@ fn something_stopped_working_undoes_the_last_hour_only_and_holds_it() {
         .unwrap();
     assert!(e.held().is_empty());
 }
+
+mod beat_tlp {
+    use super::*;
+
+    fn put(sb: &Sandbox, path: &str, v: &str) {
+        let f = sb.dir.join("root").join(path.trim_start_matches('/'));
+        std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+        std::fs::write(f, v).unwrap();
+    }
+
+    const NVME0: &str = "/sys/class/nvme/nvme0/power/pm_qos_latency_tolerance_us";
+    const NVME1: &str = "/sys/class/nvme/nvme1/power/pm_qos_latency_tolerance_us";
+
+    #[test]
+    fn ssd_power_states_come_back_and_restore() {
+        let sb = Sandbox::new();
+        put(&sb, NVME0, "0\n");
+        put(&sb, NVME1, "100000\n");
+        let s = settings::by_id("storage.nvme_power_states").unwrap();
+        assert_eq!(s.read(&sb.root()).unwrap(), "mixed");
+        let mut e = sb.engine();
+        assert!(
+            e.apply(&req("storage.nvme_power_states", "on")).is_err(),
+            "drives that differ are left as they are"
+        );
+        put(&sb, NVME1, "0\n");
+        e.apply(&req("storage.nvme_power_states", "on")).unwrap();
+        assert_eq!(sb.file(NVME0).trim(), "100000");
+        assert_eq!(sb.file(NVME1).trim(), "100000");
+        assert!(e.apply(&req("storage.nvme_power_states", "5000")).is_err());
+        e.restore().unwrap();
+        assert_eq!(sb.file(NVME0).trim(), "0");
+        assert_eq!(sb.file(NVME1).trim(), "0");
+    }
+
+    #[test]
+    fn ssd_power_states_left_alone_when_set_at_boot() {
+        let sb = Sandbox::new();
+        put(&sb, NVME0, "0\n");
+        put(
+            &sb,
+            "/proc/cmdline",
+            "quiet nvme_core.default_ps_max_latency_us=0\n",
+        );
+        let s = settings::by_id("storage.nvme_power_states").unwrap();
+        assert!(matches!(s.probe(&sb.root()), Probe::Unsupported { .. }));
+    }
+
+    #[test]
+    fn amd_screen_saving_in_longer_battery_only() {
+        let sb = Sandbox::new();
+        let f = "/sys/class/drm/card1-eDP-1/amdgpu/panel_power_savings";
+        put(&sb, f, "0\n");
+        let mut e = sb.engine();
+        assert!(e
+            .apply(&req("display.amd_panel_power_savings", "5"))
+            .is_err());
+        let root = sb.root();
+        dynamis_core::profiles::apply(
+            &mut e,
+            &root,
+            dynamis_core::profiles::Profile::PowerSaver,
+            "test",
+        );
+        assert_eq!(sb.file(f).trim(), "3");
+        dynamis_core::profiles::apply(
+            &mut e,
+            &root,
+            dynamis_core::profiles::Profile::Balanced,
+            "test",
+        );
+        assert_eq!(sb.file(f).trim(), "0");
+    }
+}
