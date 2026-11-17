@@ -184,6 +184,38 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 
 **Not taken, by design:** a trained prediction model (XGBoost) choosing settings by itself. Dynamis Power decides from measured, repeatable tests that can each be explained ("saves 0.4 W, no lag") and undone; a model's choices cannot. Calendar access for predictive hibernation (personal data the service does not need).
 
+## To do: catch up on maker-specific support
+
+TLP's lead is years of per-maker knowledge. The facts behind it (which kernel file a laptop uses, which setting misbehaves on which model) are public; the code and config text are GPL and are not copied. Knowledge matters less for *savings* here, because Dynamis Power measures instead of trusting presets; it matters for *safety* (what never to touch on a given laptop) and *reach* (controls only some makers offer). Five steps, in order:
+
+**1. Coverage inventory** (one sitting). Go through the kernel's own documentation for every laptop maker's driver (`Documentation/ABI/testing/sysfs-platform-*`, `sysfs-class-power`, `sysfs-platform_profile`, the ThinkPad and ASUS admin guides) and list every power-related control in `docs/HARDWARE-COVERAGE.md`: maker, kernel driver, file, what it does, how common the laptops are, and its status here (supported, to add, not allowed by the safety rules, or needs a decision).
+
+- [ ] `docs/HARDWARE-COVERAGE.md` with the matrix, ranked by how common the laptops are
+- [ ] A decision record for controls the safety rules do not settle clearly, such as processor power limits through maker drivers (ASUS `asus-armoury` PPT, Lenovo Legion), maker fan or "silent" modes, and panel overdrive
+
+Already supported: the standard charge limit (`charge_control_end_threshold`: ThinkPad, ASUS, Dell, System76, Framework, MSI, Toshiba and most recent kernels), IdeaPad conservation mode, LG, Samsung, Sony and Huawei charge controls, the firmware power mode (`platform_profile`, every maker that offers it), Intel and AMD graphics speed, and the generic processor, device, Wi-Fi, disk and radio controls.
+
+**2. Close the common gaps** (two to three sittings, most common makers first: Lenovo, HP, Dell, ASUS, Acer, MSI, then Framework, Microsoft Surface, Chromebooks and the rest). Each control is a setting plugin with probe, read, apply and revert, a risk tier, a fixture and tests, like every other setting.
+
+- [ ] Charge start thresholds and charge types (`charge_control_start_threshold`, `charge_types`: Standard / Long Life / Adaptive / Custom) where the standard limit alone is not enough
+- [ ] Maker controls the inventory finds for the top six makers
+- [ ] Each new control in the TLP import map where TLP has an equivalent line
+
+**3. Seed the quirk list** (one sitting, then ongoing). Turn public reports into quirk entries with a source link each: kernel bug tracker, distribution wikis (the Arch wiki's per-model pages), maker forums and TLP's public issue tracker. Each entry gives the models, the setting, the plain reason, and a kernel or firmware range where a fix is known (`kernel_below`, `firmware_before`), so it lifts itself when the fix arrives.
+
+- [ ] A first reviewed batch in the built-in list (`quirks/builtin.json`), the one that needs no signing key
+- [ ] A signing key and the first published list, so new entries reach installed laptops without a new release (see [docs/MAINTAINING.md](docs/MAINTAINING.md))
+
+**4. Find gaps in the field** (one sitting).
+
+- [ ] `dynamis hardware-report` lists power-related kernel files on this laptop that Dynamis Power does not know yet (under `/sys/devices/platform/`, `/sys/class/power_supply/`, `/sys/firmware/acpi/`), by name only, nothing personal
+- [ ] *Report a problem* includes that list, and a GitHub issue form "My laptop" asks for the report from people willing to help
+
+**5. Stay current** (ongoing).
+
+- [ ] A monthly check of new kernel releases' documentation changes and other tools' release notes, for new maker controls and fixed bugs (facts only), turned into issues on this list
+- [ ] Sharing (phase 8): per-model results show which settings fail on which models across many laptops, the long-term source of quirks
+
 ## Realistic expectations
 
 This is a spare-time project. Phases 1 to 4 make a useful first version and will likely take several months. Dates are not promised.
