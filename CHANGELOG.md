@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **`dynamis bench`**: the head-to-head benchmark. `run --label stock|tlp|dynamis` measures idle, light use, video and a fixed heavy job on battery and saves the results; `compare` prints them side by side with each against the first. Changes no setting.
+
 - **The app opens faster on slow laptops**: the window shows the page colour and sidebar before any script is read (no blank white window), only the Dashboard's code is loaded at open (other screens load when first shown), and the installed app no longer carries the demo's stand-in backend. The script read at open is 228 KB instead of 329 KB.
 
 - The session helper puts the desktop back (indexing, refresh rate, style) when it is stopped at logout, not only at the next login.

@@ -66,6 +66,8 @@ The programs are then at `target/release/dynamis` (under 1 MB) and `target/relea
 ./target/release/dynamis log -o power.csv   # record a reading every 5 s until Ctrl+C
 ./target/release/dynamis report power.csv   # summarise a recording
 ./target/release/dynamis gauge              # how often the battery gauge updates (run on battery)
+./target/release/dynamis bench run --label stock --video ~/bench.mp4   # head-to-head benchmark on battery
+./target/release/dynamis bench compare bench-*.json                     # compare stock, TLP and Dynamis Power
 ./target/release/dynamis hardware-report    # text to paste into a GitHub hardware report
 ./target/release/dynamis stat               # full diagnostic report, like tlp-stat (sudo for everything)
 ./target/release/dynamis sleep-test on      # guided sleep test (the laptop sleeps and wakes by itself); `dynamis sleep-test` for results

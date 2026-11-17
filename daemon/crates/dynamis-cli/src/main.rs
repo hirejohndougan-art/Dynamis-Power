@@ -4,6 +4,7 @@
 //! always through the engine's safety checks (see `changes.rs`).
 
 mod auto_cmd;
+mod bench_cmd;
 mod changes;
 
 use std::fs::File;
@@ -102,6 +103,12 @@ enum Command {
     /// Print a hardware report to paste into a GitHub "Hardware report" issue.
     /// Contains no serial numbers, usernames or network names.
     HardwareReport,
+    /// The head-to-head benchmark: run the same workloads on battery under
+    /// different power managers, then compare. Changes no setting.
+    Bench {
+        #[command(subcommand)]
+        action: BenchAction,
+    },
     /// List the settings Dynamis Power can change on this machine.
     Settings {
         /// Print JSON instead of text.
@@ -197,6 +204,58 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum BenchAction {
+    /// Run the workloads on battery and save the results (about 1 hour 20
+    /// minutes with the defaults).
+    Run {
+        /// What is running the laptop: stock, tlp, dynamis, or any name.
+        #[arg(long)]
+        label: String,
+        /// Only these workloads (default: idle, light, video, heavy).
+        #[arg(long, value_enum, value_delimiter = ',')]
+        only: Vec<BenchWorkload>,
+        /// Minutes per workload, after one minute of settling (5–120).
+        #[arg(long, default_value_t = 15.0)]
+        minutes: f64,
+        /// A video file to loop for the video workload (played with mpv or
+        /// ffplay).
+        #[arg(long, value_name = "FILE")]
+        video: Option<PathBuf>,
+        /// Where to save the results. Default: bench-LABEL-DATE.json.
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+        /// Testing only: seconds per workload.
+        #[arg(long, hide = true)]
+        test_seconds: Option<f64>,
+    },
+    /// Compare saved results side by side.
+    Compare {
+        /// Results files from `dynamis bench run`.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum BenchWorkload {
+    Idle,
+    Light,
+    Video,
+    Heavy,
+}
+
+impl From<BenchWorkload> for dynamis_core::bench::Workload {
+    fn from(w: BenchWorkload) -> Self {
+        match w {
+            BenchWorkload::Idle => Self::Idle,
+            BenchWorkload::Light => Self::Light,
+            BenchWorkload::Video => Self::Video,
+            BenchWorkload::Heavy => Self::Heavy,
+        }
+    }
+}
+
 #[derive(Clone, Copy, ValueEnum)]
 enum SafeModeAction {
     Status,
@@ -230,6 +289,31 @@ fn main() {
         Command::Gauge { duration, json } => cmd_gauge(&root, duration, json),
         Command::HardwareReport => cmd_hardware_report(&root),
         Command::Stat => auto_cmd::cmd_stat(&root, &state),
+        Command::Bench { action } => match action {
+            BenchAction::Run {
+                label,
+                only,
+                minutes,
+                video,
+                output,
+                test_seconds,
+            } => {
+                let only: Vec<dynamis_core::bench::Workload> =
+                    only.into_iter().map(Into::into).collect();
+                bench_cmd::cmd_run(
+                    &root,
+                    bench_cmd::RunArgs {
+                        label: &label,
+                        only: &only,
+                        minutes,
+                        video: video.as_deref(),
+                        output,
+                        test_seconds,
+                    },
+                )
+            }
+            BenchAction::Compare { files } => bench_cmd::cmd_compare(&files),
+        },
         Command::Settings { json } => changes::cmd_settings(&root, &state, json),
         Command::Set {
             id,

@@ -185,6 +185,46 @@ Report anything odd in a bug report with `sudo dynamis journal --last 100` attac
 
 **On a laptop that already freezes** (like the project's VivoBook did until November 2026, for reasons never found), a freeze during these steps does not prove Dynamis Power caused it. After the reboot, Home says what was happening (going to sleep, waking, a device error, or nothing in the log) and what Dynamis Power had changed in the ten minutes before; `sudo dynamis journal` shows the same changes, and a `recover` line means a change was in progress. For the system's own log of that boot to be there, the journal must be kept on disk (`/var/log/journal` exists). After three such freezes safe mode switches on: keep using the laptop. If it still freezes, `dynamis safe-mode` says Dynamis Power is unlikely to be the cause; report that with `journalctl -b -1 -k | tail -50`.
 
+## Head-to-head benchmark: stock, TLP, Dynamis Power
+
+The same workloads, on battery, under each power manager, measured the same way. `dynamis bench` changes no setting; it only runs the workloads and reads the battery.
+
+**Workloads** (each one minute of settling, then 15 minutes by default):
+
+- **idle**: nothing running, screen on;
+- **light**: a small steady load, like reading and light browsing (about 10% of one core);
+- **video**: a video file looping in mpv or ffplay (bring a 1080p video; the same file for every run);
+- **heavy**: a fixed amount of work on every core: how long it takes and how much energy it uses.
+
+**Before every run**
+
+1. Charge to full, then unplug. Start each run between 100% and 60% (the battery's voltage changes slightly as it empties).
+2. Same brightness every time (50% is a good choice), Wi-Fi on and connected, Bluetooth as you normally have it.
+3. Switch off screen dimming and sleep for the run (System Settings → Power Management on KDE), close other apps, and leave the laptop alone. A run where the brightness changed or the charger was plugged in is marked and left out of the comparison.
+
+**Three configurations, each run at least twice**
+
+1. **stock**: `sudo systemctl stop dynamis-power tlp` (whichever exist), then `sudo dynamis restore`, and reboot so every setting is the kernel's own.
+   `dynamis bench run --label stock --video ~/bench.mp4`
+2. **tlp**: install TLP with its default settings, `sudo systemctl enable --now tlp`, Dynamis Power stopped, reboot.
+   `dynamis bench run --label tlp --video ~/bench.mp4`
+3. **dynamis**: TLP stopped and disabled, Dynamis Power running after learning has finished (Learning shows 100%; *Learn now* gets there in an evening), automatic choice on, reboot.
+   `dynamis bench run --label dynamis --video ~/bench.mp4`
+
+Each run takes about 1 hour 20 minutes and saves `bench-LABEL-DATE.json` after every workload, so an interrupted run keeps what finished. `--only idle,light` runs some workloads; `--minutes 30` makes each longer and the result steadier.
+
+**Compare**
+
+```sh
+dynamis bench compare bench-*.json
+```
+
+prints, for each workload, the average power and how long a full battery would last under each label, repeats averaged with their spread, and each label against the first one (`-12% power`). For heavy work it also prints the time to finish and the energy used: a manager that saves power by being slow shows up there.
+
+Power comes from the drop in the battery's stored energy when the gauge reports it, otherwise from the average of its power readings; the results file says which. Differences smaller than the spread between repeats are not differences.
+
+On the VivoBook, say in any write-up that its earlier freezes were never explained, and run each configuration at least twice.
+
 ## Known limits
 
 - Whole-system power is only meaningful on battery. Plugged in, most laptops report nothing useful.

@@ -186,6 +186,8 @@ That design and Dynamis Power share the goal; this is what it had that Dynamis P
 
 ## Built: beat TLP on savings
 
+**Measuring it:** `dynamis bench` runs the same workloads (idle, light, video, heavy) on battery under stock settings, TLP and Dynamis Power and compares them (docs/TESTING-ON-HARDWARE.md, "Head-to-head benchmark"). Built; the first runs are on the VivoBook.
+
 All twelve are built and fixture-tested; each still needs a real laptop (and, for B, a real KDE and GNOME desktop) to confirm, as part of the hardware tests.
 
 Where the remaining watts are, and what TLP cannot do because it applies fixed settings blind and knows nothing of the desktop. Build order: kernel side first (A), then through the desktop (B, decision [0027](docs/decisions/0027-acting-through-the-desktop.md)), then advice (C). Every change is runtime-only, journaled and put back by Restore; nothing here is on the never-touch list.
