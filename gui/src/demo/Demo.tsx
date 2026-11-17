@@ -105,6 +105,18 @@ function TrayMenu(props: { status: Status; onOpen: () => void; onClose: () => vo
           )}
         </>
       )}
+      <button type="button" role="menuitem" disabled={locked} onClick={() => act(() => (s.relief ? backend.endRelief() : backend.feelsSlow(false)))}>
+        <span className="tray-mark" aria-hidden="true" />
+        {s.relief ? "Back to normal settings" : "It feels slow"}
+      </button>
+      <button type="button" role="menuitem" onClick={() => { void act(async () => { if (!s.trouble) await backend.somethingBroke(); }); window.location.hash = "#home"; props.onOpen(); }}>
+        <span className="tray-mark" aria-hidden="true" />
+        Something stopped working…
+      </button>
+      <button type="button" role="menuitem" onClick={() => { props.onClose(); window.location.hash = "#activity:report"; props.onOpen(); }}>
+        <span className="tray-mark" aria-hidden="true" />
+        Report a problem…
+      </button>
       <div className="tray-sep" role="separator" />
       <button type="button" role="menuitem" onClick={() => { props.onClose(); props.onOpen(); }}>
         <span className="tray-mark" aria-hidden="true" />
@@ -134,6 +146,7 @@ export function Demo() {
   const [appOpen, setAppOpen] = useState(true);
   const [run, setRun] = useState(0);
   const iconRef = useRef<HTMLButtonElement>(null);
+  const holdRef = useRef<number | undefined>(undefined);
 
   const read = useCallback(async () => {
     setStatus(await backend.status());
@@ -223,8 +236,22 @@ export function Demo() {
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen(!menuOpen)}
+                // Right button: open on press, as panels do, so a page or
+                // browser menu cannot get in first.
+                onPointerDown={(e) => {
+                  if (e.button === 2) {
+                    e.preventDefault();
+                    setMenuOpen(true);
+                  } else if (e.pointerType === "touch") {
+                    // Press and hold on a touch screen.
+                    holdRef.current = window.setTimeout(() => setMenuOpen(true), 450);
+                  }
+                }}
+                onPointerUp={() => window.clearTimeout(holdRef.current)}
+                onPointerLeave={() => window.clearTimeout(holdRef.current)}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   setMenuOpen(true);
                 }}
               >
