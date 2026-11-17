@@ -21,6 +21,8 @@ export interface Status {
     waiting?: { reason: WaitReason; share_pct: number } | null;
     /** How often the battery's power reading changes, in seconds. */
     power_update_s?: number | null;
+    /** Learned settings to measure again (after a system update, or a few months on), and why. */
+    rechecks?: { count: number; why: string | null };
   };
   power: {
     on_ac: boolean;

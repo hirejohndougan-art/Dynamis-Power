@@ -26,4 +26,4 @@ Format (version 1):
 }
 ```
 
-`match` fields (all optional, all must match; `*` matches anything, case is ignored): `vendor`, `model`, `cpu`, `wifi_driver`, `kernel`. An empty `match` applies to every machine: that is the kill switch for a setting. Leaving out `values` blocks every change to the setting.
+`match` fields (all optional, all must match; `*` matches anything, case is ignored): `vendor`, `model`, `cpu`, `wifi_driver`, `kernel`. Version ranges: `kernel_min` (this kernel or newer, e.g. `"6.8"`), `kernel_below` (older than this, e.g. `"6.11"`, so a fixed kernel lifts the block) and `firmware_before` (BIOS dated before `"YYYY-MM-DD"`; an unknown date matches). Versions of the program from before these fields ignore them and apply the quirk on every version, which is the safe side. An empty `match` applies to every machine: that is the kill switch for a setting. Leaving out `values` blocks every change to the setting.

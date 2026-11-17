@@ -128,6 +128,20 @@ pub struct Record {
     /// settings tested on their own. See [`crate::tune`].
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub group: BTreeMap<String, String>,
+    /// The kernel and firmware it was measured on (everyday problem §6).
+    /// Absent in results from before this field: those are re-checked by
+    /// age only. Local only, never shared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<crate::sysid::SystemId>,
+}
+
+impl Record {
+    /// Whether this result should be measured again: it was measured on
+    /// another kernel or firmware, or more than a few months ago.
+    pub fn stale(&self, now: &crate::sysid::SystemId, now_s: u64) -> bool {
+        self.system.as_ref().is_some_and(|s| s != now)
+            || now_s.saturating_sub(self.time) > crate::sysid::RECHECK_AFTER_S
+    }
 }
 
 /// What the daemon should do after a reading.
@@ -290,6 +304,7 @@ impl Experiment {
             reason,
             time: now as u64,
             group: BTreeMap::new(),
+            system: None,
         }
     }
 }

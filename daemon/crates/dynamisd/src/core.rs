@@ -220,7 +220,34 @@ impl Core {
         // Nothing is set for the mode in force at start, so restarting the
         // service leaves the screen alone.
         core.brightness.prime(core.active());
+        core.note_system();
         core
+    }
+
+    /// The kernel and firmware running now; after an update, one line in
+    /// Activity and learned settings are re-checked (everyday problem §6).
+    fn note_system(&mut self) {
+        let now = dynamis_core::sysid::SystemId::read(&self.root);
+        let file = self.state_dir.join("system.json");
+        let before: Option<dynamis_core::sysid::SystemId> = fs::read_to_string(&file)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok());
+        self.learn.system = now.clone();
+        if let Some(change) = before.as_ref().and_then(|b| now.change_from(b)) {
+            let n = self.learn.rechecks(unix_now() as u64).len();
+            if let Ok(e) = open_engine(&self.root, &self.state_dir) {
+                let _ = e.note(
+                    "system-update",
+                    "system",
+                    &format!("{change}; {n} learned setting(s) will be re-checked"),
+                );
+            }
+        }
+        if before.as_ref() != Some(&now) {
+            if let Ok(t) = serde_json::to_string(&now) {
+                let _ = write_atomic(&file, &t);
+            }
+        }
     }
 
     pub fn available(&self) -> &[Profile] {

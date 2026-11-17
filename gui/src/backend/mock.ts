@@ -358,6 +358,7 @@ export function mockBackend(): Backend {
         status: learning ? "Waiting: power use is changing" : "Learning is off",
         tests: records.length,
         tested_settings: new Set(records.filter((r) => r.verdict !== "inconclusive").map((r) => r.setting)).size,
+        rechecks: { count: 1, why: "after a system update (kernel 6.8.0-45-generic → 6.11.0-21-generic)" },
         kept: kept().map((r) => ({ setting: r.setting, label: label(r.setting), value: r.value, baseline: r.baseline, saves_w: -r.effect.mean, reason: r.reason })),
         saves_w: kept().reduce((a, r) => a - r.effect.mean, 0),
         waiting: learning ? { reason: "unsteady", share_pct: 62 } : null,

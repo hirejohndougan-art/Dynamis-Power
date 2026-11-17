@@ -55,6 +55,7 @@ impl Core {
         tested.dedup();
         let tested_settings = tested.len();
         let (workload, reason) = self.auto_status();
+        let rechecks = self.learn.rechecks(crate::core::unix_now() as u64);
 
         json!({
             "version": env!("CARGO_PKG_VERSION"),
@@ -72,6 +73,9 @@ impl Core {
                 "progress": progress,
                 "waiting": self.learn.main_wait().map(|(k, pct)| json!({"reason": k, "share_pct": pct})),
                 "power_update_s": self.learn.power_update_s(),
+                // Learned settings to measure again (after an update, or
+                // a few months on), and why.
+                "rechecks": {"count": rechecks.len(), "why": rechecks.first().map(|(_, w)| w.clone())},
             },
             "power": {
                 "on_ac": on_ac,

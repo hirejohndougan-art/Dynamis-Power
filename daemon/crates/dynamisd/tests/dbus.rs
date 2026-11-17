@@ -2442,3 +2442,72 @@ fn kernel_trouble_right_after_a_change_undoes_and_blocks_it() {
             .any(|e| e["event"] == "kernel" && e["id"] == "sound"));
     });
 }
+
+#[test]
+fn after_a_kernel_update_learned_settings_are_rechecked() {
+    let Some(env) = Env::new("recheck") else {
+        return;
+    };
+    let state = env.dir.join("state");
+    fs::create_dir_all(&state).unwrap();
+    let fw = fs::read_to_string(env.dir.join("root/sys/class/dmi/id/bios_version"))
+        .unwrap()
+        .trim()
+        .to_string();
+    // Last time the service ran, it was on an older kernel; one setting was
+    // learned there.
+    fs::write(
+        state.join("system.json"),
+        serde_json::json!({"kernel": "6.8.0-old", "firmware": fw}).to_string(),
+    )
+    .unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let e = serde_json::json!({"mean": -0.2, "ci_low": -0.3, "ci_high": -0.1, "confidence": 0.99});
+    fs::write(
+        state.join("calibration.json"),
+        serde_json::json!({"v": 2, "records": [{
+            "setting": "kernel.nmi_watchdog", "value": "off", "baseline": "on",
+            "context": {"power_source": "battery", "workload": "light_interactive"},
+            "metric": "system_watts", "effect": e, "stall": e, "baseline_w": 6.0,
+            "samples": 8, "verdict": "keep", "reason": "saves 0.2 W", "time": now - 86400,
+            "system": {"kernel": "6.8.0-old", "firmware": fw}
+        }]})
+        .to_string(),
+    )
+    .unwrap();
+    let _d = Guard(env.daemon_with("state", &[]));
+    zbus::block_on(async {
+        let conn = env.client().await;
+        wait_ready(&conn).await;
+        let c = dynamis_client::Client::connect_to(&env.address)
+            .await
+            .unwrap();
+        let s = c.status().await.unwrap();
+        let r = &s["learning"]["rechecks"];
+        assert_eq!(r["count"], 1, "{s}");
+        assert!(
+            r["why"]
+                .as_str()
+                .unwrap()
+                .contains("kernel 6.8.0-old → 6.14.0-synthetic"),
+            "{r}"
+        );
+        let journal = c.journal(20).await.unwrap();
+        assert!(journal
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["event"] == "system-update"
+                && e["reason"]
+                    .as_str()
+                    .unwrap()
+                    .contains("1 learned setting(s) will be re-checked")));
+        let saved: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(env.dir.join("state/system.json")).unwrap())
+                .unwrap();
+        assert_eq!(saved["kernel"], "6.14.0-synthetic");
+    });
+}

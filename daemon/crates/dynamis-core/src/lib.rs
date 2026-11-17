@@ -36,6 +36,7 @@ pub mod report;
 pub mod selfstat;
 pub mod sensors;
 pub mod settings;
+pub mod sysid;
 pub mod tlpimport;
 pub mod tools;
 pub mod trouble;

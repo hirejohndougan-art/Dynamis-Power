@@ -183,8 +183,8 @@ describe("the app with the stand-in backend", () => {
     // earlier test restored everything, which switches learning off.)
     const sw = screen.getByRole("switch", { name: /learn/i });
     if (sw.getAttribute("aria-checked") !== "true") await act(async () => fireEvent.click(sw));
-    await waitFor(() => expect(screen.getByRole("note")).toBeTruthy());
-    expect(screen.getByRole("note").textContent).toMatch(/62%.*steady use/);
+    await waitFor(() => expect(screen.getAllByRole("note").some((n) => /62%.*steady use/.test(n.textContent ?? ""))).toBe(true));
+    expect(screen.getAllByRole("note").some((n) => /Re-checking 1 learned setting after a system update/.test(n.textContent ?? ""))).toBe(true);
     expect(screen.queryByText(/updates its power reading/)).toBeNull();
     const forget = screen.getAllByRole("button", { name: /^Forget:/ })[0];
     await act(async () => fireEvent.click(forget));

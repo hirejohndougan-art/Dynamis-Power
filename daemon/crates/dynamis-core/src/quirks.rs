@@ -76,6 +76,18 @@ pub struct Match {
     pub wifi_driver: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel: Option<String>,
+    /// Only kernels at least this new (`6.8`), and only older than
+    /// `kernel_below` (`6.11`): a fix in a newer kernel lifts the block by
+    /// itself. Older clients ignore these and apply the quirk everywhere,
+    /// which is the safe side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel_min: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel_below: Option<String>,
+    /// Only firmware dated before this (`2024-03-01`): a BIOS update with
+    /// the fix lifts the block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware_before: Option<String>,
 }
 
 /// The facts quirks are matched against.
@@ -86,6 +98,8 @@ pub struct Identity {
     pub cpu: String,
     pub wifi_drivers: Vec<String>,
     pub kernel: String,
+    /// BIOS version and date (`E410MA.316 05/12/2023`).
+    pub firmware: String,
 }
 
 impl Identity {
@@ -96,7 +110,8 @@ impl Identity {
             model: inv.machine.model.unwrap_or_default(),
             cpu: inv.cpu.model.unwrap_or_default(),
             wifi_drivers: inv.wifi.into_iter().filter_map(|w| w.driver).collect(),
-            kernel: inv.software.kernel.unwrap_or_default(),
+            kernel: inv.software.kernel.unwrap_or_default().trim().to_string(),
+            firmware: crate::sysid::SystemId::read(root).firmware,
         }
     }
 }
@@ -112,6 +127,18 @@ impl Match {
                 .wifi_driver
                 .as_deref()
                 .is_none_or(|p| id.wifi_drivers.iter().any(|d| glob(p, d)))
+            && self
+                .kernel_min
+                .as_deref()
+                .is_none_or(|m| !crate::sysid::kernel_older(&id.kernel, m))
+            && self
+                .kernel_below
+                .as_deref()
+                .is_none_or(|b| crate::sysid::kernel_older(&id.kernel, b))
+            // An unknown firmware date matches: the safe side.
+            && self.firmware_before.as_deref().is_none_or(|d| {
+                crate::sysid::firmware_date(&id.firmware).is_none_or(|f| f.as_str() < d)
+            })
     }
 }
 
@@ -270,6 +297,29 @@ fn glob(pattern: &str, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_ranges() {
+        let id = |kernel: &str, firmware: &str| Identity {
+            kernel: kernel.into(),
+            firmware: firmware.into(),
+            ..Identity::default()
+        };
+        let m = Match {
+            kernel_min: Some("6.8".into()),
+            kernel_below: Some("6.11".into()),
+            firmware_before: Some("2024-03-01".into()),
+            ..Match::default()
+        };
+        assert!(m.matches(&id("6.8.0-45-generic", "X.1 05/12/2023")));
+        assert!(!m.matches(&id("6.11.2", "X.1 05/12/2023")), "fixed in 6.11");
+        assert!(!m.matches(&id("6.6.1", "X.1 05/12/2023")), "before the bug");
+        assert!(
+            !m.matches(&id("6.9.0", "X.2 04/01/2024")),
+            "fixed in the BIOS"
+        );
+        assert!(m.matches(&id("6.9.0", "")), "unknown firmware: blocked");
+    }
 
     #[test]
     fn globbing() {

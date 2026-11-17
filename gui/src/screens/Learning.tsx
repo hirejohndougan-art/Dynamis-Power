@@ -40,6 +40,11 @@ export function Learning(props: { status: Status; refresh: () => void }) {
           </>
         )}
         {!s.on && p && p.left > 0 && <p className="muted">{t("learning_paused")}</p>}
+        {(s.rechecks?.count ?? 0) > 0 && (
+          <p className="notice notice-info" role="note">
+            {tn("learning_rechecks", s.rechecks!.count, { why: s.rechecks!.why ?? "" })}
+          </p>
+        )}
         {s.on && (
           <p className="small">
             <span className="muted">{t("learning_now")}: </span>

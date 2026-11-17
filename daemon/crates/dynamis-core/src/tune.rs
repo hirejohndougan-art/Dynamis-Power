@@ -264,6 +264,7 @@ mod tests {
             reason: String::new(),
             time: 0,
             group: record_group(current, id),
+            system: None,
         }
     }
 

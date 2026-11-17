@@ -76,6 +76,8 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 - **Settings that vanish or change are handled, not errors.** A learned setting whose control no longer exists is dropped from what is applied, with a line in Activity; a changed list of choices re-plans the modes.
 - **Quirks by version.** The signed blocklist gains optional kernel and firmware version ranges, so a fix in a newer kernel lifts a block automatically.
 
+**Status: built.** Each result records `system` (kernel release, BIOS version and date; `dynamis-core/src/sysid.rs`). A kept result is re-checked when it was measured on another kernel or firmware, or more than 120 days ago; re-checks run before new tests, from the original value to the learned one, up to three tries. The learned value stays applied meanwhile; a re-check that is inconclusive leaves it, one that no longer saves power (or adds lag) ends it. At startup a changed kernel or firmware is noted in Activity (`system-update`, saved in `system.json`); a learned setting whose control is gone is no longer applied, with one line in Activity (`vanished`). Learning shows "Re-checking … after a system update" (`learning.rechecks` in `Status`). Quirk `match` gains `kernel_min`, `kernel_below` and `firmware_before`; older versions of the program ignore them and apply the quirk everywhere, the safe side. Settings tuned together (phase 5) are not re-checked yet.
+
 ## 7. Battery and charging quirks
 
 **Status: built** (kept settings with probation, re-applied at startup and after waking; firmware that ignores the limit is noticed).

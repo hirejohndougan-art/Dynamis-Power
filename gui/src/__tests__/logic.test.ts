@@ -17,6 +17,8 @@ describe("activity", () => {
     expect(k?.title).toBe("The kernel reported trouble with sound");
     expect(k?.category).toBe("problems");
     expect(describeEntry(e({ event: "problem", id: "wifi", reason: "blocked: wifi.power_save" }))?.category).toBe("problems");
+    expect(describeEntry(e({ event: "system-update", id: "system", reason: "kernel 6.8 → 6.11" }))?.title).toBe("The system was updated");
+    expect(describeEntry(e({ event: "vanished", id: "pcie.aspm", label: "PCIe link power saving" }))?.title).toBe("PCIe link power saving is no longer offered");
   });
   it("hides technical entries and no-op changes", () => {
     expect(describeEntry(e({ event: "start" }))).toBeNull();

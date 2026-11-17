@@ -154,6 +154,10 @@ pub struct Learning {
     /// Power readings over about the last block, to judge whether power use
     /// is steady (decision 0020).
     recent_power: std::collections::VecDeque<(f64, f64)>,
+    /// The kernel and firmware running now (everyday problem §6).
+    pub(crate) system: dynamis_core::sysid::SystemId,
+    /// Learned settings whose control is gone, already noted in Activity.
+    vanished: std::collections::BTreeSet<String>,
 }
 
 impl Learning {
@@ -194,6 +198,8 @@ impl Learning {
             power_seen: None,
             power_gaps: Vec::new(),
             recent_power: std::collections::VecDeque::new(),
+            system: dynamis_core::sysid::SystemId::default(),
+            vanished: std::collections::BTreeSet::new(),
         }
     }
 
@@ -202,8 +208,13 @@ impl Learning {
     /// as a record from its original value (`baseline`) to the learned one.
     pub fn learned(&self) -> Vec<Record> {
         let mut out: Vec<Record> = Vec::new();
+        // The latest settled result per setting: an inconclusive re-check
+        // leaves the earlier result in place.
         for r in self.records.iter().rev() {
-            if !tune::in_group(&r.setting) && !out.iter().any(|o| o.setting == r.setting) {
+            if r.verdict != Verdict::Inconclusive
+                && !tune::in_group(&r.setting)
+                && !out.iter().any(|o| o.setting == r.setting)
+            {
                 out.push(r.clone());
             }
         }
@@ -244,6 +255,33 @@ impl Learning {
                 last.reason
             );
             out.push(r);
+        }
+        out
+    }
+
+    /// Learned settings to measure again (everyday problem §6): measured on
+    /// another kernel or firmware, or more than a few months ago, and not
+    /// yet re-tested enough times since. Tested on their own, from the
+    /// original value to the learned one. With why, for the app.
+    pub fn rechecks(&self, now_s: u64) -> Vec<(Record, String)> {
+        let mut out = Vec::new();
+        for r in self.learned() {
+            if tune::in_group(&r.setting) || !r.stale(&self.system, now_s) {
+                continue;
+            }
+            let since = self
+                .records
+                .iter()
+                .filter(|o| o.setting == r.setting && o.time > r.time)
+                .count();
+            if since >= MAX_TRIES {
+                continue;
+            }
+            let why = match r.system.as_ref().and_then(|s| self.system.change_from(s)) {
+                Some(change) => format!("after a system update ({change})"),
+                None => "a few months on".to_string(),
+            };
+            out.push((r, why));
         }
         out
     }
@@ -374,10 +412,20 @@ impl Learning {
             "Learning is off".into()
         } else if let Some(r) = &self.running {
             let (b, n) = r.exp.progress();
-            format!(
-                "Testing {} = {}: step {b} of {n}",
-                r.exp.plan.setting, r.exp.plan.value
-            )
+            let now_s = crate::core::unix_now() as u64;
+            match self
+                .rechecks(now_s)
+                .into_iter()
+                .find(|(rec, _)| rec.setting == r.exp.plan.setting)
+            {
+                Some((_, why)) => {
+                    format!("Re-checking {} {why}: step {b} of {n}", r.exp.plan.setting)
+                }
+                None => format!(
+                    "Testing {} = {}: step {b} of {n}",
+                    r.exp.plan.setting, r.exp.plan.value
+                ),
+            }
         } else if self.status.is_empty() {
             "Waiting for a quiet moment on battery".into()
         } else {
@@ -629,6 +677,21 @@ impl Core {
             let v = allowed.check(v).ok()?;
             engine.quirks().blocking(id, &v).is_none().then_some(v)
         };
+
+        // Re-checks come first (everyday problem §6): the learned value
+        // against the original, if both are still allowed here.
+        let now_s = crate::core::unix_now() as u64;
+        for (r, _) in self.learn.rechecks(now_s) {
+            let (Some(base), Some(v)) = (
+                allowed(&r.setting, &r.baseline),
+                allowed(&r.setting, &r.value),
+            ) else {
+                continue;
+            };
+            if base != v {
+                return Some((plan(&r.setting, base, v), State::new()));
+            }
+        }
 
         // Phase 4: every setting on its own first.
         if let Some(p) = self.single_tests(engine).into_iter().find(|p| !p.done) {
@@ -958,6 +1021,7 @@ impl Core {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
+        rec.system = Some(self.learn.system.clone());
         eprintln!(
             "dynamisd: learning: {} = {}: {:?}, {}",
             rec.setting, rec.value, rec.verdict, rec.reason
@@ -1024,6 +1088,22 @@ impl Core {
             .filter(|r| !tune::in_group(&r.setting))
             .collect();
         for r in &learned {
+            // A control gone after an update: dropped from what is applied,
+            // with one line in Activity.
+            let gone = settings::by_id(&r.setting)
+                .is_none_or(|s| matches!(s.probe(&self.root), Probe::Unsupported { .. }));
+            if gone {
+                if self.learn.vanished.insert(r.setting.clone()) {
+                    if let Ok(e) = open_engine(&self.root, &self.state_dir) {
+                        let _ = e.note(
+                            "vanished",
+                            &r.setting,
+                            "this laptop no longer offers this setting (after a system update?); the learned value is no longer applied",
+                        );
+                    }
+                }
+                continue;
+            }
             let (value, why) = if want {
                 (&r.value, format!("learned: {}", r.reason))
             } else {
@@ -1077,6 +1157,75 @@ mod tests {
     fn learning() -> Learning {
         let dir = std::env::temp_dir().join(format!("dynamis-learn-unit-{}", std::process::id()));
         Learning::load(&dir, Timing::default())
+    }
+
+    fn rec(verdict: Verdict, time: u64, system: Option<&str>) -> Record {
+        let e = dynamis_core::calibrate::Effect {
+            mean: -0.2,
+            ci_low: -0.3,
+            ci_high: -0.1,
+            confidence: 1.0,
+        };
+        Record {
+            setting: "kernel.nmi_watchdog".into(),
+            value: "off".into(),
+            baseline: "on".into(),
+            context: dynamis_core::calibrate::RecordContext {
+                power_source: PowerSource::Battery,
+                workload: Workload::LightInteractive,
+            },
+            metric: "system_watts".into(),
+            effect: e,
+            stall: e,
+            baseline_w: 6.0,
+            samples: 4,
+            verdict,
+            reason: String::new(),
+            time,
+            group: Default::default(),
+            system: system.map(|k| dynamis_core::sysid::SystemId {
+                kernel: k.into(),
+                firmware: "X 01/01/2025".into(),
+            }),
+        }
+    }
+
+    #[test]
+    fn results_from_another_kernel_or_long_ago_are_rechecked() {
+        let now = 1_800_000_000;
+        let mut l = learning();
+        l.system = dynamis_core::sysid::SystemId {
+            kernel: "6.11.0".into(),
+            firmware: "X 01/01/2025".into(),
+        };
+        // Same kernel, recent: nothing to re-check.
+        l.records = vec![rec(Verdict::Keep, now - 86_400, Some("6.11.0"))];
+        assert!(l.rechecks(now).is_empty());
+        // Older results without a system: re-checked only by age.
+        l.records = vec![rec(Verdict::Keep, now - 86_400, None)];
+        assert!(l.rechecks(now).is_empty());
+        l.records = vec![rec(Verdict::Keep, now - 200 * 86_400, None)];
+        assert_eq!(l.rechecks(now)[0].1, "a few months on");
+        // Measured on another kernel: re-checked, saying why.
+        l.records = vec![rec(Verdict::Keep, now - 86_400, Some("6.8.0"))];
+        let r = l.rechecks(now);
+        assert_eq!(r.len(), 1);
+        assert!(r[0].1.contains("kernel 6.8.0 → 6.11.0"), "{}", r[0].1);
+        // An inconclusive re-check keeps the learned value and tries again,
+        // up to the limit.
+        for i in 1..=MAX_TRIES as u64 {
+            l.records
+                .push(rec(Verdict::Inconclusive, now - 86_400 + i, Some("6.11.0")));
+            assert_eq!(l.learned().len(), 1, "still learned");
+        }
+        assert!(l.rechecks(now).is_empty(), "tried enough");
+        // A re-check that no longer saves power: not learned any more.
+        l.records.push(rec(Verdict::Reject, now, Some("6.11.0")));
+        assert!(l.learned().is_empty());
+        // Kept again on the new kernel: learned, nothing to re-check.
+        l.records.push(rec(Verdict::Keep, now, Some("6.11.0")));
+        assert_eq!(l.learned().len(), 1);
+        assert!(l.rechecks(now).is_empty());
     }
 
     #[test]
