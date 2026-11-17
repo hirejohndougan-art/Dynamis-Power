@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Fedora and Arch packages**: `daemon/packaging/build-rpm.sh` (service `.rpm`, same install and removal steps as the `.deb`), the app as `.rpm` from Tauri, and `daemon/packaging/arch/PKGBUILD` building both for Arch (conflicts with and provides power-profiles-daemon; prints how to start the service). CI builds, installs and removes each in a Fedora and an Arch container. `stage.sh` now lays out the service's files for all three.
+
 - *Report a problem* is now also in Advanced → Safety and in the panel menu (which opens the app with the dialog, `--report`).
 
 - **Watching for trouble all the time** (everyday problem §1): on every reading the service checks new kernel log records for signs of trouble from Wi-Fi, Bluetooth, sound, graphics, disks, USB or a lockup. Trouble within 10 minutes of a change that could cause it undoes and blocks that change on this laptop; otherwise it is only noted in Activity. Quiet during tests and for two minutes after waking. `kernel_watch` in `Status`; Advanced → Safety says whether the log can be read.

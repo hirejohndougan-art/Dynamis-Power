@@ -1,0 +1,58 @@
+# Arch Linux packages for Dynamis Power, built from this checkout:
+#
+#   cd daemon/packaging/arch && makepkg -si
+#
+# Two packages from one build: dynamis-power-service (the system service,
+# command line and panel icon) and dynamis-power (the app). For the AUR,
+# replace _root with a git source and cd "$srcdir/Dynamis-Power".
+pkgbase=dynamis-power
+pkgname=(dynamis-power-service dynamis-power)
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Power manager that learns your laptop"
+arch=(x86_64 aarch64)
+url="https://github.com/hirejohndougan-art/Dynamis-Power"
+license=(MIT)
+makedepends=(cargo nodejs npm webkit2gtk-4.1 librsvg)
+options=(!lto !debug)
+
+_root=$(cd "$startdir/../../.." && pwd)
+
+pkgver() {
+    sed -n 's/^version = "\(.*\)"/\1/p' "$_root/daemon/Cargo.toml" | head -1
+}
+
+build() {
+    cd "$_root/daemon"
+    cargo build --release --locked
+    cd "$_root/gui"
+    npm ci
+    npx tauri build --no-bundle
+}
+
+package_dynamis-power-service() {
+    pkgdesc="Power manager that learns your laptop (service and command line)"
+    depends=(dbus polkit systemd)
+    # dynamisd serves the same power-profiles D-Bus interface, so desktop
+    # power sliders keep working; only one may run.
+    provides=(power-profiles-daemon)
+    conflicts=(power-profiles-daemon tuned-ppd)
+    backup=(etc/xdg/autostart/dynamis-agent.desktop)
+    install=dynamis-power-service.install
+
+    "$_root/daemon/packaging/stage.sh" "$pkgdir" "$_root/daemon/target/release"
+    install -Dm644 "$_root/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
+
+package_dynamis-power() {
+    pkgdesc="Power manager that learns your laptop (app)"
+    depends=(dynamis-power-service webkit2gtk-4.1 gtk3)
+
+    install -Dm755 "$_root/gui/src-tauri/target/release/dynamis-power-app" "$pkgdir/usr/bin/dynamis-power-app"
+    install -Dm644 "$_root/gui/packaging/dynamis-power.desktop" "$pkgdir/usr/share/applications/dynamis-power.desktop"
+    install -Dm644 "$_root/gui/src-tauri/icons/32x32.png" "$pkgdir/usr/share/icons/hicolor/32x32/apps/dynamis-power.png"
+    install -Dm644 "$_root/gui/src-tauri/icons/128x128.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/dynamis-power.png"
+    install -Dm644 "$_root/gui/src-tauri/icons/128x128@2x.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/dynamis-power.png"
+    install -Dm644 "$_root/gui/src-tauri/icons/icon.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/dynamis-power.png"
+    install -Dm644 "$_root/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Dynamis Power
+GenericName=Power manager
+Comment=Longer battery life, tuned to your laptop
+Exec=dynamis-power-app
+Icon=dynamis-power
+Terminal=false
+Categories=Utility;System;Settings;
+Keywords=battery;power;energy;laptop;
+StartupWMClass=dynamis-power-app

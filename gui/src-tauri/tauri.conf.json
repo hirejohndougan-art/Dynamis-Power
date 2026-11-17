@@ -27,7 +27,8 @@
   "bundle": {
     "active": true,
     "targets": [
-      "deb"
+      "deb",
+      "rpm"
     ],
     "category": "Utility",
     "shortDescription": "Power manager that learns your laptop",
@@ -40,6 +41,11 @@
     ],
     "linux": {
       "deb": {
+        "depends": [
+          "dynamis-power-service"
+        ]
+      },
+      "rpm": {
         "depends": [
           "dynamis-power-service"
         ]

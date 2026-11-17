@@ -106,7 +106,7 @@ What can go wrong for someone using Dynamis Power day to day, what already prote
 
 **Plan.**
 
-- **Packages for Fedora (RPM) and Arch (PKGBUILD, for the AUR)**, built by CI next to the `.deb`, with the same install and clean-removal steps (enable the service, switch off and remember replaced tools, restore everything on removal).
+- **Packages for Fedora (RPM) and Arch (PKGBUILD, for the AUR)**, built by CI next to the `.deb`, with the same install and clean-removal steps (enable the service, switch off and remember replaced tools, restore everything on removal). *Built:* `daemon/packaging/build-rpm.sh` and the app `.rpm`, and `daemon/packaging/arch/PKGBUILD` (Arch's own conventions: conflicts with power-profiles-daemon rather than masking it, and prints how to start the service). See [daemon/packaging/README.md](../daemon/packaging/README.md).
 - **Refuse clearly where it cannot work.** At startup the service checks for systemd and polkit, and the app explains what is missing, instead of failing silently. *Built:* `missing_parts` in `Status`, a notice on the Dashboard, and a line in the service's log.
 - **Desktops**: auto mode and app priority make sense without a battery (heat, noise, electricity); learning needs a power reading, which desktops rarely have. See Follow-up.
 

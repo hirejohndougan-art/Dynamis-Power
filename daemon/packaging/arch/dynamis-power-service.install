@@ -1,0 +1,32 @@
+# Arch packages do not start services by themselves; say how, once.
+post_install() {
+    install -d -m 700 /var/lib/dynamis-power
+    cat <<MSG
+==> To start Dynamis Power:
+      sudo systemctl enable --now dynamisd.service dynamis-sync.timer
+      sudo systemctl --global enable dynamis-agent.service   # panel icon, from your next login
+MSG
+}
+
+post_upgrade() {
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl try-restart dynamisd.service || true
+    fi
+}
+
+pre_remove() {
+    if [ -d /run/systemd/system ]; then
+        systemctl disable --now dynamisd.service dynamis-sync.timer 2>/dev/null || true
+        systemctl --global disable dynamis-agent.service 2>/dev/null || true
+    fi
+    # Put every original setting back while the program is still here.
+    /usr/bin/dynamis restore >/dev/null 2>&1 || echo "dynamis-power: restore reported a problem; settings return to normal at the next reboot anyway" >&2
+}
+
+post_remove() {
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+    echo "==> The journal and learned settings are kept in /var/lib/dynamis-power; delete that folder to forget them."
+}

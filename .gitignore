@@ -24,3 +24,8 @@ npm-debug.log*
 *.pem
 *.key
 exports/
+
+# makepkg output
+daemon/packaging/arch/src/
+daemon/packaging/arch/pkg/
+daemon/packaging/arch/*.pkg.tar.*

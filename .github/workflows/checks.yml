@@ -45,7 +45,7 @@ jobs:
       - name: CLI runs against the fixture
         run: cargo run -q --bin dynamis -- --root ../tests/fixtures/sysfs/synthetic-laptop inventory
       - name: Install scripts pass shellcheck
-        run: shellcheck dist/install.sh dist/uninstall.sh scripts/phase1-test.sh packaging/build-deb.sh packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm
+        run: shellcheck dist/install.sh dist/uninstall.sh scripts/phase1-test.sh packaging/stage.sh packaging/build-deb.sh packaging/build-rpm.sh packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm
       - name: Build the service package
         run: ./packaging/build-deb.sh
       - uses: actions/upload-artifact@v4
@@ -86,12 +86,66 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
-      - name: Build the .deb
-        run: npx tauri build --bundles deb
+      - name: Build the .deb and .rpm
+        run: npx tauri build --bundles deb,rpm
       - uses: actions/upload-artifact@v4
         with:
           name: dynamis-power-app-deb
           path: gui/src-tauri/target/release/bundle/deb/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynamis-power-app-rpm
+          path: gui/src-tauri/target/release/bundle/rpm/*.rpm
+
+  fedora:
+    name: Fedora package (service)
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Install build tools
+        run: dnf install -y --setopt=install_weak_deps=False git cargo rust gcc rpm-build systemd-rpm-macros
+      - uses: actions/checkout@v4
+      - name: Build the .rpm
+        working-directory: daemon
+        run: ./packaging/build-rpm.sh
+      - name: Install, check and remove
+        working-directory: daemon
+        run: |
+          dnf install -y ./target/rpm/*.rpm
+          dynamis --help > /dev/null
+          test -x /usr/libexec/dynamis-power/dynamisd
+          test -f /usr/lib/systemd/system/dynamisd.service
+          grep -q /usr/libexec/dynamis-power/dynamisd /usr/lib/systemd/system/dynamisd.service
+          dnf remove -y dynamis-power-service
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynamis-power-service-rpm
+          path: daemon/target/rpm/*.rpm
+
+  arch:
+    name: Arch packages (service and app)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel git rust nodejs npm webkit2gtk-4.1 librsvg
+      - uses: actions/checkout@v4
+      - name: Build with makepkg (not as root)
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/daemon/packaging/arch' && makepkg --noconfirm"
+      - name: Install, check and remove
+        run: |
+          pacman -U --noconfirm daemon/packaging/arch/*.pkg.tar.zst
+          dynamis --help > /dev/null
+          test -x /usr/bin/dynamis-power-app
+          test -f /usr/share/applications/dynamis-power.desktop
+          pacman -R --noconfirm dynamis-power dynamis-power-service
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynamis-power-arch
+          path: daemon/packaging/arch/*.pkg.tar.zst
 
   docs:
     name: Check documentation links

@@ -1,5 +1,19 @@
 # Packaging
 
+Packages for Debian and Ubuntu (`.deb`), Fedora (`.rpm`) and Arch Linux. Every one is built by CI on every push; download them from the run's *Artifacts*. All three lay the service's files out with `stage.sh`, so they hold the same files.
+
+| Distribution | Service | App |
+| --- | --- | --- |
+| Ubuntu, KDE neon, Debian | `build-deb.sh` → `dynamis-power-service_<version>_<arch>.deb` | `npx tauri build --bundles deb` |
+| Fedora, RHEL and relatives | `build-rpm.sh` → `dynamis-power-service-<version>-1.<dist>.<arch>.rpm` (needs `rpmbuild`, `systemd-rpm-macros`) | `npx tauri build --bundles rpm` |
+| Arch Linux | `arch/PKGBUILD` (`cd daemon/packaging/arch && makepkg -si`) builds both | (same) |
+
+**Fedora** follows the Debian package exactly: the install switches off and masks power-profiles-daemon or tuned-ppd and turns them back on when removed, starts the service and turns on the panel icon for every user. Not checked yet: SELinux on a real Fedora install (the service runs as an ordinary system service).
+
+**Arch** follows Arch's conventions instead: the service package *conflicts with* power-profiles-daemon and tuned-ppd and *provides* power-profiles-daemon (it serves the same D-Bus interface), so pacman offers to replace them; and it does not start anything by itself, but prints the two commands to run. Removing it stops the service and restores every original setting. For the AUR, the PKGBUILD's `_root` becomes a git source.
+
+## Debian and Ubuntu
+
 Two `.deb` packages, for Ubuntu, KDE neon, Debian and relatives:
 
 | Package | Contents | Built by |
