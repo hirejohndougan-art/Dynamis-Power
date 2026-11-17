@@ -112,8 +112,25 @@ export function PowerChart(props: {
     .map((c, i) => (Number.isNaN(c) ? null : `${x(i + (v.length - sv.length)).toFixed(1)},${sy(c).toFixed(1)}`))
     .filter((p): p is string => p !== null)
     .join(" ");
+  const two = v.length > 1 && sOk.length > 1 && !!props.second;
+  // The temperature scale: top, middle and bottom.
+  const sMarks = [sHi, (sHi + sLo) / 2, sLo];
   return (
-    <div className="chart">
+    <div className="chart-wrap">
+      {/* What each line is, above the chart so it never covers the times. */}
+      {v.length > 1 && (
+        <div className="chart-legend small" aria-hidden="true">
+          <span className="chart-legend-item">
+            <span className="chart-key chart-key-1" /> {t("chart_key_power")}
+          </span>
+          {two && (
+            <span className="chart-legend-item chart-legend-2">
+              <span className="chart-key chart-key-2" /> {t("chart_key_temp", { label: props.second!.label, unit: props.second!.unit })}
+            </span>
+          )}
+        </div>
+      )}
+    <div className={two ? "chart chart-two" : "chart"}>
       <div className="chart-y" aria-hidden="true">
         {lines.map((w) => (
           <span key={w} style={{ top: `${(y(w) / H) * 100}%` }}>
@@ -146,15 +163,11 @@ export function PowerChart(props: {
         </svg>
         {v.length < 2 && props.empty && <div className="chart-empty">{props.empty}</div>}
       </div>
-      {v.length > 1 && sOk.length > 1 && props.second && (
-        <div className="chart-legend small muted" aria-hidden="true">
-          <span className="chart-key chart-key-1" /> {t("chart_power")} <span className="chart-key chart-key-2" /> {props.second.label}
-        </div>
-      )}
-      {v.length > 1 && sOk.length > 1 && props.second && (
+      {two && (
         <div className="chart-y2" aria-hidden="true">
-          <span style={{ top: "0%" }}>{`${sHi}${props.second.unit}`}</span>
-          <span style={{ top: "100%" }}>{`${sLo}${props.second.unit}`}</span>
+          {sMarks.map((c, i) => (
+            <span key={i} style={{ top: `${(sy(c) / H) * 100}%` }}>{`${Math.round(c)}${props.second!.unit}`}</span>
+          ))}
         </div>
       )}
       <div className="chart-x" aria-hidden="true">
@@ -168,6 +181,7 @@ export function PowerChart(props: {
           ))}
         <span style={{ left: "100%" }}>{t("chart_now")}</span>
       </div>
+    </div>
     </div>
   );
 }

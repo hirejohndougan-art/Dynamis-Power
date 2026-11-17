@@ -175,6 +175,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Fixed
 
+- The Dashboard chart's key no longer covers the time labels: it sits above the chart and names both lines (power in watts, scale on the left; temperature in °C, scale on the right), and the temperature scale has its own column with three marks.
 - The panel icon's drawing failed for a battery below about 10% (a rounded corner wider than the fill).
 - The service unit no longer sets `ProtectKernelLogs=yes`, which stopped the trial health monitor from reading the kernel log on installed systems.
 - Crash recovery no longer undoes a change whose owner process is still running (needed for tests that span many steps, and for running `dynamis` commands meanwhile).
