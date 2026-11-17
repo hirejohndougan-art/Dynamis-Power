@@ -54,6 +54,8 @@ export interface Status {
   kernel_watch?: boolean;
   /** "Something stopped working": the last hour was undone; waiting for what broke. */
   trouble?: Trouble | null;
+  /** "Check deep idle": running, or the last report. */
+  deep_idle?: DeepIdle;
   /** A rule offered from the modes picked by hand; nothing changes before a yes. */
   suggestion?: Suggestion | null;
   /** The laptop runs hotter at light use than it used to (dust, dried paste). */
@@ -174,6 +176,32 @@ export interface AppRule {
   profile: Profile;
 }
 
+export interface IdleBlocker {
+  id: string;
+  name: string | null;
+  what: string;
+}
+
+export interface DeepIdleReport {
+  v: number;
+  seconds: number;
+  deepest: string | null;
+  core_deepest_pct: number | null;
+  package_pct: number | null;
+  platform_pct: number | null;
+  held_awake: IdleBlocker[];
+  no_link_sleep: IdleBlocker[];
+  no_deeper_link_sleep: IdleBlocker[];
+  touched: boolean;
+}
+
+export interface DeepIdle {
+  running: boolean;
+  seconds_left: number | null;
+  at: number | null;
+  report: DeepIdleReport | null;
+}
+
 export type TroubleKind = "wifi" | "bluetooth" | "sound" | "input" | "screen" | "storage" | "sleep" | "freeze" | "other";
 
 export interface Trouble {
@@ -248,7 +276,7 @@ export interface AppsInfo {
   rules: AppRule[];
   front: string | null;
   running: string[];
-  now: { app: string; cpu_pct: number; watts: number | null; share: number | null }[];
+  now: { app: string; cpu_pct: number; watts: number | null; share: number | null; wakeups_per_s?: number | null }[];
   today: AppUse[];
   week: AppUse[];
   /** Apps whose average power while running on battery changed by a quarter or more since last month. */
@@ -350,6 +378,8 @@ export interface Backend {
   /** The guided sleep test. */
   sleepTest(): Promise<SleepTestInfo>;
   startSleepTest(minutes: number): Promise<void>;
+  /** Start "Check deep idle" (one minute, read-only). */
+  checkDeepIdle(): Promise<void>;
   stopSleepTest(): Promise<void>;
   /** The full diagnostic report in plain text (`dynamis stat`). */
   diagnostics(): Promise<string>;
@@ -479,6 +509,8 @@ export type DevicePolicy = {
   pci: boolean;
   /** Device models the person keeps awake (`usb:046d:c52b`). */
   never?: string[];
+  /** Deeper link sleep (PCIe L1 substates) on battery. Experimental. */
+  deeper_link_sleep?: boolean;
 };
 export type DeviceInfo = {
   id: string;
@@ -499,12 +531,16 @@ export type DeviceInfo = {
   managed: boolean;
   /** Why it is always kept awake, if so. */
   excluded: string | null;
+  /** Deeper link sleep: null where the device's link has none. */
+  link_sleep?: { on: boolean; managed: boolean; excluded: string | null } | null;
 };
 export type DevicesInfo = {
   policy: DevicePolicy;
   /** Why a kind is blocked on this laptop, if it is. */
-  blocked: { usb: string | null; pci: string | null };
+  blocked: { usb: string | null; pci: string | null; links?: string | null };
   devices: DeviceInfo[];
+  /** Devices able to use deeper link sleep (not graphics or excluded). */
+  link_sleep_capable?: number;
 };
 
 export type SleepTypeResult = {

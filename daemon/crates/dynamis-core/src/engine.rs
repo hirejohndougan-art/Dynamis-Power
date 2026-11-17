@@ -224,6 +224,14 @@ struct DevicesTouched {
     control: BTreeMap<String, String>,
 }
 
+/// Devices given deeper link sleep: device directory → substate file → its
+/// value before.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct LinksTouched {
+    v: u32,
+    files: BTreeMap<String, BTreeMap<String, String>>,
+}
+
 /// Radios switched off by rule, with whether each was off before.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct RadiosTouched {
@@ -1011,6 +1019,121 @@ impl Engine {
         }
     }
 
+    /// Turn on deeper link sleep (every PCIe L1 substate the link has) for
+    /// one PCI device. Refused in safe mode, when deeper link sleep or link
+    /// power saving is blocked on this laptop, and for anything but a PCI
+    /// device directory. The values before are kept for restore. If a write
+    /// fails, the device is put back. Returns whether anything changed.
+    pub fn set_link_sleep(&mut self, dev: &str, id: &str, reason: &str) -> Result<bool> {
+        if let Some(why) = self.safe_mode() {
+            return Err(EngineError::SafeMode(why));
+        }
+        for g in [crate::linksleep::ID, "pcie.aspm"] {
+            if let Some(why) = self.refused(g) {
+                return Err(EngineError::Blocked {
+                    id: g.to_string(),
+                    reason: why,
+                });
+            }
+        }
+        if !crate::devices::is_device_path(dev) || !dev.starts_with(crate::devices::PCI_DIR) {
+            return Err(EngineError::Invalid(format!("not a PCI device: {dev}")));
+        }
+        let files = crate::linksleep::files(&self.root, dev);
+        if files.is_empty() {
+            return Err(EngineError::Unsupported(format!(
+                "{dev}: no deeper link sleep here"
+            )));
+        }
+        if crate::linksleep::all_on(&files) {
+            return Ok(false);
+        }
+        let from = files
+            .iter()
+            .map(|(f, v)| format!("{f}={v}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        if self.dry_run() {
+            self.log("would", id, Some(&from), Some("on"), reason)?;
+            return Ok(false);
+        }
+        let file = self.dir.join("link-sleep.json");
+        let mut t: LinksTouched = read_json(&file).unwrap_or_default();
+        if !t.files.contains_key(dev) {
+            t.v = STATE_FORMAT_VERSION;
+            t.files.insert(
+                dev.to_string(),
+                files
+                    .iter()
+                    .map(|(f, v)| (f.to_string(), v.clone()))
+                    .collect(),
+            );
+            write_json(&file, &t)?;
+        }
+        self.log("link-sleep", id, Some(&from), Some("on"), reason)?;
+        for (f, v) in &files {
+            if v == "1" {
+                continue;
+            }
+            if let Err(e) = self.write_device(&format!("{dev}/link/{f}"), "1") {
+                let _ = self.reset_link_sleep(dev, id, "a write failed");
+                return Err(e);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Put one device's link sleep back as it was. Works in safe mode.
+    pub fn reset_link_sleep(&mut self, dev: &str, id: &str, reason: &str) -> Result<bool> {
+        let file = self.dir.join("link-sleep.json");
+        let mut t: LinksTouched = read_json(&file).unwrap_or_default();
+        let Some(before) = t.files.remove(dev) else {
+            return Ok(false);
+        };
+        write_json(&file, &t)?;
+        // Deepest first, the reverse of turning on.
+        let mut changed = false;
+        for f in crate::linksleep::FILES.iter().rev() {
+            let Some(orig) = before.get(*f) else {
+                continue;
+            };
+            let path = format!("{dev}/link/{f}");
+            let Ok(cur) = self.root.read_string(&path) else {
+                continue; // gone
+            };
+            if cur.trim() != orig {
+                if !changed {
+                    self.log("link-sleep", id, Some("on"), Some("off"), reason)?;
+                }
+                changed = true;
+                self.write_device(&path, orig)?;
+            }
+        }
+        Ok(changed)
+    }
+
+    /// The devices given deeper link sleep.
+    pub fn touched_links(&self) -> Vec<String> {
+        read_json::<LinksTouched>(&self.dir.join("link-sleep.json"))
+            .unwrap_or_default()
+            .files
+            .into_keys()
+            .collect()
+    }
+
+    /// Put every device's link sleep back (Restore). Returns how many.
+    pub fn restore_link_sleep(&mut self) -> Result<usize> {
+        let mut n = 0;
+        for dev in self.touched_links() {
+            let id = format!("pci:{}", dev.rsplit('/').next().unwrap_or_default());
+            if self.reset_link_sleep(&dev, &id, "restore")? {
+                n += 1;
+            }
+        }
+        let _ = fs::remove_file(self.dir.join("link-sleep.json"));
+        Ok(n)
+    }
+
     /// Put one device back to its original value. Works in safe mode.
     /// Returns whether anything changed (false if never changed or gone).
     pub fn reset_device_power(&mut self, dev: &str, id: &str, reason: &str) -> Result<bool> {
@@ -1258,6 +1381,7 @@ impl Engine {
             self.revert("restore requested")?;
         }
         self.restore_app_weights()?;
+        self.restore_link_sleep()?;
         self.restore_device_power()?;
         self.restore_radios()?;
         self.restore_kbd_lights()?;
@@ -1396,6 +1520,18 @@ impl Engine {
                 id,
                 to: to.clone(),
                 ok: result == "ok",
+            });
+        }
+        // Deeper link sleep.
+        if recent
+            .iter()
+            .any(|e| e.event == "link-sleep" && e.to.as_deref() == Some("on"))
+            && self.restore_link_sleep()? > 0
+        {
+            out.push(Undone {
+                id: crate::linksleep::ID.into(),
+                to: "off".into(),
+                ok: true,
             });
         }
         // Devices let sleep when idle.

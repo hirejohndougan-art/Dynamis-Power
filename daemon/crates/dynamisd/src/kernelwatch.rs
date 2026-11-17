@@ -46,12 +46,14 @@ pub struct Acted {
 }
 
 /// The ids changed since `since`, newest first: settings, and the device
-/// groups (`usb.autosuspend`, `pci.runtime_pm`) for devices let sleep.
+/// groups (`usb.autosuspend`, `pci.runtime_pm`) for devices let sleep, and
+/// `pcie.l1_substates` for deeper link sleep.
 fn recent_changes(engine: &dynamis_core::engine::Engine, since: u64) -> Vec<String> {
     let mut ids: Vec<String> = Vec::new();
     for e in engine.journal(400).into_iter().filter(|e| e.time >= since) {
         let id = match e.event.as_str() {
             "done" | "keep" if e.from != e.to => e.id.clone(),
+            "link-sleep" if e.to.as_deref() == Some("on") => dynamis_core::linksleep::ID.into(),
             "device-power" if e.to.as_deref() == Some("auto") => {
                 if e.id.starts_with("usb:") {
                     "usb.autosuspend".into()

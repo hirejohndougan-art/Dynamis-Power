@@ -54,6 +54,11 @@ const ONE_FILE_ONLY: &[(&str, &str)] = &[
     // Runtime power management of one USB device or PCI function.
     ("/sys/bus/usb/devices/", "/power/control"),
     ("/sys/bus/pci/devices/", "/power/control"),
+    // Deeper link sleep (PCIe L1 substates) of one PCI device.
+    ("/sys/bus/pci/devices/", "/link/l1_1_aspm"),
+    ("/sys/bus/pci/devices/", "/link/l1_2_aspm"),
+    ("/sys/bus/pci/devices/", "/link/l1_1_pcipm"),
+    ("/sys/bus/pci/devices/", "/link/l1_2_pcipm"),
 ];
 
 fn allowed(path: &str) -> bool {

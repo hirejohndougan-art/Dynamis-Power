@@ -300,6 +300,16 @@ impl Client {
         self.json("SleepTest", &()).await
     }
 
+    /// Start "Check deep idle" (one minute; the result is `deep_idle` in
+    /// the status).
+    pub async fn check_deep_idle(&self) -> Result<()> {
+        self.own()
+            .await?
+            .call::<_, _, ()>("CheckDeepIdle", &())
+            .await
+            .map_err(explain)
+    }
+
     /// Start the sleep test, `minutes` per sleep type.
     pub async fn start_sleep_test(&self, minutes: f64) -> Result<()> {
         self.own()

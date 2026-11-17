@@ -990,6 +990,21 @@ impl DynamisPower {
         c.sleeptest.json(&c.root).to_string()
     }
 
+    /// Start "Check deep idle": a one-minute, read-only measurement of how
+    /// deeply the processor rests and which devices may be in the way. The
+    /// result is `deep_idle` in `Status`.
+    async fn check_deep_idle(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] hdr: Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.check(conn, Some(&hdr), ACTION_SWITCH).await?;
+        self.0.lock().check_deep_idle();
+        notify(conn, &self.0).await;
+        self.0.ticker.poke();
+        Ok(())
+    }
+
     /// Start the sleep test: the laptop sleeps `minutes` (5–60) with each
     /// sleep type it offers and wakes by itself. Needs the battery.
     async fn start_sleep_test(

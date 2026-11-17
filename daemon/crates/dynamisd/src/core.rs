@@ -114,6 +114,8 @@ pub struct Core {
     pub kernel: crate::kernelwatch::KernelWatch,
     /// "Something stopped working": the open question, if any.
     pub trouble: crate::trouble::Trouble,
+    /// "Check deep idle": a one-minute measurement, and the last report.
+    pub deepidle: crate::deepidle::DeepIdle,
     /// Temperature at light use, month by month ("runs hotter").
     pub heat: dynamis_core::heat::HeatHistory,
     heat_unsaved: usize,
@@ -213,6 +215,7 @@ impl Core {
             habits: crate::habits::Habits::load(&state_dir_for_radios),
             kernel: crate::kernelwatch::KernelWatch::start(&root_for_kernel),
             trouble: crate::trouble::Trouble::load(&state_dir_for_radios, unix_now() as u64),
+            deepidle: crate::deepidle::DeepIdle::load(&state_dir_for_radios),
         };
         let on = core.relief.active(unix_now());
         core.learn.relief = on;
@@ -562,6 +565,7 @@ impl Core {
     pub fn after_resume(&mut self) {
         let (root, dir) = (self.root.clone(), self.state_dir.clone());
         self.sleeptest.on_resume(&root, &dir, unix_now());
+        self.deepidle.cancel();
         self.kernel.after_wake(unix_now() as u64);
         self.outside
             .quiet_until(unix_now() + crate::outside::AFTER_WAKE_S);
@@ -579,6 +583,12 @@ impl Core {
         self.learn.reapply_soon();
         self.apps.reassert();
         self.devices.mark_dirty();
+    }
+
+    /// Start "Check deep idle" (read-only, one minute).
+    pub fn check_deep_idle(&mut self) {
+        let root = self.root.clone();
+        self.deepidle.start(&root, unix_now());
     }
 
     /// Start the sleep test (`minutes` per sleep type).
@@ -749,6 +759,7 @@ impl Core {
             || self.relief.until.is_some()
             || self.radios.needs_ticks()
             || self.sleeptest.running()
+            || self.deepidle.running()
     }
 
     /// Whether processes need reading this tick.
@@ -819,6 +830,7 @@ impl Core {
         }
         self.fullcharge.tick(&root, &dir, unix, ctx.on_ac);
         self.sleeptest.tick(&root, &dir, unix, &ctx);
+        self.deepidle.tick(&root, &dir, unix, ctx.user_idle);
         self.predict.hold_charge = self.fullcharge.is_active();
         let mut target_changed = false;
         if self

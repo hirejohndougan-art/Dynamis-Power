@@ -8,8 +8,9 @@
 //! a fault they cannot cause.
 //!
 //! Besides setting ids, two ids stand for groups the engine manages:
-//! `usb.autosuspend` and `pci.runtime_pm` (devices let sleep when idle) and
-//! `radios` (radios switched off by rule).
+//! `usb.autosuspend` and `pci.runtime_pm` (devices let sleep when idle),
+//! `pcie.l1_substates` (deeper link sleep) and `radios` (radios switched off
+//! by rule).
 
 /// The kinds of trouble the app asks about, in the order shown.
 pub const KINDS: &[&str] = &[
@@ -31,6 +32,7 @@ pub fn suspects(kind: &str) -> &'static [&'static str] {
         "wifi" => &[
             "wifi.power_save",
             "pcie.aspm",
+            "pcie.l1_substates",
             "pci.runtime_pm",
             "usb.autosuspend",
             "radios",
@@ -59,6 +61,7 @@ pub fn suspects(kind: &str) -> &'static [&'static str] {
             "storage.io_scheduler",
             "usb.autosuspend",
             "pcie.aspm",
+            "pcie.l1_substates",
             "pci.runtime_pm",
         ],
         "sleep" => &[
@@ -69,6 +72,7 @@ pub fn suspects(kind: &str) -> &'static [&'static str] {
         ],
         "freeze" => &[
             "pcie.aspm",
+            "pcie.l1_substates",
             "pci.runtime_pm",
             "system.mem_sleep",
             "storage.sata_alpm",
@@ -153,6 +157,7 @@ pub fn label(id: &str) -> String {
         "pci.runtime_pm" => "Built-in devices sleeping when idle".into(),
         "devices" => "Devices sleeping when idle".into(),
         "radios" => "Radios switched off by rule".into(),
+        "pcie.l1_substates" => "Deeper link sleep".into(),
         "keyboard.light" => "Keyboard light off on battery".into(),
         _ if crate::radios::valid_id(id) => format!("Radio switch {id}"),
         _ => crate::settings::by_id(id)
@@ -171,7 +176,10 @@ mod tests {
             for id in suspects(kind) {
                 assert!(
                     crate::settings::by_id(id).is_some()
-                        || matches!(*id, "usb.autosuspend" | "pci.runtime_pm" | "radios"),
+                        || matches!(
+                            *id,
+                            "usb.autosuspend" | "pci.runtime_pm" | "pcie.l1_substates" | "radios"
+                        ),
                     "{kind}: {id}"
                 );
             }

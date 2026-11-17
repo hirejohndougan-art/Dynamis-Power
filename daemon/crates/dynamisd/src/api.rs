@@ -118,6 +118,8 @@ impl Core {
             "hotter": self.heat.hotter(),
             // Whether the kernel log can be read (needs root).
             "kernel_watch": self.kernel.watching(),
+            // "Check deep idle": running, or the last report.
+            "deep_idle": self.deepidle.json(crate::core::unix_now()),
             // "Something stopped working": waiting for the answer.
             "trouble": self.trouble.json(crate::core::unix_now() as u64),
             // A rule offered from the person's own choices.

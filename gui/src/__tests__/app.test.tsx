@@ -117,6 +117,8 @@ describe("the app with the stand-in backend", () => {
     render(<App />);
     expect(await screen.findByText("About 4.1 Wh")).toBeTruthy();
     expect(screen.getByText(/In front/)).toBeTruthy();
+    expect(screen.getByText(/wakes the processor 240 times a second/)).toBeTruthy();
+    expect(screen.getByText(/Thunderbird wakes the processor often/)).toBeTruthy();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Options: Thunderbird" })));
     const dialog = screen.getByRole("dialog", { hidden: true });
     await act(async () => fireEvent.click(within(dialog).getByRole("radio", { name: "Always slow it down", hidden: true })));
@@ -436,6 +438,19 @@ describe("the app with the stand-in backend", () => {
     expect(open).toHaveBeenCalledWith("Problem: Wi-Fi drops after sleep", expect.stringContaining("Please attach the file"));
     open.mockRestore();
   });
+  it("asks before turning on deeper link sleep", async () => {
+    window.location.hash = "#devices";
+    render(<App />);
+    const card = await screen.findByRole("region", { name: "Deeper link sleep" }, { timeout: 3000 });
+    const sw = () => within(card).getByRole("switch", { name: /sleep more deeply on battery/ });
+    await act(async () => fireEvent.click(sw()));
+    const dialog = screen.getByRole("dialog", { hidden: true });
+    expect(sw().getAttribute("aria-checked")).toBe("false");
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Turn on", hidden: true })));
+    await waitFor(() => expect(sw().getAttribute("aria-checked")).toBe("true"));
+    await backend.setDevicePolicy({ usb: false, pci: false, never: [], deeper_link_sleep: false });
+  });
+
   it("switches radios off by rule", async () => {
     window.location.hash = "#devices";
     render(<App />);
@@ -444,6 +459,9 @@ describe("the app with the stand-in backend", () => {
     await act(async () => fireEvent.click(sw));
     await waitFor(() => expect(within(card).getByRole("switch", { name: "Turn Bluetooth off on battery" }).getAttribute("aria-checked")).toBe("true"));
     expect(within(card).getByRole("switch", { name: "Turn Wi-Fi off while a network cable is plugged in" })).toBeTruthy();
+    const kbd = within(card).getByRole("switch", { name: /keyboard light off on battery/ });
+    await act(async () => fireEvent.click(kbd));
+    await waitFor(() => expect(within(card).getByRole("switch", { name: /keyboard light off on battery/ }).getAttribute("aria-checked")).toBe("true"));
     await backend.setRadioPolicy({ off_on_battery: [], wifi_off_when_wired: false, off_at_startup: [] });
   });
   it("offers a habit as a rule and adds it only after a yes", async () => {
@@ -501,6 +519,16 @@ describe("the app with the stand-in backend", () => {
     render(<App />);
     expect(await screen.findByRole("dialog", { name: "Report a problem", hidden: true }, { timeout: 4000 })).toBeTruthy();
   });
+  it("checks deep idle and lists what may keep the processor awake", async () => {
+    window.location.hash = "#learning";
+    render(<App />);
+    const card = await screen.findByRole("region", { name: "How deeply it rests" }, { timeout: 3000 });
+    await act(async () => fireEvent.click(within(card).getByRole("button", { name: "Check deep idle" })));
+    await waitFor(() => expect(within(card).getByText(/rested deeply only 62% of the time/)).toBeTruthy(), { timeout: 5000 });
+    expect(within(card).getByText("NVMe SSD Controller")).toBeTruthy();
+    expect(within(card).getByText("USB controller")).toBeTruthy();
+  });
+
   it("lets learning during heavy work be switched on", async () => {
     window.location.hash = "#learning";
     render(<App />);

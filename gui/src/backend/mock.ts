@@ -2,7 +2,7 @@
 // design review) and in tests. It behaves like the real thing closely enough
 // to exercise every screen: changes are journaled, Undo works, safe mode
 // refuses changes.
-import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession, Suggestion, SleepRecord, Trouble, TroubleKind } from "./types";
+import type { AppPolicy, AppsInfo, Predict, ProfileOverrides, ProfileSettings, Sensors, SystemInfo, AutoPrefs, Backend, Conflict, JournalEntry, Learned, Profile, SettingRow, Status, Unclean, DeviceInfo, DevicePolicy, BrightnessPrefs, RecalInfo, RadioPolicy, SleepTestInfo, LearnSession, Suggestion, SleepRecord, Trouble, TroubleKind, DeepIdle } from "./types";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -147,7 +147,7 @@ export function mockBackend(): Backend {
       running,
       now: [
         { app: "firefox", cpu_pct: 12.5, watts: 1.4, share: share("firefox") },
-        { app: "thunderbird", cpu_pct: 1.2, watts: 0.1, share: share("thunderbird") },
+        { app: "thunderbird", cpu_pct: 1.2, watts: 0.1, share: share("thunderbird"), wakeups_per_s: 240 },
       ],
       today: appPolicy.track ? [...usage.today].sort((a, b) => b.wh - a.wh) : [],
       week: appPolicy.track ? usage.week : [],
@@ -250,6 +250,7 @@ export function mockBackend(): Backend {
   };
   // "Something stopped working".
   let trouble: Trouble | null = null;
+  let deepIdle: DeepIdle = { running: false, seconds_left: null, at: null, report: null };
   const KINDS: TroubleKind[] = ["wifi", "bluetooth", "sound", "input", "screen", "storage", "sleep", "freeze", "other"];
   const SUSPECTS: Partial<Record<TroubleKind, string[]>> = {
     wifi: ["wifi.power_save", "pcie.aspm"], sound: ["audio.power_save", "pcie.aspm"], screen: ["pcie.aspm"],
@@ -395,6 +396,7 @@ export function mockBackend(): Backend {
       suggestion,
       hotter: null,
       trouble,
+      deep_idle: deepIdle,
       kernel_watch: true,
       learning_strict: learningStrict,
       unclean,
@@ -520,6 +522,31 @@ export function mockBackend(): Backend {
       }
     },
     sleepTest: async () => delay({ ...sleep, active: values["system.mem_sleep"] }),
+    checkDeepIdle: async () => {
+      refuse();
+      deepIdle = { ...deepIdle, running: true, seconds_left: 60 };
+      // The demo shortens the minute to a moment.
+      setTimeout(() => {
+        deepIdle = {
+          running: false,
+          seconds_left: null,
+          at: Math.floor(Date.now() / 1000),
+          report: {
+            v: 1,
+            seconds: 60,
+            deepest: "C10",
+            core_deepest_pct: 62,
+            package_pct: 18,
+            platform_pct: null,
+            held_awake: [{ id: "pci:0000:00:14.0", name: null, what: "usb_controller" }],
+            no_link_sleep: [],
+            no_deeper_link_sleep: [{ id: "pci:0000:01:00.0", name: "NVMe SSD Controller", what: "storage" }],
+            touched: false,
+          },
+        };
+      }, 300);
+      return delay(undefined);
+    },
     startSleepTest: async (minutes) => {
       refuse();
       if (["sleeping", "settling", "ready"].includes(sleep.phase)) throw new Error("a sleep test is already running");
@@ -554,12 +581,15 @@ export function mockBackend(): Backend {
     devices: async () =>
       delay({
         policy: devicePolicy,
-        blocked: { usb: null, pci: null },
+        blocked: { usb: null, pci: null, links: null },
         devices: deviceList.map(({ own, ...x }) => {
           const kept_awake = !!x.model && (devicePolicy.never ?? []).includes(x.model);
           const managed = devicePolicy[x.kind] && !x.excluded && !own && !kept_awake;
-          return { ...x, kept_awake, managed, sleeps: own || managed };
+          const link = x.kind === "pci" && x.what === "storage";
+          const link_sleep = link ? { on: !!devicePolicy.deeper_link_sleep && !kept_awake, managed: !!devicePolicy.deeper_link_sleep && !kept_awake, excluded: null } : null;
+          return { ...x, kept_awake, managed, sleeps: own || managed, link_sleep };
         }),
+        link_sleep_capable: deviceList.filter((x) => x.kind === "pci" && x.what === "storage").length,
       }),
     setDevicePolicy: async (p) => {
       refuse();
@@ -567,6 +597,11 @@ export function mockBackend(): Backend {
         if (p[k] === devicePolicy[k]) continue;
         for (const x of deviceList.filter((d) => d.kind === k && !d.excluded && !d.own)) {
           log({ event: "device-power", id: x.id, label: x.name ?? x.address, from: p[k] ? "on" : "auto", to: p[k] ? "auto" : "on", reason: p[k] ? "on battery: let it sleep when idle" : "switched off" });
+        }
+      }
+      if (p.deeper_link_sleep !== devicePolicy.deeper_link_sleep) {
+        for (const x of deviceList.filter((d) => d.kind === "pci" && d.what === "storage")) {
+          log({ event: "link-sleep", id: x.id, label: x.name ?? x.address, from: p.deeper_link_sleep ? "off" : "on", to: p.deeper_link_sleep ? "on" : "off", reason: p.deeper_link_sleep ? "on battery: deeper link sleep" : "switched off" });
         }
       }
       devicePolicy = p;

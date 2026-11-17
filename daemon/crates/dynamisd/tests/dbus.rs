@@ -1634,7 +1634,7 @@ fn idle_devices_sleep_on_battery() {
         let info = c.devices().await.unwrap();
         assert_eq!(
             info["policy"],
-            serde_json::json!({"usb": false, "pci": false, "never": []})
+            serde_json::json!({"usb": false, "pci": false, "never": [], "deeper_link_sleep": false})
         );
     });
 }

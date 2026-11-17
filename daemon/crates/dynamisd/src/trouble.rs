@@ -68,6 +68,7 @@ pub fn put_back_and_block(engine: &mut Engine, id: &str, reason: &str) -> Result
     let put_back = match id {
         "usb.autosuspend" | "pci.runtime_pm" => engine.restore_device_power().map(|_| ()),
         "radios" => engine.restore_radios().map(|_| ()),
+        dynamis_core::linksleep::ID => engine.restore_link_sleep().map(|_| ()),
         _ => engine.restore_one(id).map(|_| ()),
     };
     if let Err(e) = put_back {
@@ -176,6 +177,7 @@ impl Trouble {
             let baseline = engine.baseline();
             let devices = engine.touched_devices();
             let radios = engine.touched_radios();
+            let links = engine.touched_links();
             let reason = format!(
                 "you said {} stopped working after it was changed",
                 what(kind)
@@ -185,6 +187,7 @@ impl Trouble {
                     "usb.autosuspend" => devices.keys().any(|d| d.starts_with(USB_DIR)),
                     "pci.runtime_pm" => devices.keys().any(|d| d.starts_with(PCI_DIR)),
                     "radios" => !radios.is_empty(),
+                    dynamis_core::linksleep::ID => !links.is_empty(),
                     _ => baseline.get(&id).is_some_and(|orig| {
                         settings::by_id(&id)
                             .and_then(|s| s.read(root).ok())

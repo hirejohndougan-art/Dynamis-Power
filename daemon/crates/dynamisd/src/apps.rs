@@ -337,7 +337,7 @@ impl AppsState {
                     .values()
                     .find(|(a, _)| *a == n.app)
                     .map(|(_, w)| *w);
-                json!({"app": n.app, "cpu_pct": n.cpu_pct, "watts": n.watts, "share": share})
+                json!({"app": n.app, "cpu_pct": n.cpu_pct, "watts": n.watts, "share": share, "wakeups_per_s": n.wakeups_per_s})
             })
             .collect();
         json!({

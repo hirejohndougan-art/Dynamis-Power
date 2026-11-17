@@ -201,6 +201,11 @@ async fn start_sleep_test(conn: State<'_, Conn>, minutes: f64) -> Result<(), Str
 }
 
 #[tauri::command]
+async fn check_deep_idle(conn: State<'_, Conn>) -> Result<(), String> {
+    client(&conn).await?.check_deep_idle().await
+}
+
+#[tauri::command]
 async fn stop_sleep_test(conn: State<'_, Conn>) -> Result<(), String> {
     client(&conn).await?.stop_sleep_test().await
 }
@@ -470,6 +475,7 @@ fn main() {
             diagnostics,
             sleep_test,
             start_sleep_test,
+            check_deep_idle,
             stop_sleep_test,
             predict,
             set_target,

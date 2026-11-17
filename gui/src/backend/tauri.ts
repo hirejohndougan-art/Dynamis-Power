@@ -28,6 +28,7 @@ export const tauriBackend: Backend = {
   diagnostics: () => invoke("diagnostics"),
   sleepTest: () => invoke("sleep_test"),
   startSleepTest: (minutes) => invoke("start_sleep_test", { minutes }),
+  checkDeepIdle: () => invoke("check_deep_idle"),
   stopSleepTest: () => invoke("stop_sleep_test"),
   setDevicePolicy: (policy) => invoke("set_device_policy", { policy }),
   radios: () => invoke("radios"),

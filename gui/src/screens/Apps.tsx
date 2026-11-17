@@ -5,6 +5,10 @@ import { Choice, Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { duration, profileName, t } from "../i18n";
 
+/** Wake-ups per second that count as "a lot" (the service's
+ * MANY_WAKEUPS_PER_S). */
+const MANY_WAKEUPS = 100;
+
 export function Apps(props: { status: Status; refresh: () => void }) {
   const s = props.status;
   const info = useLoad(() => backend.apps(), []);
@@ -51,10 +55,12 @@ export function Apps(props: { status: Status; refresh: () => void }) {
                   const rule = a.rules.find((r) => r.app === row.app);
                   const share = shareOf(a.policy, row.app);
                   const live = a.now.find((n) => n.app === row.app)?.share;
+                  const wakes = a.now.find((n) => n.app === row.app)?.wakeups_per_s;
                   const tags = [
                     row.app === a.front ? t("apps_in_front") : a.running.includes(row.app) ? t("apps_open") : null,
                     rule ? t("apps_mode_rule", { mode: profileName(rule.profile) }) : null,
                     live != null && live < 100 ? t("apps_slowed") : live != null && live > 100 ? t("apps_priority") : null,
+                    wakes != null && wakes >= MANY_WAKEUPS ? t("apps_wakes", { n: Math.round(wakes) }) : null,
                   ].filter(Boolean);
                   return (
                     <li key={row.app} className="entry app-row">
@@ -97,6 +103,15 @@ export function Apps(props: { status: Status; refresh: () => void }) {
                   })}
                 </p>
               ))}
+            {a.policy.track &&
+              a.now
+                .filter((n) => n.app !== "System" && n.app !== a.front && (n.wakeups_per_s ?? 0) >= MANY_WAKEUPS)
+                .slice(0, 1)
+                .map((n) => (
+                  <p key={`wakes-${n.app}`} className="notice notice-info small">
+                    {t("apps_wakes_note", { app: appName(n.app) })}
+                  </p>
+                ))}
           </section>
 
           <section className="card" aria-labelledby="sharing-heading">

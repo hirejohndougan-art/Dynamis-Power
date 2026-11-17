@@ -18,6 +18,7 @@ mod bus;
 mod conflicts;
 mod core;
 mod crash;
+mod deepidle;
 mod devices;
 mod fullcharge;
 mod habits;

@@ -14,6 +14,7 @@ use std::path::Path;
 
 use dynamis_core::devices::{self, Kind};
 use dynamis_core::engine::EngineError;
+use dynamis_core::linksleep;
 use dynamis_core::SysRoot;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -36,6 +37,10 @@ pub struct DevicePolicy {
     /// that misbehave asleep but are not caught by class or driver.
     #[serde(default)]
     pub never: Vec<String>,
+    /// Deeper link sleep (PCIe L1 substates) on battery. Experimental; the
+    /// app asks for an explicit yes before turning it on.
+    #[serde(default)]
+    pub deeper_link_sleep: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -70,7 +75,7 @@ impl DevicesState {
     }
 
     pub fn enabled(&self) -> bool {
-        self.policy.usb || self.policy.pci
+        self.policy.usb || self.policy.pci || self.policy.deeper_link_sleep
     }
 
     /// Readings are needed while a switch is on, to follow the charger and
@@ -150,7 +155,39 @@ impl DevicesState {
             }
         };
         let touched = engine.touched_devices();
+        let links = engine.touched_links();
         for d in devices::scan(root) {
+            if d.kind == Kind::Pci {
+                let kept_awake = d
+                    .model
+                    .as_ref()
+                    .is_some_and(|m| self.policy.never.contains(m));
+                let has = !linksleep::files(root, &d.path).is_empty();
+                let result = if has
+                    && self.policy.deeper_link_sleep
+                    && want_saving
+                    && linksleep::excluded(&d).is_none()
+                    && !kept_awake
+                {
+                    engine.set_link_sleep(&d.path, &d.id, "on battery: deeper link sleep")
+                } else if links.contains(&d.path) {
+                    let why = if !self.policy.deeper_link_sleep {
+                        "switched off"
+                    } else if kept_awake {
+                        "you keep it awake"
+                    } else {
+                        "plugged in or Faster mode"
+                    };
+                    engine.reset_link_sleep(&d.path, &d.id, why)
+                } else {
+                    Ok(false)
+                };
+                match result {
+                    Ok(_) | Err(EngineError::Blocked { .. }) => {}
+                    Err(EngineError::SafeMode(_)) => return,
+                    Err(e) => eprintln!("dynamisd: {} link sleep: {e}", d.id),
+                }
+            }
             let on = match d.kind {
                 Kind::Usb => self.policy.usb,
                 Kind::Pci => self.policy.pci,
@@ -190,14 +227,21 @@ impl DevicesState {
     /// For the app: the switches, and every device with whether it is
     /// managed, kept awake (and why), and its current state.
     pub fn json(&self, root: &SysRoot, dir: &Path) -> Value {
-        let (touched, blocked) = open_engine(root, dir)
-            .map(|e| (e.touched_devices(), e.blocked()))
+        let (touched, blocked, links) = open_engine(root, dir)
+            .map(|e| (e.touched_devices(), e.blocked(), e.touched_links()))
             .unwrap_or_default();
         let mut found = devices::scan(root);
         devices::add_friendly_names(root, &mut found);
+        let found_links = found
+            .iter()
+            .filter(|d| {
+                linksleep::excluded(d).is_none() && !linksleep::files(root, &d.path).is_empty()
+            })
+            .count();
         let list: Vec<Value> = found
             .into_iter()
             .map(|d| {
+                let files = linksleep::files(root, &d.path);
                 json!({
                     "id": d.id,
                     "kind": d.kind,
@@ -209,6 +253,12 @@ impl DevicesState {
                     "sleeps": d.control == "auto",
                     "managed": touched.contains_key(&d.path),
                     "excluded": d.excluded,
+                    // Deeper link sleep: null where the link has none.
+                    "link_sleep": (!files.is_empty()).then(|| json!({
+                        "on": linksleep::all_on(&files),
+                        "managed": links.contains(&d.path),
+                        "excluded": linksleep::excluded(&d),
+                    })),
                 })
             })
             .collect();
@@ -217,8 +267,75 @@ impl DevicesState {
             "blocked": {
                 "usb": blocked.get(Kind::Usb.setting_id()),
                 "pci": blocked.get(Kind::Pci.setting_id()),
+                "links": blocked.get(linksleep::ID).or(blocked.get("pcie.aspm")),
             },
+            "link_sleep_capable": found_links,
             "devices": list,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dynamis_core::deepidle::fixture::link;
+    use dynamis_core::devices::fixture::pci;
+
+    #[test]
+    fn deeper_link_sleep_on_battery_only_and_never_for_graphics() {
+        let dir = std::env::temp_dir().join(format!("dynamis-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let rootdir = dir.join("root");
+        pci(&rootdir, "0000:01:00.0", "0x010802", "on", "nvme");
+        link(
+            &rootdir,
+            "0000:01:00.0",
+            &[("l1_1_aspm", "0"), ("l1_2_aspm", "0")],
+        );
+        pci(&rootdir, "0000:02:00.0", "0x030000", "on", "amdgpu");
+        link(&rootdir, "0000:02:00.0", &[("l1_2_aspm", "0")]);
+        let state = dir.join("state");
+        std::fs::create_dir_all(&state).unwrap();
+        let root = SysRoot::at(&rootdir);
+        let read = |dev: &str, f: &str| {
+            std::fs::read_to_string(rootdir.join(format!("sys/bus/pci/devices/{dev}/link/{f}")))
+                .unwrap()
+                .trim()
+                .to_string()
+        };
+        let mut d = DevicesState::load(&state);
+        d.set_policy(
+            DevicePolicy {
+                deeper_link_sleep: true,
+                ..DevicePolicy::default()
+            },
+            &root,
+            &state,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            read("0000:01:00.0", "l1_2_aspm"),
+            "0",
+            "plugged in: left alone"
+        );
+        d.tick(&root, &state, true);
+        assert_eq!(read("0000:01:00.0", "l1_1_aspm"), "1");
+        assert_eq!(read("0000:01:00.0", "l1_2_aspm"), "1");
+        assert_eq!(
+            read("0000:02:00.0", "l1_2_aspm"),
+            "0",
+            "graphics left alone"
+        );
+        let j = d.json(&root, &state);
+        assert_eq!(j["link_sleep_capable"], 1);
+        d.tick(&root, &state, false);
+        assert_eq!(read("0000:01:00.0", "l1_1_aspm"), "0", "plugged in: back");
+        assert_eq!(read("0000:01:00.0", "l1_2_aspm"), "0");
+        // Restore puts it back too.
+        d.tick(&root, &state, true);
+        open_engine(&root, &state).unwrap().restore().unwrap();
+        assert_eq!(read("0000:01:00.0", "l1_2_aspm"), "0");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

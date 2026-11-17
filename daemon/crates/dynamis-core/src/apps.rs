@@ -41,6 +41,31 @@ pub struct Proc {
     pub cgroup: String,
     /// utime + stime, in clock ticks.
     pub cpu_ticks: u64,
+    /// Times any of its threads has been put on a processor (the third
+    /// number of each thread's `schedstat`): for threads that mostly sleep,
+    /// how often they woke. Only read for apps, not System processes, to
+    /// keep a reading cheap. `None` where the kernel does not keep it.
+    pub runs: Option<u64>,
+}
+
+/// Total times the process's threads were put on a processor.
+fn thread_runs(root: &SysRoot, pid: u32) -> Option<u64> {
+    let mut total = 0u64;
+    let mut any = false;
+    for tid in root.list_dir(&format!("/proc/{pid}/task")) {
+        let Ok(s) = root.read_string(&format!("/proc/{pid}/task/{tid}/schedstat")) else {
+            continue;
+        };
+        if let Some(n) = s
+            .split_whitespace()
+            .nth(2)
+            .and_then(|n| n.parse::<u64>().ok())
+        {
+            total += n;
+            any = true;
+        }
+    }
+    any.then_some(total)
 }
 
 /// App name from a cgroup path, or `None` when it is not an app scope.
@@ -117,11 +142,17 @@ pub fn scan(root: &SysRoot) -> Vec<Proc> {
         if is_own(&app) {
             continue;
         }
+        let runs = if app == SYSTEM {
+            None
+        } else {
+            thread_runs(root, pid)
+        };
         out.push(Proc {
             pid,
             app,
             cgroup,
             cpu_ticks: ticks,
+            runs,
         });
     }
     out
@@ -155,7 +186,14 @@ pub struct Now {
     pub cpu_pct: f64,
     /// Estimated watts (on battery only).
     pub watts: Option<f64>,
+    /// How often the app's threads woke, per second (None when unknown).
+    pub wakeups_per_s: Option<f64>,
 }
+
+/// Wake-ups per second above which an app is said to wake the processor a
+/// lot: each wake-up stops the processor from resting in its deeper idle
+/// states, and a quiet desktop wakes it a few hundred times a second in all.
+pub const MANY_WAKEUPS_PER_S: f64 = 100.0;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Meter {
@@ -167,6 +205,8 @@ pub struct Meter {
     months: BTreeMap<String, BTreeMap<String, Usage>>,
     #[serde(skip)]
     prev: HashMap<u32, u64>,
+    #[serde(skip)]
+    prev_runs: HashMap<u32, u64>,
     #[serde(skip)]
     prev_time: Option<f64>,
     /// Lowest whole-system power seen on battery: the idle level that is
@@ -190,6 +230,7 @@ impl Default for Meter {
             days: BTreeMap::new(),
             months: BTreeMap::new(),
             prev: HashMap::new(),
+            prev_runs: HashMap::new(),
             prev_time: None,
             base_w: None,
             last: Vec::new(),
@@ -218,8 +259,18 @@ impl Meter {
         let mut per_app: BTreeMap<String, u64> = BTreeMap::new();
         let mut cgroups: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut next = HashMap::with_capacity(procs.len());
+        let mut next_runs = HashMap::new();
+        let mut runs_per_app: BTreeMap<String, u64> = BTreeMap::new();
         for p in procs {
             next.insert(p.pid, p.cpu_ticks);
+            if let Some(r) = p.runs {
+                next_runs.insert(p.pid, r);
+                if let Some(before) = self.prev_runs.get(&p.pid) {
+                    // Threads that ended take their counts with them, so a
+                    // total can fall: count that as no wake-ups.
+                    *runs_per_app.entry(p.app.clone()).or_default() += r.saturating_sub(*before);
+                }
+            }
             if p.app != SYSTEM && !p.cgroup.is_empty() {
                 let list = cgroups.entry(p.app.clone()).or_default();
                 if !list.contains(&p.cgroup) {
@@ -233,6 +284,7 @@ impl Meter {
             *per_app.entry(p.app.clone()).or_default() += p.cpu_ticks.saturating_sub(*before);
         }
         self.prev = next;
+        self.prev_runs = next_runs;
         self.prev_time = Some(now);
         self.cgroups = cgroups;
         let Some(dt) = dt else {
@@ -288,6 +340,7 @@ impl Meter {
                     app: app.clone(),
                     cpu_pct: cpu_s / dt / cores.max(1) as f64 * 100.0,
                     watts,
+                    wakeups_per_s: runs_per_app.get(app).map(|r| *r as f64 / dt),
                 }
             })
             .collect();
@@ -446,7 +499,37 @@ mod tests {
             app: app.into(),
             cgroup: format!("/user.slice/app-{app}-1.scope"),
             cpu_ticks: ticks,
+            runs: None,
         }
+    }
+
+    #[test]
+    fn counts_wake_ups_per_app_from_every_thread() {
+        let dir = std::env::temp_dir().join(format!("dynamis-wakes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let w = |rel: &str, v: &str| {
+            let f = dir.join(rel);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, v).unwrap();
+        };
+        w("proc/40/stat", "40 (chat) S 1 0 0 0 0 0 0 0 0 0 10 5 0 0\n");
+        w(
+            "proc/40/cgroup",
+            "0::/user.slice/user-1000.slice/app-chat.scope\n",
+        );
+        w("proc/40/task/40/schedstat", "1000 200 300\n");
+        w("proc/40/task/41/schedstat", "1000 200 700\n");
+        let root = SysRoot::at(&dir);
+        let procs = scan(&root);
+        assert_eq!(procs[0].runs, Some(1000));
+        let mut m = Meter::new();
+        m.add(&procs, 0.0, None, 1);
+        w("proc/40/stat", "40 (chat) S 1 0 0 0 0 0 0 0 0 0 20 5 0 0\n");
+        w("proc/40/task/41/schedstat", "1000 200 2700\n");
+        m.add(&scan(&root), 10.0, None, 1);
+        assert_eq!(m.last[0].wakeups_per_s, Some(200.0));
+        assert!(m.last[0].wakeups_per_s.unwrap() > MANY_WAKEUPS_PER_S);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

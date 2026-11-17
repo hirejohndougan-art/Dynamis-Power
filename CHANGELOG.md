@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ### Added
 
+- **Wake-ups per app** on the Apps screen: how often each app's threads wake the processor (from each thread's `schedstat`), with a note for an app that wakes it 100 times a second or more.
+- **Check deep idle** (Learning): a quiet, read-only minute, then how much of the time the processor rested in its deepest state and which devices may be in the way (kept awake, links that never sleep, links able to sleep more deeply). `CheckDeepIdle` on D-Bus, `deep_idle` in `Status`.
+- **Deeper link sleep** (Devices, Experimental, off by default): PCIe L1.1/L1.2 for each capable device except graphics, on battery only, after an explicit yes. Put back by Restore, *Something stopped working* and the kernel watch.
+
 - **Keyboard light off on battery** (Devices → Radios, off by default): back to its earlier brightness when plugged in, unless you turned it on yourself in between.
 - **SSD power states** (`storage.nvme_power_states`): NVMe drives whose idle power states are held off get the kernel's default back; learning tests it like any setting. Left alone where the kernel command line sets it.
 - **AMD screen colour power saving** (`display.amd_panel_power_savings`): set to 3 in Longer battery mode and 0 in the others, as power-profiles-daemon does; not learned.

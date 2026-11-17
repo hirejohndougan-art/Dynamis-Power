@@ -1,5 +1,6 @@
-import { backend, type DeviceInfo, type DevicesInfo, type RadioKind, type RadiosInfo, type Status } from "../backend";
-import { Switch } from "../components";
+import { backend, type DeviceInfo, type DevicePolicy, type DevicesInfo, type RadioKind, type RadiosInfo, type Status } from "../backend";
+import { useState } from "react";
+import { Dialog, Switch } from "../components";
 import { useAction, useLoad } from "../hooks";
 import { t, tn } from "../i18n";
 
@@ -94,7 +95,65 @@ function DeviceLists(props: { locked: boolean; run: (a: () => Promise<string | v
     <>
       {usb.length > 0 && kind("usb", usb)}
       {pci.length > 0 && kind("pci", pci)}
+      {(d.link_sleep_capable ?? 0) > 0 && <LinkSleep info={d} name={name} locked={props.locked} set={set} />}
     </>
+  );
+}
+
+/** Deeper link sleep (PCIe L1 substates): Experimental, off by default,
+ * turned on only after an explicit yes. */
+function LinkSleep(props: { info: DevicesInfo; name: (x: DeviceInfo) => string; locked: boolean; set: (p: DevicePolicy) => void }) {
+  const [asking, setAsking] = useState(false);
+  const d = props.info;
+  const on = !!d.policy.deeper_link_sleep;
+  const blocked = d.blocked.links;
+  const capable = d.devices.filter((x) => x.link_sleep && !x.link_sleep.excluded);
+  return (
+    <section className="card" aria-labelledby="dev-link-heading">
+      <div className="row spread">
+        <h2 id="dev-link-heading">{t("dev_link_heading")}</h2>
+        <span className="badge badge-risky">{t("dev_link_badge")}</span>
+      </div>
+      <Switch
+        checked={on}
+        disabled={props.locked || !!blocked}
+        label={t("dev_link_switch")}
+        onChange={(v) => (v ? setAsking(true) : props.set({ ...d.policy, deeper_link_sleep: false }))}
+      />
+      <p className="muted small">{blocked ? t("dev_blocked", { why: blocked }) : t("dev_link_desc")}</p>
+      <ul className="entries" aria-label={tn("dev_count", capable.length, { n: capable.length })}>
+        {capable.map((x) => (
+          <li key={x.id} className="entry">
+            <span>{props.name(x)}</span>
+            <span className="muted small">{x.kept_awake ? t("dev_kept_awake") : x.link_sleep!.on ? t("dev_link_on") : t("dev_link_off")}</span>
+          </li>
+        ))}
+      </ul>
+      <Dialog
+        open={asking}
+        onClose={() => setAsking(false)}
+        title={t("dev_link_ask_title")}
+        actions={
+          <>
+            <button type="button" className="btn" onClick={() => setAsking(false)}>
+              {t("cancel")}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setAsking(false);
+                props.set({ ...d.policy, deeper_link_sleep: true });
+              }}
+            >
+              {t("dev_link_ask_yes")}
+            </button>
+          </>
+        }
+      >
+        <p>{t("dev_link_ask_body")}</p>
+      </Dialog>
+    </section>
   );
 }
 
